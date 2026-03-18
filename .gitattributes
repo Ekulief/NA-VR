@@ -1,0 +1,2 @@
+public/previews/all-experiments/Build/PreviewBuilds.data.gz filter=lfs diff=lfs merge=lfs -text
+*.data.gz filter=lfs diff=lfs merge=lfs -text
