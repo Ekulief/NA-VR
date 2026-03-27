@@ -97,3 +97,16 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+
+
+# --- Unity Version Control (Plastic SCM) ---
+.plastic/
+[Pp]lastic/
+*.plastic
+ignore.conf
+plastic.changes
+plastic.last
+
+# --- Specific Plastic Metadata ---
+plastic.wktree
+plastic.selector
