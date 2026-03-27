@@ -27,3 +27,8 @@ The VR client is the primary interface for students to perform experiments. It i
 2. Open **Unity Hub** and select "Add project from disk."
 3. Select this `/VR` folder.
 4. Ensure **Assets > External Dependency Manager** (if using Firebase) has resolved all dependencies.
+
+## Documentation
+
+You can find documentation for the versions of Unity and setting up here
+https://docs.google.com/document/d/1-X3SZeEoxDTdNzouSHCfrjbU7uhXFjNKYFAQVwSoFk8/edit?usp=sharing

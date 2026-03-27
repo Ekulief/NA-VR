@@ -34,6 +34,29 @@
 # Visual Studio cache directory
 .vs/
 
+
+
+# --- Unity Version Control (Plastic SCM) ---
+.plastic/
+[Pp]lastic/
+*.plastic
+ignore.conf
+plastic.changes
+plastic.last
+
+# --- Specific Plastic Metadata ---
+plastic.wktree
+plastic.selector
+
+# --- Unity Version Control (Plastic SCM) ---
+
+plastic.wktree
+plastic.selector
+plastic.changes
+plastic.last
+plastic.workspaceui
+plastic.node
+ignore.conf
 # Gradle cache directory
 .gradle/
 
@@ -98,15 +121,3 @@ InitTestScene*.unity*
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
 
-
-# --- Unity Version Control (Plastic SCM) ---
-.plastic/
-[Pp]lastic/
-*.plastic
-ignore.conf
-plastic.changes
-plastic.last
-
-# --- Specific Plastic Metadata ---
-plastic.wktree
-plastic.selector
