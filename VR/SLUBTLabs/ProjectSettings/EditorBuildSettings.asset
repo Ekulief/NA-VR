@@ -8,6 +8,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Main VR Scene.unity
     guid: 434e4f1c1129ff74283bd1f40294a2e1
+  - enabled: 1
+    path: Assets/Scenes/Depth Perception Scene.unity
+    guid: a7a10082256d5704c9bd20a74a7d350e
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
     com.unity.xr.management.loader_settings: {fileID: 11400000, guid: c782007a7c751a7479387e3ad06a5ea5, type: 2}
