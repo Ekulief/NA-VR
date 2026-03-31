@@ -97,3 +97,10 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+*.wktree
+*.workspaceui
+*.wktree
+/VR/SLUBTLabs/.plastic
+/VR/SLUBTLabs/.plastic
+VR/SLUBTLabs/.plastic/plastic.workspaceui
+VR/SLUBTLabs/.plastic/plastic.wktree
