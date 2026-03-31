@@ -102,3 +102,5 @@ InitTestScene*.unity*
 *.wktree
 /VR/SLUBTLabs/.plastic
 /VR/SLUBTLabs/.plastic
+VR/SLUBTLabs/.plastic/plastic.workspaceui
+VR/SLUBTLabs/.plastic/plastic.wktree
