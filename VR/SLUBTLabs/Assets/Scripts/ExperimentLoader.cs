@@ -1,22 +1,17 @@
 ﻿using System.Collections;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using UnityEngine.XR.Interaction.Toolkit;
-using UnityEngine.XR.Interaction.Toolkit.Interactables;
-using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
 
 /// <summary>
 /// SLUBT Labs — Experiment Loader
 ///
-/// HOW IT WORKS:
 ///   1. Player activates the teleport anchor normally (ray + trigger).
-///   2. XRI fires the teleported event on this component.
+///   2. ExperimentAnchor (on the TeleportationAnchor) calls LoadScene() on this.
 ///   3. We load the target scene additively (Main scene stays loaded).
 ///   4. We move the XR Origin to the Spawn Point in the new scene.
 ///   5. On return, we unload the experiment scene and move the player back.
 ///
 /// </summary>
-[RequireComponent(typeof(TeleportationAnchor))]
 public class ExperimentLoader : MonoBehaviour
 {
     [Header("Scene")]
@@ -39,38 +34,23 @@ public class ExperimentLoader : MonoBehaviour
     private Scene _loadedScene;
     private bool _experimentSceneLoaded = false;
 
-    //  Unity lifecycle 
-    private void Awake()
-    {
-        var anchor = GetComponent<TeleportationAnchor>();
-        anchor.selectExited.AddListener(OnAnchorSelected);
-    }
+    // ── Scene loading ─────────────────────────────────────────────────────────
 
-    private void OnDestroy()
-    {
-        var anchor = GetComponent<TeleportationAnchor>();
-        if (anchor != null)
-            anchor.selectExited.RemoveListener(OnAnchorSelected);
-    }
-
-    // ── Teleport event ────────────────────────────────────────────────────────
-
-    private void OnAnchorSelected(SelectExitEventArgs args)
+    public void LoadScene()
     {
         if (_isLoading) return;
         StartCoroutine(LoadExperimentScene());
     }
 
-    // ── Scene loading ─────────────────────────────────────────────────────────
     private IEnumerator LoadExperimentScene()
     {
         _isLoading = true;
 
-        // 1. fade to black/posssible place to add loading screen
+        // 1.  loading screen
         if (fadeCanvas != null)
             yield return StartCoroutine(Fade(0f, 1f));
 
-        // 2. Load the experiment scene additively
+        // 2. Load the experiment scene 
         AsyncOperation load = SceneManager.LoadSceneAsync(targetSceneName, LoadSceneMode.Additive);
         yield return new WaitUntil(() => load.isDone);
 
@@ -82,7 +62,7 @@ public class ExperimentLoader : MonoBehaviour
 
         SetMainSceneVisible(false);
 
-        // 3. Find the SpawnPoint in the newly loaded scene
+        // 3. Find the SpawnPoint 
         GameObject spawnPoint = FindSpawnPointInScene(_loadedScene);
 
         if (spawnPoint == null)
@@ -104,7 +84,7 @@ public class ExperimentLoader : MonoBehaviour
             Debug.LogWarning("[SLUBT Labs] xrOrigin is not assigned on Experiment Loader. Player won't be repositioned.");
         }
 
-        // 5. Optional fade back in
+        // 5.  fade back in
         if (fadeCanvas != null)
             yield return StartCoroutine(Fade(1f, 0f));
 
@@ -113,10 +93,6 @@ public class ExperimentLoader : MonoBehaviour
 
     // ── Return to main scene ──────────────────────────────────────────────────
 
-    /// <summary>
-    /// Call this to unload the experiment scene and return the player to the hub.
-    /// Hook this to a "Return" button or exit anchor in your experiment scene.
-    /// </summary>
     public void ReturnToHub(Vector3 hubSpawnPosition)
     {
         if (!_experimentSceneLoaded) return;
@@ -137,12 +113,12 @@ public class ExperimentLoader : MonoBehaviour
         Scene mainScene = SceneManager.GetSceneAt(0);
         SceneManager.SetActiveScene(mainScene);
         DynamicGI.UpdateEnvironment();
+        SetMainSceneVisible(true);
 
         AsyncOperation unload = SceneManager.UnloadSceneAsync(_loadedScene);
         yield return new WaitUntil(() => unload.isDone);
 
         _experimentSceneLoaded = false;
-        SetMainSceneVisible(true);
 
         if (fadeCanvas != null)
             yield return StartCoroutine(Fade(1f, 0f));
