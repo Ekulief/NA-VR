@@ -36,12 +36,9 @@ public class DepthPerceptionUI : MonoBehaviour
     public Button incrementButton;          // + button
     public Button decrementButton;          // - button
     public Slider heightSlider;             // Bottom slider for large jumps
-    public Button submitButton;             // Confirm estimate
-    public Button returnHomeButton;         // Return to hub
+    public Button submitButton;              // Confirm estimate
+    public Button returnHomeButton;          // Return to hub
     public GameObject confirmationPanel;    // Shown after submit, hidden by default
-
-    [Tooltip("World position the player returns to in the hub.")]
-    public Vector3 hubReturnPosition = Vector3.zero;
 
     // ── State ─────────────────────────────────────────────────────────────────
     private float _currentHeight = 0f;
@@ -112,11 +109,18 @@ public class DepthPerceptionUI : MonoBehaviour
 
     private void OnReturnHome()
     {
-        confirmationPanel.SetActive(false);
+        if (confirmationPanel != null)
+            confirmationPanel.SetActive(false);
+
         if (_experimentLoader != null)
-            _experimentLoader.ReturnToHub(hubReturnPosition);
+        {
+            // Loader now handles matching and teleporting directly to "Respawn"
+            _experimentLoader.ReturnToHub();
+        }
         else
+        {
             Debug.LogWarning("[SLUBT Labs] ExperimentLoader not found in any loaded scene.");
+        }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

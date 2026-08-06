@@ -3,20 +3,11 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 
 /// <summary>
-/// SLUBT Labs — Experiment Loader
-///
-///   1. Player activates the teleport anchor normally (ray + trigger).
-///   2. ExperimentAnchor (on the TeleportationAnchor) calls LoadScene() on this.
-///   3. We load the target scene additively (Main scene stays loaded).
-///   4. We move the XR Origin to the Spawn Point in the new scene.
-///   5. On return, we unload the experiment scene and move the player back.
-///
+/// SLUBT Labs — Dynamic Experiment Loader
+/// Keep this script attached to your central manager object.
 /// </summary>
 public class ExperimentLoader : MonoBehaviour
 {
-    [Header("Scene")]
-    public string targetSceneName = "Depth Perception Scene";
-
     [Header("Player")]
     public GameObject xrOrigin;
 
@@ -36,25 +27,35 @@ public class ExperimentLoader : MonoBehaviour
 
     // ── Scene loading ─────────────────────────────────────────────────────────
 
-    public void LoadScene()
+    /// <summary>
+    /// Dynamically loads any scene name passed to it from an individual teleport anchor pad.
+    /// </summary>
+    public void LoadScene(string sceneName)
     {
         if (_isLoading) return;
-        StartCoroutine(LoadExperimentScene());
+
+        if (string.IsNullOrEmpty(sceneName))
+        {
+            Debug.LogError("[SLUBT Labs] Cannot load scene: The passed scene name is empty!");
+            return;
+        }
+
+        StartCoroutine(LoadExperimentScene(sceneName));
     }
 
-    private IEnumerator LoadExperimentScene()
+    private IEnumerator LoadExperimentScene(string sceneName)
     {
         _isLoading = true;
 
-        // 1.  loading screen
+        // 1. Fade out to loading screen
         if (fadeCanvas != null)
             yield return StartCoroutine(Fade(0f, 1f));
 
-        // 2. Load the experiment scene 
-        AsyncOperation load = SceneManager.LoadSceneAsync(targetSceneName, LoadSceneMode.Additive);
+        // 2. Load the dynamic experiment scene additively 
+        AsyncOperation load = SceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Additive);
         yield return new WaitUntil(() => load.isDone);
 
-        _loadedScene = SceneManager.GetSceneByName(targetSceneName);
+        _loadedScene = SceneManager.GetSceneByName(sceneName);
         _experimentSceneLoaded = true;
 
         SceneManager.SetActiveScene(_loadedScene);
@@ -62,18 +63,18 @@ public class ExperimentLoader : MonoBehaviour
 
         SetMainSceneVisible(false);
 
-        // 3. Find the SpawnPoint 
+        // 3. Find the Spawn Point inside the newly loaded scene
         GameObject spawnPoint = FindSpawnPointInScene(_loadedScene);
 
         if (spawnPoint == null)
         {
-            Debug.LogError($"[SLUBT Labs] No GameObject named 'Spawn Point' found in '{targetSceneName}'. " +
+            Debug.LogError($"[SLUBT Labs] No GameObject named 'Spawn Point' found in '{sceneName}'. " +
                            "Create an empty GameObject called Spawn Point and position it where the player should appear.");
             _isLoading = false;
             yield break;
         }
 
-        // 4. Move XR Origin to the spawn point
+        // 4. Move XR Origin to the dynamic spawn point
         if (xrOrigin != null)
         {
             xrOrigin.transform.position = spawnPoint.transform.position;
@@ -84,7 +85,7 @@ public class ExperimentLoader : MonoBehaviour
             Debug.LogWarning("[SLUBT Labs] xrOrigin is not assigned on Experiment Loader. Player won't be repositioned.");
         }
 
-        // 5.  fade back in
+        // 5. Fade back in
         if (fadeCanvas != null)
             yield return StartCoroutine(Fade(1f, 0f));
 
@@ -93,22 +94,67 @@ public class ExperimentLoader : MonoBehaviour
 
     // ── Return to main scene ──────────────────────────────────────────────────
 
+    /// <summary>
+    /// Legacy fallback method signature wrapper to handle any calling script still passing a Vector3.
+    /// </summary>
     public void ReturnToHub(Vector3 hubSpawnPosition)
     {
-        if (!_experimentSceneLoaded) return;
-        StartCoroutine(UnloadExperimentScene(hubSpawnPosition));
+        ReturnToHub();
     }
 
-    private IEnumerator UnloadExperimentScene(Vector3 returnPosition)
+    /// <summary>
+    /// Clean parameterless method that locates the "Respawn" tracking target directly in the Main VR Scene.
+    /// </summary>
+    public void ReturnToHub()
+    {
+        if (!_experimentSceneLoaded) return;
+
+        Vector3 finalReturnPos = Vector3.zero;
+        Quaternion finalReturnRot = Quaternion.identity;
+        bool foundRespawnObject = false;
+
+        // Automatically scan your main Hub scene roots for an object named exactly "Respawn"
+        Scene hubScene = SceneManager.GetSceneAt(0);
+        foreach (GameObject root in hubScene.GetRootGameObjects())
+        {
+            if (root.name == "Respawn")
+            {
+                finalReturnPos = root.transform.position;
+                finalReturnRot = root.transform.rotation;
+                foundRespawnObject = true;
+                break;
+            }
+            Transform found = root.transform.Find("Respawn");
+            if (found != null)
+            {
+                finalReturnPos = found.position;
+                finalReturnRot = found.rotation;
+                foundRespawnObject = true;
+                break;
+            }
+        }
+
+        if (!foundRespawnObject)
+        {
+            Debug.LogError("[SLUBT Labs] CRITICAL ERROR: Could not locate a GameObject named exactly 'Respawn' inside your Main VR Scene hierarchy!");
+        }
+
+        StartCoroutine(UnloadExperimentScene(finalReturnPos, finalReturnRot));
+    }
+
+    private IEnumerator UnloadExperimentScene(Vector3 returnPosition, Quaternion returnRotation)
     {
         _isLoading = true;
 
         if (fadeCanvas != null)
             yield return StartCoroutine(Fade(0f, 1f));
 
-        // Move player back to hub before unloading so they don't fall into void
+        // Move player back onto the localized Respawn GameObject target transform space
         if (xrOrigin != null)
+        {
             xrOrigin.transform.position = returnPosition;
+            xrOrigin.transform.rotation = returnRotation;
+        }
 
         Scene mainScene = SceneManager.GetSceneAt(0);
         SceneManager.SetActiveScene(mainScene);
@@ -139,7 +185,6 @@ public class ExperimentLoader : MonoBehaviour
             if (root.name == "Spawn Point")
                 return root;
 
-            // Also check children of root objects
             Transform found = root.transform.Find("Spawn Point");
             if (found != null)
                 return found.gameObject;
@@ -147,7 +192,6 @@ public class ExperimentLoader : MonoBehaviour
         return null;
     }
 
-    /// <summary>Fades the optional CanvasGroup between two alpha values.</summary>
     private IEnumerator Fade(float from, float to)
     {
         if (fadeCanvas == null) yield break;
@@ -164,7 +208,6 @@ public class ExperimentLoader : MonoBehaviour
 
         fadeCanvas.alpha = to;
 
-        // Hide the canvas when fully transparent so it doesn't block raycasts
         if (to <= 0f)
             fadeCanvas.gameObject.SetActive(false);
     }
