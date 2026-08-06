@@ -27,28 +27,39 @@ public class GazeAndTakeCamera : MonoBehaviour
 
     void ExecuteTeleport()
     {
-
         var reticle = Object.FindAnyObjectByType<CardboardReticlePointer>();
         if (reticle != null)
         {
             reticle.gameObject.SetActive(false);
         }
 
- 
-        GameObject camRig = Camera.main.transform.root.gameObject;
+        // GRAB THE RIG: Since the Main Camera is inside your Player_6DoF_Rig, 
+        // its direct parent is the object we need to take to the next scene.
+        GameObject camRig = Camera.main.transform.parent != null ?
+                           Camera.main.transform.parent.gameObject : Camera.main.gameObject;
+
         DontDestroyOnLoad(camRig);
 
         SceneManager.LoadScene(targetScene);
-
         SceneManager.sceneLoaded += OnSceneLoaded;
     }
 
     void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
         GameObject spawn = GameObject.Find(spawnPointName);
-        if (spawn != null)
+        GameObject camRig = Camera.main.transform.parent != null ?
+                           Camera.main.transform.parent.gameObject : Camera.main.gameObject;
+
+        if (spawn != null && camRig != null)
         {
-            GameObject camRig = Camera.main.transform.root.gameObject;
+            // 1. Force the AR tracking code to instantly clear its baseline history
+            Cardboard6DoF dynamicTracker = camRig.GetComponent<Cardboard6DoF>();
+            if (dynamicTracker != null)
+            {
+                dynamicTracker.Recalibrate();
+            }
+
+            // 2. Snap the rig directly onto the spawn point coordinates
             camRig.transform.position = spawn.transform.position;
             camRig.transform.rotation = spawn.transform.rotation;
         }
@@ -58,13 +69,9 @@ public class GazeAndTakeCamera : MonoBehaviour
         if (reticle != null)
         {
             reticle.gameObject.SetActive(true);
-
-            // FORCE RESET: This tells the reticle "You aren't looking at anything anymore"
-            // It forces the circle to shrink back to a dot.
             reticle.SendMessage("OnPointerExit", null, SendMessageOptions.DontRequireReceiver);
         }
 
-        // Clean up the event listener
         SceneManager.sceneLoaded -= OnSceneLoaded;
     }
 }
