@@ -1,0 +1,7 @@
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans+Flex:opsz,wght@6..144,1..1000&family=League+Spartan:wght@100..900&display=swap');
+@import "tailwindcss";
+
+@theme {
+    --font-google: "Google Sans Flex", sans-serif;
+    --color-slublue: #111FA2;
+}
