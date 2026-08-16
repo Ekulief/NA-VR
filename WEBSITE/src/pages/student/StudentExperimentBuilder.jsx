@@ -2,33 +2,42 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import {
-  collection,
-  getDocs,
-  query,
-  where,
-  addDoc,
-  serverTimestamp,
   doc,
   getDoc,
+  addDoc,
   updateDoc,
+  collection,
+  serverTimestamp,
 } from "firebase/firestore";
 
-import { db } from "../../config/firebase-config";
+import { db, auth } from "../../config/firebase-config";
 
 import { ArrowLeft, Plus, X, Image, Box, Upload } from "lucide-react";
 
-export default function InstructorExperimentBuilder() {
+export default function StudentExperimentBuilder() {
   const navigate = useNavigate();
   const { blockId, experimentId } = useParams();
-
   const isEditing = Boolean(experimentId);
-
   const [experimentName, setExperimentName] = useState("");
   const [instructions, setInstructions] = useState("");
   const [duration, setDuration] = useState("");
-
   const [environment, setEnvironment] = useState("");
-
+  const [stimuli, setStimuli] = useState([
+    {
+      id: Date.now(),
+      type: "text",
+      content: "",
+      duration: "",
+      positionX: "",
+      positionY: "",
+      positionZ: "",
+      color: "#ff0000",
+    },
+  ]);
+  const [participantInstructions, setParticipantInstructions] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(isEditing);
+  const [error, setError] = useState("");
   const environments = [
     {
       name: "Classroom",
@@ -52,53 +61,8 @@ export default function InstructorExperimentBuilder() {
     },
   ];
 
-  const [stimuli, setStimuli] = useState([
-    {
-      id: Date.now(),
-      type: "text",
-      content: "",
-      duration: "",
-      positionX: "",
-      positionY: "",
-      positionZ: "",
-      color: "#ff0000",
-    },
-  ]);
-
-  const [participantInstructions, setParticipantInstructions] = useState("");
-  const [groups, setGroups] = useState([]);
-  const [selectedGroups, setSelectedGroups] = useState([]);
-  const [allowStudentExperiments, setAllowStudentExperiments] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(isEditing);
-
   useEffect(() => {
-    const getGroups = async () => {
-      if (!blockId) return;
-
-      try {
-        const groupsRef = collection(db, "group");
-
-        const q = query(groupsRef, where("blockId", "==", blockId));
-
-        const snapshot = await getDocs(q);
-
-        const groupList = snapshot.docs.map((groupDoc) => ({
-          id: groupDoc.id,
-          ...groupDoc.data(),
-        }));
-
-        setGroups(groupList);
-      } catch (error) {
-        console.error("Error getting groups:", error);
-      }
-    };
-
-    getGroups();
-  }, [blockId]);
-
-  useEffect(() => {
-    const getExperiment = async () => {
+    const loadExperiment = async () => {
       if (!experimentId) {
         setLoading(false);
         return;
@@ -106,36 +70,54 @@ export default function InstructorExperimentBuilder() {
 
       try {
         setLoading(true);
+        setError("");
+
+        const currentUser = auth.currentUser;
+
+        if (!currentUser) {
+          setError("You must be logged in to edit an experiment.");
+          return;
+        }
 
         const experimentRef = doc(db, "experiment", experimentId);
 
         const experimentSnap = await getDoc(experimentRef);
 
         if (!experimentSnap.exists()) {
-          alert("Experiment not found.");
-          navigate(-1);
+          setError("Experiment not found.");
           return;
         }
 
         const data = experimentSnap.data();
+
+        if (data.createdByStudent !== currentUser.uid) {
+          setError("You do not have permission to edit this experiment.");
+          return;
+        }
+
+        if (data.blockId !== blockId) {
+          setError("This experiment does not belong to this activity.");
+          return;
+        }
+
         setExperimentName(data.experimentName || "");
         setInstructions(data.instructions || "");
         setDuration(data.duration || "");
-        setEnvironment(data.environment || "");
+
+        setEnvironment(data.environment || data.vrEnvironment || "");
+
         setParticipantInstructions(data.participantInstructions || "");
-        setSelectedGroups(data.groupIds || []);
-        setAllowStudentExperiments(data.allowStudentExperiments === true);
 
         if (Array.isArray(data.stimuli) && data.stimuli.length > 0) {
           setStimuli(
             data.stimuli.map((stimulus, index) => ({
-              id: `${Date.now()}-${index}`,
+              id: Date.now() + index + Math.random(),
               type: stimulus.type || "text",
               content: stimulus.content || "",
-              duration: stimulus.duration || "",
-              positionX: stimulus.positionX || "",
-              positionY: stimulus.positionY || "",
-              positionZ: stimulus.positionZ || "",
+              duration: stimulus.duration ?? "",
+              positionX: stimulus.positionX ?? "",
+              positionY: stimulus.positionY ?? "",
+              positionZ: stimulus.positionZ ?? "",
               color: stimulus.color || "#ff0000",
             })),
           );
@@ -154,17 +136,16 @@ export default function InstructorExperimentBuilder() {
           ]);
         }
       } catch (error) {
-        console.error("Error getting experiment:", error);
+        console.error("Error loading student experiment:", error);
 
-        alert("Unable to load the experiment.");
-        navigate(-1);
+        setError("Unable to load the experiment.");
       } finally {
         setLoading(false);
       }
     };
 
-    getExperiment();
-  }, [experimentId, navigate]);
+    loadExperiment();
+  }, [blockId, experimentId]);
 
   const addStimulus = (type) => {
     const newStimulus = {
@@ -198,17 +179,7 @@ export default function InstructorExperimentBuilder() {
     );
   };
 
-  const toggleGroup = (groupId) => {
-    setSelectedGroups((previous) => {
-      if (previous.includes(groupId)) {
-        return previous.filter((id) => id !== groupId);
-      }
-
-      return [...previous, groupId];
-    });
-  };
-
-  const saveExperiment = async (status) => {
+  const saveExperiment = async () => {
     if (!experimentName.trim()) {
       alert("Please enter an experiment name.");
       return;
@@ -219,66 +190,88 @@ export default function InstructorExperimentBuilder() {
       return;
     }
 
+    const currentUser = auth.currentUser;
+
+    if (!currentUser) {
+      alert("You must be logged in to create an experiment.");
+      return;
+    }
+
     try {
       setSaving(true);
+
+      const formattedStimuli = stimuli.map((stimulus) => ({
+        type: stimulus.type,
+        content: stimulus.content,
+        duration: stimulus.duration,
+        positionX: stimulus.positionX,
+        positionY: stimulus.positionY,
+        positionZ: stimulus.positionZ,
+
+        color: stimulus.type === "text" ? stimulus.color : null,
+      }));
+
+      if (isEditing) {
+        const experimentRef = doc(db, "experiment", experimentId);
+
+        const experimentSnap = await getDoc(experimentRef);
+
+        if (!experimentSnap.exists()) {
+          alert("Experiment not found.");
+          return;
+        }
+
+        const existingData = experimentSnap.data();
+
+        if (existingData.createdByStudent !== currentUser.uid) {
+          alert("You do not have permission to edit this experiment.");
+          return;
+        }
+
+        await updateDoc(experimentRef, {
+          experimentName: experimentName.trim(),
+          instructions: instructions.trim(),
+          duration: duration,
+          environment: environment,
+          stimuli: formattedStimuli,
+          participantInstructions: participantInstructions.trim(),
+          createdByStudent: currentUser.uid,
+          updatedAt: serverTimestamp(),
+        });
+
+        alert("Experiment updated successfully!");
+
+        navigate(`/student/course/${blockId}/experiment`);
+
+        return;
+      }
 
       const experimentData = {
         experimentName: experimentName.trim(),
         instructions: instructions.trim(),
         duration: duration,
         blockId: blockId,
-
         environment: environment,
-
-        stimuli: stimuli.map((stimulus) => ({
-          type: stimulus.type,
-          content: stimulus.content,
-          duration: stimulus.duration,
-          positionX: stimulus.positionX,
-          positionY: stimulus.positionY,
-          positionZ: stimulus.positionZ,
-          color: stimulus.type === "text" ? stimulus.color : null,
-        })),
-
+        stimuli: formattedStimuli,
         participantInstructions: participantInstructions.trim(),
-
-        groupIds: selectedGroups,
-
-        allowStudentExperiments: allowStudentExperiments,
-
-        status: status,
-
+        createdByStudent: currentUser.uid,
+        createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
 
-      if (isEditing) {
-        const experimentRef = doc(db, "experiment", experimentId);
+      await addDoc(collection(db, "experiment"), experimentData);
 
-        await updateDoc(experimentRef, experimentData);
+      alert("Experiment created successfully!");
 
-        alert(
-          status === "Published"
-            ? "Experiment updated and published successfully!"
-            : "Experiment updated and saved as draft.",
-        );
-      } else {
-        await addDoc(collection(db, "experiment"), {
-          ...experimentData,
-          createdAt: serverTimestamp(),
-        });
-
-        alert(
-          status === "Published"
-            ? "Experiment published successfully!"
-            : "Experiment saved as draft.",
-        );
-      }
-
-      navigate(-1);
+      navigate(`/student/course/${blockId}/experiment`);
     } catch (error) {
-      console.error("Error saving experiment:", error);
+      console.error("Error saving student experiment:", error);
 
-      alert("Unable to save the experiment. Please try again.");
+      alert(
+        isEditing
+          ? "Unable to update the experiment. Please try again."
+          : "Unable to create the experiment. Please try again.",
+      );
     } finally {
       setSaving(false);
     }
@@ -288,6 +281,35 @@ export default function InstructorExperimentBuilder() {
     return (
       <div className="font-google min-h-screen flex items-center justify-center">
         <p>Loading experiment...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="font-google min-h-screen bg-white text-black">
+        <main className="pt-20 px-8">
+          <button
+            onClick={() => navigate(-1)}
+            className="
+              flex
+              items-center
+              gap-2
+              text-gray-600
+              hover:text-black
+              transition
+              mb-6
+            "
+          >
+            <ArrowLeft size={20} />
+
+            <span>Back</span>
+          </button>
+
+          <div className="max-w-5xl mx-auto">
+            <p className="text-red-600">{error}</p>
+          </div>
+        </main>
       </div>
     );
   }
@@ -310,12 +332,10 @@ export default function InstructorExperimentBuilder() {
         >
           <ArrowLeft size={20} />
 
-          <span>Back to Experiments</span>
+          <span>Back to Activity</span>
         </button>
 
         <div className="max-w-5xl mx-auto px-6 pb-12">
-          {/* TITLE */}
-
           <h1 className="text-3xl font-medium mt-5 mb-6">
             {isEditing ? "Edit Experiment" : "New Experiment"}
           </h1>
@@ -516,11 +536,11 @@ export default function InstructorExperimentBuilder() {
                 <div
                   key={stimulus.id}
                   className="
-                    border
-                    border-gray-300
-                    rounded-lg
-                    p-3
-                  "
+                      border
+                      border-gray-300
+                      rounded-lg
+                      p-3
+                    "
                 >
                   <div className="flex justify-between mb-2">
                     <h3 className="text-base font-medium">
@@ -535,9 +555,9 @@ export default function InstructorExperimentBuilder() {
                       type="button"
                       onClick={() => removeStimulus(stimulus.id)}
                       className="
-                        text-red-600
-                        hover:text-red-800
-                      "
+                          text-red-600
+                          hover:text-red-800
+                        "
                     >
                       <X size={18} />
                     </button>
@@ -561,14 +581,14 @@ export default function InstructorExperimentBuilder() {
                                 )
                               }
                               className="
-                                w-full
-                                bg-gray-200
-                                border
-                                border-gray-300
-                                rounded-lg
-                                px-3
-                                py-2
-                              "
+                                  w-full
+                                  bg-gray-200
+                                  border
+                                  border-gray-300
+                                  rounded-lg
+                                  px-3
+                                  py-2
+                                "
                             />
 
                             <input
@@ -582,16 +602,16 @@ export default function InstructorExperimentBuilder() {
                                 )
                               }
                               className="
-                                absolute
-                                right-2
-                                top-1/2
-                                -translate-y-1/2
-                                w-7
-                                h-7
-                                border-0
-                                bg-transparent
-                                cursor-pointer
-                              "
+                                  absolute
+                                  right-2
+                                  top-1/2
+                                  -translate-y-1/2
+                                  w-7
+                                  h-7
+                                  border-0
+                                  bg-transparent
+                                  cursor-pointer
+                                "
                             />
                           </div>
                         </div>
@@ -612,14 +632,14 @@ export default function InstructorExperimentBuilder() {
                               )
                             }
                             className="
-                              w-full
-                              bg-gray-200
-                              border
-                              border-gray-300
-                              rounded-lg
-                              px-3
-                              py-2
-                            "
+                                w-full
+                                bg-gray-200
+                                border
+                                border-gray-300
+                                rounded-lg
+                                px-3
+                                py-2
+                              "
                           />
                         </div>
                       </div>
@@ -641,14 +661,14 @@ export default function InstructorExperimentBuilder() {
                               )
                             }
                             className="
-                              w-full
-                              bg-gray-200
-                              border
-                              border-gray-300
-                              rounded-lg
-                              px-3
-                              py-2
-                            "
+                                w-full
+                                bg-gray-200
+                                border
+                                border-gray-300
+                                rounded-lg
+                                px-3
+                                py-2
+                              "
                           />
                         </div>
 
@@ -668,14 +688,14 @@ export default function InstructorExperimentBuilder() {
                               )
                             }
                             className="
-                              w-full
-                              bg-gray-200
-                              border
-                              border-gray-300
-                              rounded-lg
-                              px-3
-                              py-2
-                            "
+                                w-full
+                                bg-gray-200
+                                border
+                                border-gray-300
+                                rounded-lg
+                                px-3
+                                py-2
+                              "
                           />
                         </div>
 
@@ -695,14 +715,14 @@ export default function InstructorExperimentBuilder() {
                               )
                             }
                             className="
-                              w-full
-                              bg-gray-200
-                              border
-                              border-gray-300
-                              rounded-lg
-                              px-3
-                              py-2
-                            "
+                                w-full
+                                bg-gray-200
+                                border
+                                border-gray-300
+                                rounded-lg
+                                px-3
+                                py-2
+                              "
                           />
                         </div>
                       </div>
@@ -717,18 +737,18 @@ export default function InstructorExperimentBuilder() {
 
                           <label
                             className="
-                              w-full
-                              bg-gray-200
-                              border
-                              border-gray-300
-                              rounded-lg
-                              px-3
-                              py-2
-                              flex
-                              items-center
-                              justify-between
-                              cursor-pointer
-                            "
+                                w-full
+                                bg-gray-200
+                                border
+                                border-gray-300
+                                rounded-lg
+                                px-3
+                                py-2
+                                flex
+                                items-center
+                                justify-between
+                                cursor-pointer
+                              "
                           >
                             <span className="truncate">
                               {stimulus.content || "Choose image"}
@@ -771,14 +791,14 @@ export default function InstructorExperimentBuilder() {
                               )
                             }
                             className="
-                              w-full
-                              bg-gray-200
-                              border
-                              border-gray-300
-                              rounded-lg
-                              px-3
-                              py-2
-                            "
+                                w-full
+                                bg-gray-200
+                                border
+                                border-gray-300
+                                rounded-lg
+                                px-3
+                                py-2
+                              "
                           />
                         </div>
                       </div>
@@ -800,14 +820,14 @@ export default function InstructorExperimentBuilder() {
                               )
                             }
                             className="
-                              w-full
-                              bg-gray-200
-                              border
-                              border-gray-300
-                              rounded-lg
-                              px-3
-                              py-2
-                            "
+                                w-full
+                                bg-gray-200
+                                border
+                                border-gray-300
+                                rounded-lg
+                                px-3
+                                py-2
+                              "
                           />
                         </div>
 
@@ -827,14 +847,14 @@ export default function InstructorExperimentBuilder() {
                               )
                             }
                             className="
-                              w-full
-                              bg-gray-200
-                              border
-                              border-gray-300
-                              rounded-lg
-                              px-3
-                              py-2
-                            "
+                                w-full
+                                bg-gray-200
+                                border
+                                border-gray-300
+                                rounded-lg
+                                px-3
+                                py-2
+                              "
                           />
                         </div>
 
@@ -854,14 +874,14 @@ export default function InstructorExperimentBuilder() {
                               )
                             }
                             className="
-                              w-full
-                              bg-gray-200
-                              border
-                              border-gray-300
-                              rounded-lg
-                              px-3
-                              py-2
-                            "
+                                w-full
+                                bg-gray-200
+                                border
+                                border-gray-300
+                                rounded-lg
+                                px-3
+                                py-2
+                              "
                           />
                         </div>
                       </div>
@@ -878,18 +898,18 @@ export default function InstructorExperimentBuilder() {
 
                           <label
                             className="
-                              w-full
-                              bg-gray-200
-                              border
-                              border-gray-300
-                              rounded-lg
-                              px-3
-                              py-2
-                              flex
-                              items-center
-                              justify-between
-                              cursor-pointer
-                            "
+                                w-full
+                                bg-gray-200
+                                border
+                                border-gray-300
+                                rounded-lg
+                                px-3
+                                py-2
+                                flex
+                                items-center
+                                justify-between
+                                cursor-pointer
+                              "
                           >
                             <span className="truncate">
                               {stimulus.content || "Choose 3D object"}
@@ -932,14 +952,14 @@ export default function InstructorExperimentBuilder() {
                               )
                             }
                             className="
-                              w-full
-                              bg-gray-200
-                              border
-                              border-gray-300
-                              rounded-lg
-                              px-3
-                              py-2
-                            "
+                                w-full
+                                bg-gray-200
+                                border
+                                border-gray-300
+                                rounded-lg
+                                px-3
+                                py-2
+                              "
                           />
                         </div>
                       </div>
@@ -961,14 +981,14 @@ export default function InstructorExperimentBuilder() {
                               )
                             }
                             className="
-                              w-full
-                              bg-gray-200
-                              border
-                              border-gray-300
-                              rounded-lg
-                              px-3
-                              py-2
-                            "
+                                w-full
+                                bg-gray-200
+                                border
+                                border-gray-300
+                                rounded-lg
+                                px-3
+                                py-2
+                              "
                           />
                         </div>
 
@@ -988,14 +1008,14 @@ export default function InstructorExperimentBuilder() {
                               )
                             }
                             className="
-                              w-full
-                              bg-gray-200
-                              border
-                              border-gray-300
-                              rounded-lg
-                              px-3
-                              py-2
-                            "
+                                w-full
+                                bg-gray-200
+                                border
+                                border-gray-300
+                                rounded-lg
+                                px-3
+                                py-2
+                              "
                           />
                         </div>
 
@@ -1015,14 +1035,14 @@ export default function InstructorExperimentBuilder() {
                               )
                             }
                             className="
-                              w-full
-                              bg-gray-200
-                              border
-                              border-gray-300
-                              rounded-lg
-                              px-3
-                              py-2
-                            "
+                                w-full
+                                bg-gray-200
+                                border
+                                border-gray-300
+                                rounded-lg
+                                px-3
+                                py-2
+                              "
                           />
                         </div>
                       </div>
@@ -1067,86 +1087,11 @@ export default function InstructorExperimentBuilder() {
             />
           </section>
 
-          <section
-            className="
-              border
-              border-gray-300
-              rounded-lg
-              p-4
-              mb-5
-            "
-          >
-            <h2 className="text-lg font-medium mb-3">Groups</h2>
-
-            {groups.length === 0 ? (
-              <p className="text-gray-500">
-                No groups have been created for this course.
-              </p>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {groups.map((group) => (
-                  <label
-                    key={group.id}
-                    className="
-                      flex
-                      items-center
-                      gap-3
-                      cursor-pointer
-                    "
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedGroups.includes(group.id)}
-                      onChange={() => toggleGroup(group.id)}
-                      className="
-                        w-4
-                        h-4
-                        accent-indigo-600
-                      "
-                    />
-
-                    <span>
-                      {group.groupName || group.name || "Unnamed Group"}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </section>
-
-          <div className="flex items-center gap-3 mb-6">
-            <span>
-              Allow Students to create an experiment for this activity?
-            </span>
-
-            <label className="flex items-center gap-1">
-              <input
-                type="radio"
-                name="studentExperimentPermission"
-                checked={allowStudentExperiments === true}
-                onChange={() => setAllowStudentExperiments(true)}
-                className="accent-indigo-600"
-              />
-              Yes
-            </label>
-
-            <label className="flex items-center gap-1">
-              <input
-                type="radio"
-                name="studentExperimentPermission"
-                checked={allowStudentExperiments === false}
-                onChange={() => setAllowStudentExperiments(false)}
-                className="accent-indigo-600"
-              />
-              No
-            </label>
-          </div>
-
           <div className="flex items-center gap-2">
             <button
               type="button"
               disabled={saving}
-              onClick={() => saveExperiment("Published")}
+              onClick={saveExperiment}
               className="
                 bg-indigo-800
                 hover:bg-indigo-700
@@ -1164,16 +1109,18 @@ export default function InstructorExperimentBuilder() {
               <Plus size={18} />
 
               {saving
-                ? "Saving..."
+                ? isEditing
+                  ? "Updating..."
+                  : "Creating..."
                 : isEditing
                   ? "Update Experiment"
-                  : "Publish Experiment"}
+                  : "Create Experiment"}
             </button>
 
             <button
               type="button"
               disabled={saving}
-              onClick={() => saveExperiment("Draft")}
+              onClick={() => navigate(-1)}
               className="
                 border
                 border-gray-300
@@ -1185,7 +1132,7 @@ export default function InstructorExperimentBuilder() {
                 transition
               "
             >
-              {isEditing ? "Save as draft" : "Save as draft"}
+              Cancel
             </button>
           </div>
         </div>

@@ -8,6 +8,7 @@ import Login from "./pages/Login";
 import StudentHome from "./pages/student/StudentHome";
 import StudentCourseExperiments from "./pages/student/StudentCourseExperiments";
 import StudentExperimentDetails from "./pages/student/StudentExperimentDetails";
+import StudentExperimentBuilder from "./pages/student/StudentExperimentBuilder";
 import InstructorHome from "./pages/instructor/InstructorHome";
 import InstructorCourseExperiments from "./pages/instructor/InstructorCourseExperiments";
 import InstructorExperimentBuilder from "./pages/instructor/InstructorExperimentBuilder";
@@ -86,6 +87,28 @@ function App() {
         />
 
         <Route
+          path="/student/course/:blockId/experiment/create"
+          element={
+            user ? (
+              <StudentExperimentBuilder />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+
+        <Route
+          path="/student/course/:blockId/experiment/:experimentId/edit"
+          element={
+            user ? (
+              <StudentExperimentBuilder />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+
+        <Route
           path="/instructor/course/:blockId"
           element={
             user ? (
@@ -98,6 +121,17 @@ function App() {
 
         <Route
           path="/instructor/course/:blockId/experiment/create"
+          element={
+            user ? (
+              <InstructorExperimentBuilder />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+
+        <Route
+          path="/instructor/course/:blockId/experiment/:experimentId/edit"
           element={
             user ? (
               <InstructorExperimentBuilder />
