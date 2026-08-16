@@ -105,10 +105,12 @@ export default function InstructorCourseExperiments() {
 
         const experimentSnapshot = await getDocs(experimentQuery);
 
-        const experimentList = experimentSnapshot.docs.map((experimentDoc) => ({
-          id: experimentDoc.id,
-          ...experimentDoc.data(),
-        }));
+        const experimentList = experimentSnapshot.docs
+          .map((experimentDoc) => ({
+            id: experimentDoc.id,
+            ...experimentDoc.data(),
+          }))
+          .filter((experiment) => experiment.createdByStudent !== true);
 
         setExperiments(experimentList);
 
@@ -206,11 +208,21 @@ export default function InstructorCourseExperiments() {
     }
 
     try {
-      // Add deleteDoc() here when ready.
+      const experimentRef = doc(db, "experiment", experimentId);
 
-      console.log("Delete experiment:", experimentId);
+      await deleteDoc(experimentRef);
+
+      setExperiments((currentExperiments) =>
+        currentExperiments.filter(
+          (experiment) => experiment.id !== experimentId,
+        ),
+      );
+
+      alert("Experiment deleted successfully.");
     } catch (error) {
       console.error("Error deleting experiment:", error);
+
+      alert("Unable to delete the experiment. Please try again.");
     }
   };
 

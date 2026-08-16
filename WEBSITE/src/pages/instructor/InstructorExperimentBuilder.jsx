@@ -8,6 +8,9 @@ import {
   where,
   addDoc,
   serverTimestamp,
+  doc,
+  getDoc,
+  updateDoc,
 } from "firebase/firestore";
 
 import { db } from "../../config/firebase-config";
@@ -16,7 +19,9 @@ import { ArrowLeft, Plus, X, Image, Box, Upload } from "lucide-react";
 
 export default function InstructorExperimentBuilder() {
   const navigate = useNavigate();
-  const { blockId } = useParams();
+  const { blockId, experimentId } = useParams();
+
+  const isEditing = Boolean(experimentId);
 
   const [experimentName, setExperimentName] = useState("");
   const [instructions, setInstructions] = useState("");
@@ -65,6 +70,7 @@ export default function InstructorExperimentBuilder() {
   const [selectedGroups, setSelectedGroups] = useState([]);
   const [allowStudentExperiments, setAllowStudentExperiments] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(isEditing);
 
   useEffect(() => {
     const getGroups = async () => {
@@ -90,6 +96,75 @@ export default function InstructorExperimentBuilder() {
 
     getGroups();
   }, [blockId]);
+
+  useEffect(() => {
+    const getExperiment = async () => {
+      if (!experimentId) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+
+        const experimentRef = doc(db, "experiment", experimentId);
+
+        const experimentSnap = await getDoc(experimentRef);
+
+        if (!experimentSnap.exists()) {
+          alert("Experiment not found.");
+          navigate(-1);
+          return;
+        }
+
+        const data = experimentSnap.data();
+        setExperimentName(data.experimentName || "");
+        setInstructions(data.instructions || "");
+        setDuration(data.duration || "");
+        setEnvironment(data.environment || "");
+        setParticipantInstructions(data.participantInstructions || "");
+        setSelectedGroups(data.groupIds || []);
+        setAllowStudentExperiments(data.allowStudentExperiments === true);
+
+        if (Array.isArray(data.stimuli) && data.stimuli.length > 0) {
+          setStimuli(
+            data.stimuli.map((stimulus, index) => ({
+              id: `${Date.now()}-${index}`,
+              type: stimulus.type || "text",
+              content: stimulus.content || "",
+              duration: stimulus.duration || "",
+              positionX: stimulus.positionX || "",
+              positionY: stimulus.positionY || "",
+              positionZ: stimulus.positionZ || "",
+              color: stimulus.color || "#ff0000",
+            })),
+          );
+        } else {
+          setStimuli([
+            {
+              id: Date.now(),
+              type: "text",
+              content: "",
+              duration: "",
+              positionX: "",
+              positionY: "",
+              positionZ: "",
+              color: "#ff0000",
+            },
+          ]);
+        }
+      } catch (error) {
+        console.error("Error getting experiment:", error);
+
+        alert("Unable to load the experiment.");
+        navigate(-1);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    getExperiment();
+  }, [experimentId, navigate]);
 
   const addStimulus = (type) => {
     const newStimulus = {
@@ -152,7 +227,9 @@ export default function InstructorExperimentBuilder() {
         instructions: instructions.trim(),
         duration: duration,
         blockId: blockId,
+
         environment: environment,
+
         stimuli: stimuli.map((stimulus) => ({
           type: stimulus.type,
           content: stimulus.content,
@@ -162,21 +239,40 @@ export default function InstructorExperimentBuilder() {
           positionZ: stimulus.positionZ,
           color: stimulus.type === "text" ? stimulus.color : null,
         })),
+
         participantInstructions: participantInstructions.trim(),
+
         groupIds: selectedGroups,
+
         allowStudentExperiments: allowStudentExperiments,
+
         status: status,
-        createdAt: serverTimestamp(),
+
         updatedAt: serverTimestamp(),
       };
 
-      await addDoc(collection(db, "experiment"), experimentData);
+      if (isEditing) {
+        const experimentRef = doc(db, "experiment", experimentId);
 
-      alert(
-        status === "Published"
-          ? "Experiment published successfully!"
-          : "Experiment saved as draft.",
-      );
+        await updateDoc(experimentRef, experimentData);
+
+        alert(
+          status === "Published"
+            ? "Experiment updated and published successfully!"
+            : "Experiment updated and saved as draft.",
+        );
+      } else {
+        await addDoc(collection(db, "experiment"), {
+          ...experimentData,
+          createdAt: serverTimestamp(),
+        });
+
+        alert(
+          status === "Published"
+            ? "Experiment published successfully!"
+            : "Experiment saved as draft.",
+        );
+      }
 
       navigate(-1);
     } catch (error) {
@@ -187,6 +283,14 @@ export default function InstructorExperimentBuilder() {
       setSaving(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="font-google min-h-screen flex items-center justify-center">
+        <p>Loading experiment...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="font-google min-h-screen bg-white text-black">
@@ -205,11 +309,16 @@ export default function InstructorExperimentBuilder() {
           "
         >
           <ArrowLeft size={20} />
+
           <span>Back to Experiments</span>
         </button>
 
         <div className="max-w-5xl mx-auto px-6 pb-12">
-          <h1 className="text-3xl font-medium mt-5 mb-6">New Experiment</h1>
+          {/* TITLE */}
+
+          <h1 className="text-3xl font-medium mt-5 mb-6">
+            {isEditing ? "Edit Experiment" : "New Experiment"}
+          </h1>
 
           <section
             className="
@@ -1054,7 +1163,11 @@ export default function InstructorExperimentBuilder() {
             >
               <Plus size={18} />
 
-              {saving ? "Saving..." : "Publish Experiment"}
+              {saving
+                ? "Saving..."
+                : isEditing
+                  ? "Update Experiment"
+                  : "Publish Experiment"}
             </button>
 
             <button
@@ -1072,7 +1185,7 @@ export default function InstructorExperimentBuilder() {
                 transition
               "
             >
-              Save as draft
+              {isEditing ? "Save as draft" : "Save as draft"}
             </button>
           </div>
         </div>

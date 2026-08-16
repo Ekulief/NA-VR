@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { db } from "../../config/firebase-config";
+import { auth } from "../../config/firebase-config";
 
 import {
   doc,
@@ -10,19 +11,19 @@ import {
   getDocs,
   query,
   where,
+  deleteDoc,
 } from "firebase/firestore";
 
-import { Play, Plus, ArrowLeft } from "lucide-react";
+import { Play, Plus, ArrowLeft, Pencil, Trash2 } from "lucide-react";
 
 export default function StudentExperimentDetails() {
   const navigate = useNavigate();
   const { blockId, experimentId } = useParams();
-
   const [course, setCourse] = useState(null);
   const [experiment, setExperiment] = useState(null);
   const [studentExperiment, setStudentExperiment] = useState(null);
-
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -63,14 +64,35 @@ export default function StudentExperimentDetails() {
           const q = query(experimentsRef, where("blockId", "==", blockId));
 
           const experimentSnapshot = await getDocs(q);
+        }
 
-          if (!experimentSnapshot.empty) {
-            const experimentDoc = experimentSnapshot.docs[0];
+        const currentUser = auth.currentUser;
 
-            setExperiment({
-              id: experimentDoc.id,
-              ...experimentDoc.data(),
+        if (currentUser) {
+          const experimentsRef = collection(db, "experiment");
+
+          const studentQuery = query(
+            experimentsRef,
+            where("blockId", "==", blockId),
+          );
+
+          const studentSnapshot = await getDocs(studentQuery);
+
+          const existingStudentExperiment = studentSnapshot.docs.find(
+            (experimentDoc) => {
+              const data = experimentDoc.data();
+
+              return data.createdByStudent === currentUser.uid;
+            },
+          );
+
+          if (existingStudentExperiment) {
+            setStudentExperiment({
+              id: existingStudentExperiment.id,
+              ...existingStudentExperiment.data(),
             });
+          } else {
+            setStudentExperiment(null);
           }
         }
       } catch (error) {
@@ -132,19 +154,66 @@ export default function StudentExperimentDetails() {
   };
 
   const handleCreateExperiment = () => {
+    if (studentExperiment) {
+      return;
+    }
+
     navigate(`/student/course/${blockId}/experiment/create`);
   };
 
+  const handleEditExperiment = () => {
+    if (!studentExperiment?.id) {
+      return;
+    }
+
+    navigate(
+      `/student/course/${blockId}/experiment/${studentExperiment.id}/edit`,
+    );
+  };
+
   const handleRunExperiment = () => {
-    if (!experiment?.id) return;
+    if (!experiment?.id) {
+      return;
+    }
 
     navigate(`/student/course/${blockId}/experiment/${experiment.id}/run`);
+  };
+
+  const handleDeleteExperiment = async () => {
+    if (!studentExperiment?.id) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Are you sure you want to delete your experiment? This action cannot be undone.",
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setDeleting(true);
+
+      const experimentRef = doc(db, "experiment", studentExperiment.id);
+
+      await deleteDoc(experimentRef);
+
+      setStudentExperiment(null);
+
+      alert("Your experiment has been deleted.");
+    } catch (error) {
+      console.error("Error deleting student experiment:", error);
+
+      alert("Unable to delete your experiment. Please try again.");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
     <div className="font-google min-h-screen bg-white text-black">
       <main className="pt-20 px-5 pb-10">
-        {/* Back button */}
         <button
           onClick={handleBack}
           className="
@@ -158,12 +227,10 @@ export default function StudentExperimentDetails() {
           "
         >
           <ArrowLeft size={20} />
+
           <span className="text-lg">Back to Course</span>
         </button>
 
-        {/* =========================
-            COURSE / ACTIVITY DETAILS
-            ========================= */}
         <h1 className="text-3xl font-medium mb-4">
           {course.name || course.courseName || course.title || "Final Project"}
         </h1>
@@ -200,9 +267,6 @@ export default function StudentExperimentDetails() {
           </section>
         )}
 
-        {/* =========================
-            EXPERIMENT SECTION
-            ========================= */}
         <section
           className="
             border
@@ -220,7 +284,6 @@ export default function StudentExperimentDetails() {
             </p>
           ) : (
             <>
-              {/* Experiment details */}
               <div className="mb-6">
                 <h3 className="text-2xl font-medium mb-3">
                   {experiment.experimentName || "Untitled Experiment"}
@@ -279,7 +342,6 @@ export default function StudentExperimentDetails() {
                   </div>
                 )}
 
-                {/* Experiment metadata */}
                 <div className="flex flex-wrap gap-8 text-gray-600">
                   {experiment.vrEnvironment && (
                     <p>
@@ -311,11 +373,7 @@ export default function StudentExperimentDetails() {
                 </div>
               </div>
 
-              {/* =========================
-                  ACTIONS
-                  ========================= */}
               <div className="flex items-center gap-3">
-                {/* Run instructor experiment */}
                 <button
                   onClick={handleRunExperiment}
                   className="
@@ -337,11 +395,10 @@ export default function StudentExperimentDetails() {
                   <span>Run Experiment</span>
                 </button>
 
-                {/* Create student experiment
-                    ONLY if instructor enabled it */}
                 {experiment.allowStudentExperiments === true && (
                   <button
                     onClick={handleCreateExperiment}
+                    disabled={!!studentExperiment}
                     className="
                       flex
                       items-center
@@ -350,6 +407,10 @@ export default function StudentExperimentDetails() {
                       border-indigo-800
                       text-indigo-800
                       hover:bg-indigo-50
+                      disabled:border-gray-300
+                      disabled:text-gray-400
+                      disabled:bg-gray-100
+                      disabled:cursor-not-allowed
                       px-5
                       py-3
                       rounded-lg
@@ -359,13 +420,162 @@ export default function StudentExperimentDetails() {
                   >
                     <Plus size={22} />
 
-                    <span>Create Experiment</span>
+                    <span>
+                      {studentExperiment
+                        ? "Experiment Created"
+                        : "Create Experiment"}
+                    </span>
                   </button>
                 )}
               </div>
             </>
           )}
         </section>
+
+        {studentExperiment && (
+          <section
+            className="
+              border
+              border-gray-300
+              rounded-xl
+              p-5
+              mt-6
+            "
+          >
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h2 className="text-2xl font-medium">My Experiment</h2>
+
+                <p className="text-gray-500 mt-1">
+                  Your experiment for this activity
+                </p>
+              </div>
+            </div>
+
+            <div className="mb-5">
+              <h3 className="text-2xl font-medium mb-3">
+                {studentExperiment.experimentName || "Untitled Experiment"}
+              </h3>
+            </div>
+
+            {studentExperiment.instructions && (
+              <div className="mb-5">
+                <h3 className="text-xl font-medium mb-2">Instructions</h3>
+
+                <p
+                  className="
+                    text-lg
+                    text-gray-600
+                    whitespace-pre-line
+                    leading-relaxed
+                  "
+                >
+                  {studentExperiment.instructions}
+                </p>
+              </div>
+            )}
+
+            {studentExperiment.participantInstructions && (
+              <div className="mb-5">
+                <h3 className="text-xl font-medium mb-2">
+                  Participant Instructions
+                </h3>
+
+                <p
+                  className="
+                    text-lg
+                    text-gray-600
+                    whitespace-pre-line
+                    leading-relaxed
+                  "
+                >
+                  {studentExperiment.participantInstructions}
+                </p>
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-8 text-gray-600 mb-6">
+              {(studentExperiment.environment ||
+                studentExperiment.vrEnvironment) && (
+                <p>
+                  <span className="font-medium">Environment:</span>{" "}
+                  {studentExperiment.environment ||
+                    studentExperiment.vrEnvironment}
+                </p>
+              )}
+
+              {studentExperiment.stimuli && (
+                <p>
+                  <span className="font-medium">Stimuli:</span>{" "}
+                  {studentExperiment.stimuli.length}
+                </p>
+              )}
+
+              {studentExperiment.duration && (
+                <p>
+                  <span className="font-medium">Duration:</span>{" "}
+                  {studentExperiment.duration}
+                </p>
+              )}
+
+              {studentExperiment.createdAt && (
+                <p>
+                  <span className="font-medium">Created:</span>{" "}
+                  {formatDate(studentExperiment.createdAt)}
+                </p>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={handleEditExperiment}
+                className="
+                  flex
+                  items-center
+                  gap-2
+                  bg-indigo-800
+                  hover:bg-indigo-700
+                  text-white
+                  px-5
+                  py-3
+                  rounded-lg
+                  text-lg
+                  transition
+                "
+              >
+                <Pencil size={20} />
+
+                <span>Edit Experiment</span>
+              </button>
+
+              <button
+                onClick={handleDeleteExperiment}
+                disabled={deleting}
+                className="
+                  flex
+                  items-center
+                  gap-2
+                  border
+                  border-red-600
+                  text-red-600
+                  hover:bg-red-50
+                  disabled:border-gray-300
+                  disabled:text-gray-400
+                  disabled:cursor-not-allowed
+                  px-5
+                  py-3
+                  rounded-lg
+                  text-lg
+                  transition
+                "
+              >
+                <Trash2 size={20} />
+
+                <span>{deleting ? "Deleting..." : "Delete Experiment"}</span>
+              </button>
+            </div>
+          </section>
+        )}
       </main>
     </div>
   );
