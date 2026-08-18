@@ -54,19 +54,10 @@ Access analytics dashboard
 
 Export experiment results
 
-## Psychological Modules
-
-Perception (e.g., visual illusions)
-
-Reaction Time
-
-Attention (Stroop Effect)
-
-Memory (recall & recognition)
-
-Emotion (affective scenarios)
-
-Social Interaction (multiplayer VR)
+##Branches
+main - for archiving
+development - main branch for development
+feature(collaborator) - assigned branches for development
 
 
 
