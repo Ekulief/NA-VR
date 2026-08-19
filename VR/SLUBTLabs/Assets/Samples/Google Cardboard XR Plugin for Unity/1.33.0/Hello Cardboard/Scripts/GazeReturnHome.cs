@@ -1,7 +1,7 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-// This forces a Box Collider onto the object to capture the VR Gaze flawlessly
 [RequireComponent(typeof(BoxCollider))]
 public class GazeReturnHome : MonoBehaviour
 {
@@ -9,6 +9,9 @@ public class GazeReturnHome : MonoBehaviour
     public string targetScene = "CardboardTest";
     public string spawnPointName = "Respawn";
     public float gazeTimeLimit = 1.5f;
+
+    [Tooltip("Must match the name of your VR Player root GameObject exactly.")]
+    public string xrOriginName = "VR Player";
 
     [Header("Visuals")]
     [Tooltip("Drag your TextMeshPro GameObject here")]
@@ -21,29 +24,21 @@ public class GazeReturnHome : MonoBehaviour
 
     void Start()
     {
-        // 1. Configure the Box Collider area automatically
         BoxCollider box = GetComponent<BoxCollider>();
         if (box != null)
-        {
-            box.isTrigger = true; // Detects gaze without physically blocking elements
-        }
+            box.isTrigger = true;
 
-        // 2. Safely find and cache TextMeshPro using reflection (avoids missing dependency errors)
         if (targetTextObject != null)
         {
             tmpComponent = targetTextObject.GetComponent("TextMeshProUGUI");
             if (tmpComponent != null)
             {
-                // Cache the text starting color
                 startColor = (Color)tmpComponent.GetType().GetProperty("color").GetValue(tmpComponent, null);
-
-                // FORCE the text mesh to stop raycasting so it doesn't fight our BoxCollider
                 tmpComponent.GetType().GetProperty("raycastTarget").SetValue(tmpComponent, false, null);
             }
         }
     }
 
-    // These names match CardboardReticlePointer's SendMessage triggers exactly
     public void OnPointerEnter() => isHovering = true;
 
     public void OnPointerExit()
@@ -61,23 +56,18 @@ public class GazeReturnHome : MonoBehaviour
         {
             timer += Time.deltaTime;
 
-            // Smoothly blend text color to red as the player gazes at the button
             Color lerpedColor = Color.Lerp(startColor, Color.red, timer / gazeTimeLimit);
             SetTextColor(lerpedColor);
 
             if (timer >= gazeTimeLimit)
-            {
                 ExecuteTeleport();
-            }
         }
     }
 
     private void SetTextColor(Color targetColor)
     {
         if (tmpComponent != null)
-        {
             tmpComponent.GetType().GetProperty("color").SetValue(tmpComponent, targetColor, null);
-        }
     }
 
     void ExecuteTeleport()
@@ -85,52 +75,28 @@ public class GazeReturnHome : MonoBehaviour
         isHovering = false;
         timer = 0f;
 
-        // Temporarily disable the reticle during scene transition
         var reticle = Object.FindAnyObjectByType<CardboardReticlePointer>();
         if (reticle != null)
-        {
             reticle.gameObject.SetActive(false);
-        }
 
-        // Locate your persistent Player VR Camera Rig
-        GameObject camRig = Camera.main.transform.parent != null ?
-                           Camera.main.transform.parent.gameObject : Camera.main.gameObject;
+        GameObject camRig = GameObject.Find(xrOriginName);
+        if (camRig == null)
+        {
+            Debug.LogError($"[SLUBT Labs] Could not find '{xrOriginName}' — check the name matches exactly.");
+            return;
+        }
 
         DontDestroyOnLoad(camRig);
 
-        // Transition to your Hub scene
         SceneManager.LoadScene(targetScene);
         SceneManager.sceneLoaded += OnSceneLoaded;
     }
 
     void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
-        GameObject spawn = GameObject.Find(spawnPointName);
-        GameObject camRig = Camera.main.transform.parent != null ?
-                           Camera.main.transform.parent.gameObject : Camera.main.gameObject;
+        SceneManager.sceneLoaded -= OnSceneLoaded;
 
-        if (spawn != null && camRig != null)
-        {
-            // Clear baseline tracking drift history
-            Cardboard6DoF dynamicTracker = camRig.GetComponent<Cardboard6DoF>();
-            if (dynamicTracker != null)
-            {
-                dynamicTracker.Recalibrate();
-            }
-
-            // Snap the player rig directly on top of your "Respawn" object
-            camRig.transform.position = spawn.transform.position;
-            camRig.transform.rotation = spawn.transform.rotation;
-        }
-        else
-        {
-            if (spawn == null)
-            {
-                Debug.LogError($"[SLUBT Labs] Could not locate a GameObject named '{spawnPointName}' in '{targetScene}'!");
-            }
-        }
-
-        // Re-enable and reset the gaze pointer visual state
+        // Re-enable reticle first
         var reticle = Object.FindAnyObjectByType<CardboardReticlePointer>(FindObjectsInactive.Include);
         if (reticle != null)
         {
@@ -138,6 +104,50 @@ public class GazeReturnHome : MonoBehaviour
             reticle.SendMessage("OnPointerExit", null, SendMessageOptions.DontRequireReceiver);
         }
 
-        SceneManager.sceneLoaded -= OnSceneLoaded;
+        // Wait one frame before repositioning so XR tracking has settled
+        StartCoroutine(RepositionAfterFrame());
+    }
+
+    private IEnumerator RepositionAfterFrame()
+    {
+        yield return null; // wait one frame
+
+        GameObject spawn = GameObject.Find(spawnPointName);
+        GameObject camRig = GameObject.Find(xrOriginName);
+
+        if (spawn == null)
+        {
+            Debug.LogError($"[SLUBT Labs] Could not locate '{spawnPointName}' in '{targetScene}'!");
+            yield break;
+        }
+
+        if (camRig == null)
+        {
+            Debug.LogError($"[SLUBT Labs] Could not locate '{xrOriginName}' after scene load!");
+            yield break;
+        }
+
+        Cardboard6DoF dynamicTracker = camRig.GetComponent<Cardboard6DoF>();
+        if (dynamicTracker != null)
+            dynamicTracker.Recalibrate();
+
+        // Wait another frame after recalibrate so tracking drift clears
+        yield return null;
+
+        // Now calculate offset with settled tracking values
+        Vector3 cameraWorldPos = Camera.main.transform.position;
+        Vector3 rigWorldPos = camRig.transform.position;
+        Vector3 trackingOffset = cameraWorldPos - rigWorldPos;
+
+        Vector3 spawnTarget = spawn.transform.position;
+        Vector3 targetRigPosition = spawnTarget - trackingOffset;
+
+        camRig.transform.position = targetRigPosition;
+        camRig.transform.rotation = spawn.transform.rotation;
+
+        Debug.Log($"[SLUBT Labs] Repositioned after frame settle. " +
+                  $"Tracking offset: {trackingOffset} | " +
+                  $"Camera now at: {Camera.main.transform.position} | " +
+                  $"Spawn target was: {spawnTarget}");
     }
 }

@@ -109,9 +109,8 @@ public class ExperimentLoader : MonoBehaviour
     {
         if (!_experimentSceneLoaded) return;
 
-        Vector3 finalReturnPos = Vector3.zero;
-        Quaternion finalReturnRot = Quaternion.identity;
         bool foundRespawnObject = false;
+        GameObject respawnObject = null;
 
         // Automatically scan your main Hub scene roots for an object named exactly "Respawn"
         Scene hubScene = SceneManager.GetSceneAt(0);
@@ -119,16 +118,14 @@ public class ExperimentLoader : MonoBehaviour
         {
             if (root.name == "Respawn")
             {
-                finalReturnPos = root.transform.position;
-                finalReturnRot = root.transform.rotation;
+                respawnObject = root;
                 foundRespawnObject = true;
                 break;
             }
             Transform found = root.transform.Find("Respawn");
             if (found != null)
             {
-                finalReturnPos = found.position;
-                finalReturnRot = found.rotation;
+                respawnObject = found.gameObject;
                 foundRespawnObject = true;
                 break;
             }
@@ -139,22 +136,15 @@ public class ExperimentLoader : MonoBehaviour
             Debug.LogError("[SLUBT Labs] CRITICAL ERROR: Could not locate a GameObject named exactly 'Respawn' inside your Main VR Scene hierarchy!");
         }
 
-        StartCoroutine(UnloadExperimentScene(finalReturnPos, finalReturnRot));
+        StartCoroutine(UnloadExperimentScene(respawnObject));
     }
 
-    private IEnumerator UnloadExperimentScene(Vector3 returnPosition, Quaternion returnRotation)
+    private IEnumerator UnloadExperimentScene(GameObject respawnObject)
     {
         _isLoading = true;
 
         if (fadeCanvas != null)
             yield return StartCoroutine(Fade(0f, 1f));
-
-        // Move player back onto the localized Respawn GameObject target transform space
-        if (xrOrigin != null)
-        {
-            xrOrigin.transform.position = returnPosition;
-            xrOrigin.transform.rotation = returnRotation;
-        }
 
         Scene mainScene = SceneManager.GetSceneAt(0);
         SceneManager.SetActiveScene(mainScene);
@@ -165,6 +155,21 @@ public class ExperimentLoader : MonoBehaviour
         yield return new WaitUntil(() => unload.isDone);
 
         _experimentSceneLoaded = false;
+
+        // Wait one frame for XR tracking to settle after scene unload
+        yield return null;
+
+        // Apply tracking offset compensation so camera lands exactly on Respawn
+        if (xrOrigin != null && respawnObject != null)
+        {
+            Vector3 trackingOffset = Camera.main.transform.position - xrOrigin.transform.position;
+            Vector3 targetRigPosition = respawnObject.transform.position - trackingOffset;
+
+            xrOrigin.transform.position = targetRigPosition;
+            xrOrigin.transform.rotation = respawnObject.transform.rotation;
+
+            Debug.Log($"[SLUBT Labs] Returned to hub. Tracking offset compensated: {trackingOffset}");
+        }
 
         if (fadeCanvas != null)
             yield return StartCoroutine(Fade(1f, 0f));
