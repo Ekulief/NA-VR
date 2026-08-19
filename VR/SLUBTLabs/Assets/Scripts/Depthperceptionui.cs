@@ -20,6 +20,11 @@ using TMPro;
 /// HEIGHT RANGE:
 ///   Min is always 0 m. Set maxHeightMetres in the Inspector to match
 ///   the actual height of your building in Unity world units.
+///
+/// SAVING RESULTS:
+///   Requires a SessionDataManager present in a loaded scene (see SessionDataManager.cs).
+///   On submit, this writes {userId, experimentName, heightEstimateMetres, timestampUtc}
+///   to a local JSON file under Application.persistentDataPath.
 /// </summary>
 public class DepthPerceptionUI : MonoBehaviour
 {
@@ -96,8 +101,14 @@ public class DepthPerceptionUI : MonoBehaviour
 
         Debug.Log($"[SLUBT Labs] Participant estimate: {_currentHeight} m");
 
-        // TODO: pass _currentHeight to SessionDataManager when wired up
-        // SessionDataManager.Instance.RecordDepthEstimate(_currentHeight);
+        if (SessionDataManager.Instance != null)
+        {
+            SessionDataManager.Instance.RecordDepthEstimate(_currentHeight);
+        }
+        else
+        {
+            Debug.LogWarning("[SLUBT Labs] SessionDataManager not found in any loaded scene — result was NOT saved.");
+        }
 
         submitButton.interactable = false;
         incrementButton.interactable = false;
