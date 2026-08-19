@@ -9,25 +9,28 @@ public class ExperimentAnchor : MonoBehaviour
     [Tooltip("Type the EXACT scene name you want this specific anchor pad to load.")]
     public string sceneToLoad = "Depth Perception Scene";
 
-    private void Awake()
+    private bool _hasTriggered = false;
+
+    private void OnEnable()
     {
+        _hasTriggered = false;
         GetComponent<TeleportationAnchor>().selectExited.AddListener(OnAnchorSelected);
-    } 
+    }
+
+    private void OnDisable()
+    {
+        GetComponent<TeleportationAnchor>().selectExited.RemoveListener(OnAnchorSelected);
+    }
 
     private void OnAnchorSelected(SelectExitEventArgs args)
     {
-        // Unsubscribe instantly so it doesn't double-trigger
-        GetComponent<TeleportationAnchor>().selectExited.RemoveListener(OnAnchorSelected);
+        if (_hasTriggered) return;
+        _hasTriggered = true;
 
-        // Find the main manager and pass our unique, custom scene name right into it!
         ExperimentLoader loader = FindAnyObjectByType<ExperimentLoader>();
         if (loader != null)
-        {
             loader.LoadScene(sceneToLoad);
-        }
         else
-        {
-            Debug.LogError($"[SLUBT Labs] Could not find ExperimentLoader in the scene to load: {sceneToLoad}");
-        }
+            Debug.LogError($"[SLUBT Labs] Could not find ExperimentLoader to load: {sceneToLoad}");
     }
 }
