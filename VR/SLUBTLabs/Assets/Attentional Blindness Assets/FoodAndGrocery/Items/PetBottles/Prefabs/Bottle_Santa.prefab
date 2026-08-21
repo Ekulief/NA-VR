@@ -11,9 +11,9 @@ GameObject:
   - component: {fileID: 4000012765468910}
   - component: {fileID: 33000010438123766}
   - component: {fileID: 23000010852209138}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: Bottle_Santa
-  m_TagString: Untagged
+  m_TagString: SpawnedItem
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 4294967295

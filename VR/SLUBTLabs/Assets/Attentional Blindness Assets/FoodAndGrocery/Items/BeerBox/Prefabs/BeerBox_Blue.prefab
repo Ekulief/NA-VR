@@ -13,7 +13,7 @@ GameObject:
   - component: {fileID: 23000014286118626}
   m_Layer: 0
   m_Name: BeerBox_Blue
-  m_TagString: Untagged
+  m_TagString: SpawnedItem
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 4294967295
