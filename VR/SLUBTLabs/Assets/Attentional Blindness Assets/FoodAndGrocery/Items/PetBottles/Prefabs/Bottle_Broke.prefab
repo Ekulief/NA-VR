@@ -11,9 +11,9 @@ GameObject:
   - component: {fileID: 4000012787269842}
   - component: {fileID: 33000011518192366}
   - component: {fileID: 23000011322053576}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: Bottle_Broke
-  m_TagString: Untagged
+  m_TagString: SpawnedItem
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 4294967295

@@ -328,6 +328,10 @@ PrefabInstance:
       value: 2
       objectReference: {fileID: 0}
     - target: {fileID: 7462879561657043759, guid: ad818c36731146e994540a1896ad8f24, type: 3}
+      propertyPath: m_RaycastMask.m_Bits
+      value: 224
+      objectReference: {fileID: 0}
+    - target: {fileID: 7462879561657043759, guid: ad818c36731146e994540a1896ad8f24, type: 3}
       propertyPath: m_InteractionLayers.m_Bits
       value: 2
       objectReference: {fileID: 0}
@@ -336,13 +340,29 @@ PrefabInstance:
       value: 
       objectReference: {fileID: -6756787485274679044, guid: c348712bda248c246b8c49b3db54643f, type: 3}
     - target: {fileID: 7462879561657043759, guid: ad818c36731146e994540a1896ad8f24, type: 3}
+      propertyPath: m_SelectInput.m_InputActionReferenceValue
+      value: 
+      objectReference: {fileID: -1758520528963094988, guid: c348712bda248c246b8c49b3db54643f, type: 3}
+    - target: {fileID: 7462879561657043759, guid: ad818c36731146e994540a1896ad8f24, type: 3}
       propertyPath: m_UIPressInput.m_InputActionReferenceValue
       value: 
       objectReference: {fileID: 71106601250685021, guid: c348712bda248c246b8c49b3db54643f, type: 3}
     - target: {fileID: 7462879561657043759, guid: ad818c36731146e994540a1896ad8f24, type: 3}
+      propertyPath: m_ActivateInput.m_InputActionReferenceValue
+      value: 
+      objectReference: {fileID: -4289430672226363583, guid: c348712bda248c246b8c49b3db54643f, type: 3}
+    - target: {fileID: 7462879561657043759, guid: ad818c36731146e994540a1896ad8f24, type: 3}
+      propertyPath: m_SelectInput.m_InputActionReferencePerformed
+      value: 
+      objectReference: {fileID: 187161793506945269, guid: c348712bda248c246b8c49b3db54643f, type: 3}
+    - target: {fileID: 7462879561657043759, guid: ad818c36731146e994540a1896ad8f24, type: 3}
       propertyPath: m_UIPressInput.m_InputActionReferencePerformed
       value: 
       objectReference: {fileID: 3279264004350380116, guid: c348712bda248c246b8c49b3db54643f, type: 3}
+    - target: {fileID: 7462879561657043759, guid: ad818c36731146e994540a1896ad8f24, type: 3}
+      propertyPath: m_ActivateInput.m_InputActionReferencePerformed
+      value: 
+      objectReference: {fileID: -5982496924579745919, guid: c348712bda248c246b8c49b3db54643f, type: 3}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -1919,7 +1939,7 @@ GameObject:
   - component: {fileID: 533334775}
   - component: {fileID: 533334774}
   - component: {fileID: 533334773}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: Grabbable Cube Dynamic Attach
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1941,7 +1961,7 @@ MonoBehaviour:
   m_InteractionManager: {fileID: 0}
   m_Colliders: []
   m_InteractionLayers:
-    m_Bits: 1
+    m_Bits: 2
   m_DistanceCalculationMode: 1
   m_SelectMode: 0
   m_FocusMode: 1
@@ -4224,6 +4244,32 @@ RectTransform:
   m_AnchoredPosition: {x: -10.461422, y: 2}
   m_SizeDelta: {x: 380, y: 150}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!1 &1239863443 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 288001707487649489, guid: a96da40baad352946bf55e0caf08fbde, type: 3}
+  m_PrefabInstance: {fileID: 1977326644}
+  m_PrefabAsset: {fileID: 0}
+--- !u!65 &1239863448
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1239863443}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 0.5, y: 0.5, z: 0.5}
+  m_Center: {x: -0.000000022351742, y: 0.094763346, z: 0.000000011175871}
 --- !u!1 &1244764310
 GameObject:
   m_ObjectHideFlags: 0
@@ -5794,7 +5840,7 @@ GameObject:
   - component: {fileID: 1670514926}
   - component: {fileID: 1670514925}
   - component: {fileID: 1670514924}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: Grabbable Cube Attach Transform
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -5816,7 +5862,7 @@ MonoBehaviour:
   m_InteractionManager: {fileID: 0}
   m_Colliders: []
   m_InteractionLayers:
-    m_Bits: 1
+    m_Bits: 2
   m_DistanceCalculationMode: 1
   m_SelectMode: 0
   m_FocusMode: 1
@@ -7342,7 +7388,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1925057223}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 7951c64acb0fa62458bf30a60089fe2d, type: 3}
   m_Name: 
@@ -7590,6 +7636,74 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1951962719}
   m_CullTransparentMesh: 1
+--- !u!1001 &1977326644
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: -9180717868241177848, guid: a96da40baad352946bf55e0caf08fbde, type: 3}
+      propertyPath: m_Colliders.Array.size
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -9180717868241177848, guid: a96da40baad352946bf55e0caf08fbde, type: 3}
+      propertyPath: m_InteractionLayers.m_Bits
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 288001707487649489, guid: a96da40baad352946bf55e0caf08fbde, type: 3}
+      propertyPath: m_Name
+      value: BeerBox
+      objectReference: {fileID: 0}
+    - target: {fileID: 288001707487937265, guid: a96da40baad352946bf55e0caf08fbde, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -14.89
+      objectReference: {fileID: 0}
+    - target: {fileID: 288001707487937265, guid: a96da40baad352946bf55e0caf08fbde, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0.66422
+      objectReference: {fileID: 0}
+    - target: {fileID: 288001707487937265, guid: a96da40baad352946bf55e0caf08fbde, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 1.82
+      objectReference: {fileID: 0}
+    - target: {fileID: 288001707487937265, guid: a96da40baad352946bf55e0caf08fbde, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 288001707487937265, guid: a96da40baad352946bf55e0caf08fbde, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 288001707487937265, guid: a96da40baad352946bf55e0caf08fbde, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 288001707487937265, guid: a96da40baad352946bf55e0caf08fbde, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 288001707487937265, guid: a96da40baad352946bf55e0caf08fbde, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 288001707487937265, guid: a96da40baad352946bf55e0caf08fbde, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 288001707487937265, guid: a96da40baad352946bf55e0caf08fbde, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 288001707487649489, guid: a96da40baad352946bf55e0caf08fbde, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1239863448}
+  m_SourcePrefab: {fileID: 100100000, guid: a96da40baad352946bf55e0caf08fbde, type: 3}
 --- !u!1 &1980473346
 GameObject:
   m_ObjectHideFlags: 0
@@ -8985,7 +9099,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   m_InteractionManager: {fileID: 0}
   m_InteractionLayers:
-    m_Bits: 1
+    m_Bits: 3
   m_Handedness: 2
   m_AttachTransform: {fileID: 431158316430918524}
   m_KeepSelectedTargetValid: 1
@@ -9207,3 +9321,4 @@ SceneRoots:
   - {fileID: 984668624}
   - {fileID: 206144636}
   - {fileID: 2132626507}
+  - {fileID: 1977326644}
