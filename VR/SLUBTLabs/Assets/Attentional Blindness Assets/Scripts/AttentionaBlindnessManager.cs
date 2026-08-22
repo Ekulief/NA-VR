@@ -3,36 +3,32 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
-using TMPro; // still needed for reportQuestionText and resultsSummaryText
+using UnityEngine.XR.Interaction.Toolkit;
+using UnityEngine.XR.Interaction.Toolkit.Interactables;
+using TMPro;
 
 /// <summary>
 /// SLUBT Labs — Attentional Blindness Manager
 ///
-/// Participant points ray at target item and pulls trigger to confirm they found it.
-/// Uses a physics raycast from the right controller — same ray the XR Interactor uses.
+/// Works with ShelfSpawner — finds spawned items at runtime, no pre-assignment needed.
+/// Adds BoxCollider to each spawned item and registers it with the existing
+/// XRSimpleInteractable so the XR Ray Interactor can detect them.
 ///
 /// FLOW:
 ///   1. Waits one frame for ShelfSpawners to finish
-///   2. Picks anomaly items and starts blinking them
-///   3. Shows instruction — participant searches and points at target
-///   4. When ray hits target and trigger is pulled → confirmed
-///   5. Blinking stops, wrong item feedback if they picked wrong
-///   6. Post-task awareness report panel
-///   7. Results recorded
-///
-/// SETUP:
-///   a) Attach to empty GameObject "AttentionalBlindnessManager"
-///   b) Assign rightControllerTransform — drag Right Controller GameObject
-///   c) Assign triggerAction — XRI Default / Activate
-///   d) Assign UI panels
-///   e) Set targetItemName to match your target prefab name
-///   f) Tag all item prefabs as "SpawnedItem" in Project window
+///   2. Adds BoxCollider to all spawned items and registers with XRSimpleInteractable
+///   3. Picks anomaly items and starts blinking them
+///   4. Shows instruction — participant searches and points ray at target + pulls trigger
+///   5. Correct item → blinking stops, report panel appears
+///   6. Wrong item → face-following feedback text for 2 seconds
+///   7. Post-task awareness report — Yes / No
+///   8. Results recorded
 /// </summary>
 public class AttentionalBlindnessManager : MonoBehaviour
 {
     [Header("Input")]
-    [Tooltip("Drag your Right Controller (or Ray Interactor) GameObject here.")]
-    public Transform rightControllerTransform;
+    [Tooltip("Drag your Right Controller or Ray Interactor GameObject here.")]
+    public Transform _rightControllerTransform;
 
     [Tooltip("Assign: XRI Default Input Actions → XRI Right Hand Interaction → Activate")]
     public InputActionReference triggerAction;
@@ -54,9 +50,6 @@ public class AttentionalBlindnessManager : MonoBehaviour
     public GameObject instructionPanel;
     public TMP_Text instructionText;
 
-    // Feedback display is created at runtime by FeedbackDisplay component
-    private FeedbackDisplay _feedbackDisplay;
-
     [Header("UI — Awareness Report Panel")]
     public GameObject reportPanel;
     public TMP_Text reportQuestionText;
@@ -75,6 +68,7 @@ public class AttentionalBlindnessManager : MonoBehaviour
     private GameObject _targetInstance;
     private bool _awaitingSelection = false;
     private bool _trialComplete = false;
+    private FeedbackDisplay _feedbackDisplay;
 
     // ── Unity lifecycle ───────────────────────────────────────────────────────
     private void OnEnable()
@@ -111,7 +105,10 @@ public class AttentionalBlindnessManager : MonoBehaviour
     {
         // Wait one frame for all ShelfSpawners to finish Start()
         yield return null;
-
+        // Find right controller automatically from VR Player in main scene
+        _rightControllerTransform = FindRightController();
+        if (_rightControllerTransform == null)
+            Debug.LogWarning("[AttentionalBlindness] Could not find Right Controller — manual trigger fallback disabled.");
         CollectSpawnedItems();
 
         if (_allSpawnedItems.Count == 0)
@@ -121,30 +118,79 @@ public class AttentionalBlindnessManager : MonoBehaviour
             yield break;
         }
 
+        // Add BoxCollider to each item and register with its XRSimpleInteractable
+        foreach (GameObject item in _allSpawnedItems)
+            SetupInteractable(item);
+
+        // Find the target instance
         _targetInstance = _allSpawnedItems.Find(item =>
             item.name.StartsWith(targetItemName, System.StringComparison.OrdinalIgnoreCase));
 
         if (_targetInstance == null)
-            Debug.LogWarning($"[AttentionalBlindness] No item matching '{targetItemName}' found among spawned items.");
+            Debug.LogWarning($"[AttentionalBlindness] No item matching '{targetItemName}' found.");
         else
             Debug.Log($"[AttentionalBlindness] Target: '{_targetInstance.name}' at {_targetInstance.transform.position}");
 
-        // Make sure target has a collider so raycast can hit it
-        if (_targetInstance != null && _targetInstance.GetComponentInChildren<Collider>() == null)
-        {
-            _targetInstance.AddComponent<BoxCollider>();
-            Debug.Log("[AttentionalBlindness] Added BoxCollider to target item.");
-        }
-
-        // Make sure all items have colliders for wrong-selection detection
-        foreach (GameObject item in _allSpawnedItems)
-        {
-            if (item.GetComponentInChildren<Collider>() == null)
-                item.AddComponent<BoxCollider>();
-        }
-
         yield return new WaitForSeconds(instructionDelay);
         BeginTrial();
+    }
+    private Transform FindRightController()
+    {
+        // Search by common XRI names
+        string[] names = { "Right Controller", "RightController", "Right Hand", "Ray Interactor" };
+        foreach (string n in names)
+        {
+            GameObject found = GameObject.Find(n);
+            if (found != null)
+                return found.transform;
+        }
+
+        // Fallback — find Ray Interactor component anywhere in scene
+        var rayInteractor = FindAnyObjectByType<UnityEngine.XR.Interaction.Toolkit.Interactors.XRRayInteractor>();
+        if (rayInteractor != null)
+            return rayInteractor.transform;
+
+        return null;
+    }
+    private void SetupInteractable(GameObject item)
+    {
+        XRSimpleInteractable interactable = item.GetComponent<XRSimpleInteractable>();
+        if (interactable == null)
+        {
+            Debug.LogWarning($"[AttentionalBlindness] '{item.name}' has no XRSimpleInteractable.");
+            return;
+        }
+
+        // Add BoxCollider sized to mesh bounds if missing
+        BoxCollider box = item.GetComponent<BoxCollider>();
+        if (box == null)
+        {
+            box = item.AddComponent<BoxCollider>();
+
+            Renderer[] renderers = item.GetComponentsInChildren<Renderer>();
+            if (renderers.Length > 0)
+            {
+                Bounds combined = renderers[0].bounds;
+                foreach (Renderer r in renderers)
+                    combined.Encapsulate(r.bounds);
+
+                box.center = item.transform.InverseTransformPoint(combined.center);
+                box.size = combined.size;
+            }
+        }
+
+        // Register the collider with the XRSimpleInteractable's collider list
+        List<Collider> colliders = new List<Collider>(interactable.colliders);
+        // Register the collider with the XRSimpleInteractable's collider list
+        if (!interactable.colliders.Contains(box))
+        {
+            interactable.colliders.Add(box);
+        }
+
+        // Listen for selection
+        interactable.selectEntered.AddListener((args) => OnItemSelected(item));
+
+        Debug.Log($"[AttentionalBlindness] Interactable set up on '{item.name}'");
     }
 
     private void CollectSpawnedItems()
@@ -158,7 +204,6 @@ public class AttentionalBlindnessManager : MonoBehaviour
     // ── Trial flow ────────────────────────────────────────────────────────────
     private void BeginTrial()
     {
-        // Add AnomalyBlinker to random distractor items
         List<GameObject> distractors = _allSpawnedItems.FindAll(item => item != _targetInstance);
 
         for (int i = distractors.Count - 1; i > 0; i--)
@@ -182,7 +227,6 @@ public class AttentionalBlindnessManager : MonoBehaviour
         instructionPanel.SetActive(true);
 
         StartCoroutine(StartBlinkingAfterDelay(1.5f));
-
         _trialStartTime = Time.time;
         _awaitingSelection = true;
 
@@ -203,49 +247,37 @@ public class AttentionalBlindnessManager : MonoBehaviour
         _activeBlinkers.Clear();
     }
 
-    // ── Input ─────────────────────────────────────────────────────────────────
-    private void OnTriggerPressed(InputAction.CallbackContext ctx)
+    // ── Item selection via XRSimpleInteractable ───────────────────────────────
+    private void OnItemSelected(GameObject item)
     {
         if (!_awaitingSelection || _trialComplete) return;
 
-        // Raycast from right controller forward
-        if (rightControllerTransform == null)
-        {
-            Debug.LogWarning("[AttentionalBlindness] rightControllerTransform not assigned!");
-            return;
-        }
+        if (item == _targetInstance)
+            OnTargetFound();
+        else
+            OnWrongItemSelected(item.name);
+    }
 
-        Ray ray = new Ray(rightControllerTransform.position, rightControllerTransform.forward);
+    // ── Manual trigger fallback ───────────────────────────────────────────────
+    private void OnTriggerPressed(InputAction.CallbackContext ctx)
+    {
+        if (!_awaitingSelection || _trialComplete) return;
+        if (_rightControllerTransform == null) return;
+
+        Ray ray = new Ray(_rightControllerTransform.position, _rightControllerTransform.forward);
 
         if (Physics.Raycast(ray, out RaycastHit hit, raycastDistance))
         {
-            GameObject hitObject = hit.collider.gameObject;
-
-            // Walk up to find the root spawned item
-            GameObject hitRoot = GetSpawnedItemRoot(hitObject);
-
-            if (hitRoot == null)
-            {
-                Debug.Log($"[AttentionalBlindness] Ray hit '{hitObject.name}' — not a spawned item.");
-                return;
-            }
+            GameObject hitRoot = GetSpawnedItemRoot(hit.collider.gameObject);
+            if (hitRoot == null) return;
 
             if (hitRoot == _targetInstance)
-            {
                 OnTargetFound();
-            }
             else
-            {
                 OnWrongItemSelected(hitRoot.name);
-            }
-        }
-        else
-        {
-            Debug.Log("[AttentionalBlindness] Trigger pressed but ray hit nothing.");
         }
     }
 
-    /// <summary>Walks up the hierarchy to find the root SpawnedItem tagged GameObject.</summary>
     private GameObject GetSpawnedItemRoot(GameObject hit)
     {
         Transform t = hit.transform;
@@ -258,6 +290,7 @@ public class AttentionalBlindnessManager : MonoBehaviour
         return null;
     }
 
+    // ── Outcomes ──────────────────────────────────────────────────────────────
     private void OnTargetFound()
     {
         _awaitingSelection = false;
@@ -266,19 +299,16 @@ public class AttentionalBlindnessManager : MonoBehaviour
 
         StopAnomalies();
         instructionPanel.SetActive(false);
-
         _feedbackDisplay?.HideFeedback();
 
         Debug.Log($"[AttentionalBlindness] Correct! Target found in {_foundTime:F2}s");
 
-        // Highlight the target briefly then show report
         StartCoroutine(ShowReportAfterDelay(0.5f));
     }
 
     private void OnWrongItemSelected(string itemName)
     {
-        Debug.Log($"[AttentionalBlindness] Wrong item selected: '{itemName}'");
-
+        Debug.Log($"[AttentionalBlindness] Wrong item: '{itemName}'");
         _feedbackDisplay?.ShowFeedback($"That's not the {targetItemName}. Keep looking!", Color.red);
     }
 
