@@ -2751,7 +2751,7 @@ RectTransform:
   m_GameObject: {fileID: 917147132}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: -4.775}
-  m_LocalScale: {x: 0.002, y: 0.001, z: 0.001}
+  m_LocalScale: {x: 0.0025550001, y: 0.0021567747, z: 0.001}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 258738372}
@@ -2778,6 +2778,7 @@ GameObject:
   - component: {fileID: 1006469617}
   - component: {fileID: 1006469616}
   - component: {fileID: 1006469615}
+  - component: {fileID: 1006469619}
   m_Layer: 6
   m_Name: ReportPanelNo
   m_TagString: Untagged
@@ -2793,7 +2794,7 @@ RectTransform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1006469613}
   m_LocalRotation: {x: -0, y: -1, z: -0, w: 0}
-  m_LocalPosition: {x: 0, y: 0, z: 181.99968}
+  m_LocalPosition: {x: 0, y: 0, z: 58}
   m_LocalScale: {x: 1.5431005, y: 4.7521577, z: 2}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -2908,6 +2909,25 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1006469613}
   m_CullTransparentMesh: 1
+--- !u!114 &1006469619
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1006469613}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7951c64acb0fa62458bf30a60089fe2d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.XR.Interaction.Toolkit::UnityEngine.XR.Interaction.Toolkit.UI.TrackedDeviceGraphicRaycaster
+  m_IgnoreReversedGraphics: 0
+  m_CheckFor2DOcclusion: 0
+  m_CheckFor3DOcclusion: 0
+  m_BlockingMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_RaycastTriggerInteraction: 1
 --- !u!1 &1033889994
 GameObject:
   m_ObjectHideFlags: 0
@@ -2938,7 +2958,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0c72ad453531ec548991bdecbc8d7a43, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AttentionalBlindnessManager
-  _rightControllerTransform: {fileID: 0}
   triggerAction: {fileID: -2439264783773714294, guid: b6d5c44ebe3244b7692e81ae8265eb22, type: 3}
   targetItemName: Milk
   anomalyCount: 1
@@ -3373,7 +3392,6 @@ MonoBehaviour:
   distractorPrefabs:
   - {fileID: 3405240004184321056, guid: 628034e81cbf3494fb1d9ad86f233b58, type: 3}
   - {fileID: 4366043494008590120, guid: 7367e0a6a4e95b74684e5f4d98a24584, type: 3}
-  - {fileID: 7724206117827115521, guid: 856350ccd6a5b734786363a073881ace, type: 3}
   targetPrefab: {fileID: 0}
   logTargetPosition: 1
 --- !u!65 &1249323868
@@ -3687,6 +3705,7 @@ GameObject:
   - component: {fileID: 1476044984}
   - component: {fileID: 1476044983}
   - component: {fileID: 1476044982}
+  - component: {fileID: 1476044986}
   m_Layer: 6
   m_Name: ReportPanelYes
   m_TagString: Untagged
@@ -3702,7 +3721,7 @@ RectTransform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1476044980}
   m_LocalRotation: {x: -0, y: -1, z: -0, w: 0}
-  m_LocalPosition: {x: 0, y: 0, z: 181.99968}
+  m_LocalPosition: {x: 0, y: 0, z: 35}
   m_LocalScale: {x: 1.5431005, y: 4.7521577, z: 2}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -3817,6 +3836,25 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1476044980}
   m_CullTransparentMesh: 1
+--- !u!114 &1476044986
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1476044980}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7951c64acb0fa62458bf30a60089fe2d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.XR.Interaction.Toolkit::UnityEngine.XR.Interaction.Toolkit.UI.TrackedDeviceGraphicRaycaster
+  m_IgnoreReversedGraphics: 0
+  m_CheckFor2DOcclusion: 0
+  m_CheckFor3DOcclusion: 0
+  m_BlockingMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_RaycastTriggerInteraction: 1
 --- !u!1001 &1505187929
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -4334,7 +4372,7 @@ MonoBehaviour:
   columns: 3
   rows: 2
   randomPositionOffset: 0.04
-  randomRotationOffset: 15
+  randomRotationOffset: 100
   distractorPrefabs:
   - {fileID: 3356929496169566327, guid: 6067eeb331e65154db103189e62622ee, type: 3}
   targetPrefab: {fileID: 0}
@@ -4638,7 +4676,6 @@ MonoBehaviour:
   randomPositionOffset: 0.04
   randomRotationOffset: 15
   distractorPrefabs:
-  - {fileID: 5006805777809381789, guid: 87079f84b7363be47888cb6d5f3bd335, type: 3}
   - {fileID: 5816483148173766245, guid: 9aa6eac3eec39354fbe5bdcb7123bb71, type: 3}
   - {fileID: 4009545226550383081, guid: 291a3eba4c081c64dab00164c848c944, type: 3}
   - {fileID: 8241390012740906956, guid: 1ca39d97f06b80b49a8fd7e1161f3c4f, type: 3}

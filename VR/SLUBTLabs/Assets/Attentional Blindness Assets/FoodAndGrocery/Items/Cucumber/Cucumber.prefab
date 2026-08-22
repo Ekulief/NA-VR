@@ -1,6 +1,6 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
---- !u!1001 &7724206117827017889
+--- !u!1001 &7439749358111186412
 PrefabInstance:
   m_ObjectHideFlags: 0
   serializedVersion: 2
@@ -11,14 +11,6 @@ PrefabInstance:
     - target: {fileID: 100000, guid: d25f704bfb4c8014393d28319f51d9e9, type: 3}
       propertyPath: m_Name
       value: Cucumber
-      objectReference: {fileID: 0}
-    - target: {fileID: 100000, guid: d25f704bfb4c8014393d28319f51d9e9, type: 3}
-      propertyPath: m_Layer
-      value: 7
-      objectReference: {fileID: 0}
-    - target: {fileID: 100000, guid: d25f704bfb4c8014393d28319f51d9e9, type: 3}
-      propertyPath: m_TagString
-      value: SpawnedItem
       objectReference: {fileID: 0}
     - target: {fileID: 400000, guid: d25f704bfb4c8014393d28319f51d9e9, type: 3}
       propertyPath: m_LocalPosition.x
@@ -66,23 +58,28 @@ PrefabInstance:
     m_AddedComponents:
     - targetCorrespondingSourceObject: {fileID: 100000, guid: d25f704bfb4c8014393d28319f51d9e9, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 4502822860679953274}
+      addedObject: {fileID: 1841475228913817166}
     - targetCorrespondingSourceObject: {fileID: 100000, guid: d25f704bfb4c8014393d28319f51d9e9, type: 3}
       insertIndex: -1
-      addedObject: {fileID: -413221680432182737}
+      addedObject: {fileID: 543630755980404185}
   m_SourcePrefab: {fileID: 100100000, guid: d25f704bfb4c8014393d28319f51d9e9, type: 3}
---- !u!1 &7724206117827115521 stripped
+--- !u!23 &7439749358109279628 stripped
+MeshRenderer:
+  m_CorrespondingSourceObject: {fileID: 2300000, guid: d25f704bfb4c8014393d28319f51d9e9, type: 3}
+  m_PrefabInstance: {fileID: 7439749358111186412}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &7439749358111284044 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 100000, guid: d25f704bfb4c8014393d28319f51d9e9, type: 3}
-  m_PrefabInstance: {fileID: 7724206117827017889}
+  m_PrefabInstance: {fileID: 7439749358111186412}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &4502822860679953274
+--- !u!114 &1841475228913817166
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7724206117827115521}
+  m_GameObject: {fileID: 7439749358111284044}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8a35f6cfbfba9b548aaa00d52cfe8a50, type: 3}
@@ -111,10 +108,34 @@ MonoBehaviour:
       m_Calls: []
   m_HoverEntered:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 7439749358109279628}
+        m_TargetAssemblyTypeName: UnityEngine.MeshRenderer, UnityEngine
+        m_MethodName: set_material
+        m_Mode: 2
+        m_Arguments:
+          m_ObjectArgument: {fileID: 2100000, guid: 9bc488516f6f52443b10b130d130dc10, type: 2}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Material, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
   m_HoverExited:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 7439749358109279628}
+        m_TargetAssemblyTypeName: UnityEngine.MeshRenderer, UnityEngine
+        m_MethodName: set_material
+        m_Mode: 2
+        m_Arguments:
+          m_ObjectArgument: {fileID: 2100000, guid: 620b3636c5eb63746ac437d31b7b8080, type: 2}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Material, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
   m_FirstSelectEntered:
     m_PersistentCalls:
       m_Calls: []
@@ -150,13 +171,13 @@ MonoBehaviour:
   m_StartingInteractionStrengthFilters: []
   m_AutoFindParentInteractableInHierarchy: 0
   m_ParentInteractableObject: {fileID: 0}
---- !u!65 &-413221680432182737
+--- !u!65 &543630755980404185
 BoxCollider:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7724206117827115521}
+  m_GameObject: {fileID: 7439749358111284044}
   m_Material: {fileID: 0}
   m_IncludeLayers:
     serializedVersion: 2

@@ -11,12 +11,11 @@ using TMPro;
 /// SLUBT Labs — Attentional Blindness Manager
 ///
 /// Works with ShelfSpawner — finds spawned items at runtime, no pre-assignment needed.
-/// Adds BoxCollider to each spawned item and registers it with the existing
-/// XRSimpleInteractable so the XR Ray Interactor can detect them.
+/// Registers existing colliders from prefabs with XRSimpleInteractable at runtime.
 ///
 /// FLOW:
 ///   1. Waits one frame for ShelfSpawners to finish
-///   2. Adds BoxCollider to all spawned items and registers with XRSimpleInteractable
+///   2. Registers existing colliders with XRSimpleInteractable on each spawned item
 ///   3. Picks anomaly items and starts blinking them
 ///   4. Shows instruction — participant searches and points ray at target + pulls trigger
 ///   5. Correct item → blinking stops, report panel appears
@@ -27,9 +26,6 @@ using TMPro;
 public class AttentionalBlindnessManager : MonoBehaviour
 {
     [Header("Input")]
-    [Tooltip("Drag your Right Controller or Ray Interactor GameObject here.")]
-    public Transform _rightControllerTransform;
-
     [Tooltip("Assign: XRI Default Input Actions → XRI Right Hand Interaction → Activate")]
     public InputActionReference triggerAction;
 
@@ -69,6 +65,7 @@ public class AttentionalBlindnessManager : MonoBehaviour
     private bool _awaitingSelection = false;
     private bool _trialComplete = false;
     private FeedbackDisplay _feedbackDisplay;
+    private Transform _rightControllerTransform;
 
     // ── Unity lifecycle ───────────────────────────────────────────────────────
     private void OnEnable()
@@ -105,10 +102,12 @@ public class AttentionalBlindnessManager : MonoBehaviour
     {
         // Wait one frame for all ShelfSpawners to finish Start()
         yield return null;
+
         // Find right controller automatically from VR Player in main scene
         _rightControllerTransform = FindRightController();
         if (_rightControllerTransform == null)
             Debug.LogWarning("[AttentionalBlindness] Could not find Right Controller — manual trigger fallback disabled.");
+
         CollectSpawnedItems();
 
         if (_allSpawnedItems.Count == 0)
@@ -118,7 +117,7 @@ public class AttentionalBlindnessManager : MonoBehaviour
             yield break;
         }
 
-        // Add BoxCollider to each item and register with its XRSimpleInteractable
+        // Register existing colliders with XRSimpleInteractable on each item
         foreach (GameObject item in _allSpawnedItems)
             SetupInteractable(item);
 
@@ -134,10 +133,10 @@ public class AttentionalBlindnessManager : MonoBehaviour
         yield return new WaitForSeconds(instructionDelay);
         BeginTrial();
     }
+
     private Transform FindRightController()
     {
-        // Search by common XRI names
-        string[] names = { "Right Controller", "RightController", "Right Hand", "Ray Interactor" };
+        string[] names = { "Ray Interactor", "RayInteractor", "Right Controller", "Right Hand" };
         foreach (string n in names)
         {
             GameObject found = GameObject.Find(n);
@@ -145,13 +144,14 @@ public class AttentionalBlindnessManager : MonoBehaviour
                 return found.transform;
         }
 
-        // Fallback — find Ray Interactor component anywhere in scene
+        // Fallback — find XRRayInteractor component anywhere in loaded scenes
         var rayInteractor = FindAnyObjectByType<UnityEngine.XR.Interaction.Toolkit.Interactors.XRRayInteractor>();
         if (rayInteractor != null)
             return rayInteractor.transform;
 
         return null;
     }
+
     private void SetupInteractable(GameObject item)
     {
         XRSimpleInteractable interactable = item.GetComponent<XRSimpleInteractable>();
@@ -161,31 +161,21 @@ public class AttentionalBlindnessManager : MonoBehaviour
             return;
         }
 
-        // Add BoxCollider sized to mesh bounds if missing
-        BoxCollider box = item.GetComponent<BoxCollider>();
-        if (box == null)
+        // Use existing collider from prefab — added directly in Project window
+        Collider col = item.GetComponentInChildren<Collider>();
+        if (col is BoxCollider box)
         {
-            box = item.AddComponent<BoxCollider>();
-
-            Renderer[] renderers = item.GetComponentsInChildren<Renderer>();
-            if (renderers.Length > 0)
-            {
-                Bounds combined = renderers[0].bounds;
-                foreach (Renderer r in renderers)
-                    combined.Encapsulate(r.bounds);
-
-                box.center = item.transform.InverseTransformPoint(combined.center);
-                box.size = combined.size;
-            }
+            box.size *= 0.85f; 
+        }
+        if (col == null)
+        {
+            Debug.LogWarning($"[AttentionalBlindness] '{item.name}' has no Collider — add one to the prefab.");
+            return;
         }
 
-        // Register the collider with the XRSimpleInteractable's collider list
-        List<Collider> colliders = new List<Collider>(interactable.colliders);
-        // Register the collider with the XRSimpleInteractable's collider list
-        if (!interactable.colliders.Contains(box))
-        {
-            interactable.colliders.Add(box);
-        }
+        // Register with XRSimpleInteractable's collider list
+        if (!interactable.colliders.Contains(col))
+            interactable.colliders.Add(col);
 
         // Listen for selection
         interactable.selectEntered.AddListener((args) => OnItemSelected(item));
