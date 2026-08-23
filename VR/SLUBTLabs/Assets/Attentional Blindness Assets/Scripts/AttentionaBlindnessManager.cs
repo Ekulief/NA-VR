@@ -8,29 +8,19 @@ using UnityEngine.XR.Interaction.Toolkit.Interactables;
 using TMPro;
 
 /// <summary>
-/// SLUBT Labs — Attentional Blindness Manager
+/// SLUBT Labs — Odd Item Detection Manager
 ///
-/// Works with ShelfSpawner — finds spawned items at runtime, no pre-assignment needed.
-/// Injects a UNIQUE target prefab into a random shelf slot so there is no ambiguity
-/// about which item is the target. The target prefab is separate from all distractor prefabs.
+/// Participant must find and select the odd item among the shelves as fast as possible.
+/// The moment they select the correct odd item, search time summary appears instantly.
+/// No anomaly blinking, no yes/no report — just pure visual search timing.
 ///
 /// FLOW:
 ///   1. Waits one frame for ShelfSpawners to finish
-///   2. Picks a random shelf and injects the unique target prefab into a random slot
-///   3. Registers existing colliders with XRSimpleInteractable on all spawned items
-///   4. Picks anomaly items (excluding target) and starts blinking them
-///   5. Shows instruction — participant searches and points ray at target + pulls trigger
-///   6. Correct item → blinking stops, report panel appears
-///   7. Wrong item → face-following feedback text for 2 seconds
-///   8. Post-task awareness report — Yes / No
-///   9. Results recorded
-///
-/// SETUP:
-///   a) Attach to empty GameObject "AttentionalBlindnessManager"
-///   b) Assign uniqueTargetPrefab — this is the one item that IS the target
-///      It should NOT appear in any ShelfSpawner's distractor list
-///   c) Assign UI panels
-///   d) triggerAction → XRI Default Input Actions → XRI Right Hand Interaction → Activate
+///   2. Injects unique odd item into a random shelf slot
+///   3. Registers colliders with XRSimpleInteractable on all spawned items
+///   4. Shows instruction — participant searches for the odd item
+///   5. Correct item selected → summary appears instantly with search time
+///   6. Wrong item selected → brief feedback, keep searching
 /// </summary>
 public class AttentionalBlindnessManager : MonoBehaviour
 {
@@ -39,15 +29,11 @@ public class AttentionalBlindnessManager : MonoBehaviour
     public InputActionReference triggerAction;
 
     [Header("Experiment Config")]
-    [Tooltip("The unique target prefab — must NOT be in any ShelfSpawner distractor list. " +
-             "The manager spawns exactly one of these somewhere on a random shelf.")]
+    [Tooltip("The unique odd item prefab — must NOT be in any ShelfSpawner distractor list.")]
     public GameObject uniqueTargetPrefab;
 
-    [Tooltip("Display name shown in the instruction e.g. 'Milk'.")]
-    public string targetDisplayName = "Milk";
-
-    [Tooltip("How many distractor items should blink. -1 = random subset.")]
-    public int anomalyCount = 3;
+    [Tooltip("Display name shown in the instruction e.g. 'odd item'.")]
+    public string targetDisplayName = "odd item";
 
     [Tooltip("Max raycast distance for item selection.")]
     public float raycastDistance = 10f;
@@ -59,12 +45,6 @@ public class AttentionalBlindnessManager : MonoBehaviour
     public GameObject instructionPanel;
     public TMP_Text instructionText;
 
-    [Header("UI — Awareness Report Panel")]
-    public GameObject reportPanel;
-    public TMP_Text reportQuestionText;
-    public Button yesButton;
-    public Button noButton;
-
     [Header("UI — Results Panel")]
     public GameObject resultsPanel;
     public TMP_Text resultsSummaryText;
@@ -72,9 +52,8 @@ public class AttentionalBlindnessManager : MonoBehaviour
     // ── State ─────────────────────────────────────────────────────────────────
     private float _trialStartTime;
     private float _foundTime;
-    private List<AnomalyManager> _activeBlinkers = new();
     private List<GameObject> _allSpawnedItems = new();
-    private GameObject _targetInstance;          // direct reference — no name matching needed
+    private GameObject _targetInstance;
     private bool _awaitingSelection = false;
     private bool _trialComplete = false;
     private FeedbackDisplay _feedbackDisplay;
@@ -99,13 +78,9 @@ public class AttentionalBlindnessManager : MonoBehaviour
     private void Start()
     {
         instructionPanel.SetActive(false);
-        reportPanel.SetActive(false);
         resultsPanel.SetActive(false);
 
         _feedbackDisplay = GetComponent<FeedbackDisplay>();
-
-        yesButton.onClick.AddListener(() => OnAwarenessReport(true));
-        noButton.onClick.AddListener(() => OnAwarenessReport(false));
 
         StartCoroutine(InitialiseAfterSpawn());
     }
@@ -113,52 +88,41 @@ public class AttentionalBlindnessManager : MonoBehaviour
     // ── Initialisation ────────────────────────────────────────────────────────
     private IEnumerator InitialiseAfterSpawn()
     {
-        // Wait one frame for all ShelfSpawners to finish Start()
         yield return null;
 
-        // Find right controller automatically from VR Player in main scene
         _rightControllerTransform = FindRightController();
         if (_rightControllerTransform == null)
-            Debug.LogWarning("[AttentionalBlindness] Could not find Right Controller — manual trigger fallback disabled.");
+            Debug.LogWarning("[OddItemDetection] Could not find Right Controller.");
 
-        // Inject unique target into a random shelf
         if (uniqueTargetPrefab == null)
         {
-            Debug.LogError("[AttentionalBlindness] uniqueTargetPrefab is not assigned!");
+            Debug.LogError("[OddItemDetection] uniqueTargetPrefab is not assigned!");
             yield break;
         }
 
+        // Inject unique odd item into a random shelf
         ShelfSpawner[] allShelves = FindObjectsByType<ShelfSpawner>(FindObjectsSortMode.None);
         if (allShelves.Length == 0)
         {
-            Debug.LogError("[AttentionalBlindness] No ShelfSpawners found in scene!");
+            Debug.LogError("[OddItemDetection] No ShelfSpawners found in scene!");
             yield break;
         }
 
-        // Pick a random shelf to inject the target into
         ShelfSpawner chosenShelf = allShelves[Random.Range(0, allShelves.Length)];
         _targetInstance = chosenShelf.InjectTarget(uniqueTargetPrefab);
 
         if (_targetInstance == null)
         {
-            Debug.LogError("[AttentionalBlindness] Target injection failed!");
+            Debug.LogError("[OddItemDetection] Target injection failed!");
             yield break;
         }
 
-        Debug.Log($"[AttentionalBlindness] Target '{targetDisplayName}' injected on shelf '{chosenShelf.gameObject.name}' " +
+        Debug.Log($"[OddItemDetection] Odd item injected on '{chosenShelf.gameObject.name}' " +
                   $"at {_targetInstance.transform.position}");
 
-        // Collect all spawned items across all shelves
+        // Collect all spawned items and set up interactables
         CollectSpawnedItems();
 
-        if (_allSpawnedItems.Count == 0)
-        {
-            Debug.LogError("[AttentionalBlindness] No spawned items found! " +
-                           "Make sure ShelfSpawner tags items as 'SpawnedItem'.");
-            yield break;
-        }
-
-        // Register existing colliders with XRSimpleInteractable on each item
         foreach (GameObject item in _allSpawnedItems)
             SetupInteractable(item);
 
@@ -188,26 +152,21 @@ public class AttentionalBlindnessManager : MonoBehaviour
         XRSimpleInteractable interactable = item.GetComponent<XRSimpleInteractable>();
         if (interactable == null)
         {
-            Debug.LogWarning($"[AttentionalBlindness] '{item.name}' has no XRSimpleInteractable.");
+            Debug.LogWarning($"[OddItemDetection] '{item.name}' has no XRSimpleInteractable.");
             return;
         }
 
-        // Use existing collider from prefab
         Collider col = item.GetComponentInChildren<Collider>();
         if (col == null)
         {
-            Debug.LogWarning($"[AttentionalBlindness] '{item.name}' has no Collider — add one to the prefab.");
+            Debug.LogWarning($"[OddItemDetection] '{item.name}' has no Collider.");
             return;
         }
 
-        // Register with XRSimpleInteractable's collider list
         if (!interactable.colliders.Contains(col))
             interactable.colliders.Add(col);
 
-        // Listen for selection — uses direct reference, no name matching
         interactable.selectEntered.AddListener((args) => OnItemSelected(item));
-
-        Debug.Log($"[AttentionalBlindness] Interactable set up on '{item.name}'");
     }
 
     private void CollectSpawnedItems()
@@ -215,54 +174,20 @@ public class AttentionalBlindnessManager : MonoBehaviour
         _allSpawnedItems.Clear();
         GameObject[] found = GameObject.FindGameObjectsWithTag("SpawnedItem");
         _allSpawnedItems.AddRange(found);
-        Debug.Log($"[AttentionalBlindness] Collected {_allSpawnedItems.Count} spawned items.");
+        Debug.Log($"[OddItemDetection] Collected {_allSpawnedItems.Count} spawned items.");
     }
 
     // ── Trial flow ────────────────────────────────────────────────────────────
     private void BeginTrial()
     {
-        // All items except the target are potential anomaly blinkers
-        List<GameObject> distractors = _allSpawnedItems.FindAll(item => item != _targetInstance);
-
-        for (int i = distractors.Count - 1; i > 0; i--)
-        {
-            int j = Random.Range(0, i + 1);
-            (distractors[i], distractors[j]) = (distractors[j], distractors[i]);
-        }
-
-        int count = anomalyCount < 0
-            ? Random.Range(2, Mathf.Max(3, distractors.Count / 3))
-            : Mathf.Min(anomalyCount, distractors.Count);
-
-        for (int i = 0; i < count; i++)
-        {
-            AnomalyManager blinker = distractors[i].AddComponent<AnomalyManager>();
-            _activeBlinkers.Add(blinker);
-        }
-
-        instructionText.text = $"Find the <b>{targetDisplayName}</b> on the shelves.\n\n" +
+        instructionText.text = $"Find the item that doesn't belong on the shelves.\n\n" +
                                $"Point at it and pull the <b>trigger</b> to confirm.";
         instructionPanel.SetActive(true);
 
-        StartCoroutine(StartBlinkingAfterDelay(1.5f));
         _trialStartTime = Time.time;
         _awaitingSelection = true;
 
-        Debug.Log($"[AttentionalBlindness] Trial started — {count} anomaly items blinking.");
-    }
-
-    private IEnumerator StartBlinkingAfterDelay(float delay)
-    {
-        yield return new WaitForSeconds(delay);
-        foreach (AnomalyManager blinker in _activeBlinkers)
-            blinker.StartBlinking();
-    }
-
-    private void StopAnomalies()
-    {
-        foreach (AnomalyManager blinker in _activeBlinkers)
-            if (blinker != null) blinker.StopBlinking();
-        _activeBlinkers.Clear();
+        Debug.Log("[OddItemDetection] Trial started — participant searching for odd item.");
     }
 
     // ── Item selection via XRSimpleInteractable ───────────────────────────────
@@ -271,9 +196,9 @@ public class AttentionalBlindnessManager : MonoBehaviour
         if (!_awaitingSelection || _trialComplete) return;
 
         if (item == _targetInstance)
-            OnTargetFound();
+            OnOddItemFound();
         else
-            OnWrongItemSelected(item.name);
+            OnWrongItemSelected();
     }
 
     // ── Manual trigger fallback ───────────────────────────────────────────────
@@ -290,9 +215,9 @@ public class AttentionalBlindnessManager : MonoBehaviour
             if (hitRoot == null) return;
 
             if (hitRoot == _targetInstance)
-                OnTargetFound();
+                OnOddItemFound();
             else
-                OnWrongItemSelected(hitRoot.name);
+                OnWrongItemSelected();
         }
     }
 
@@ -309,56 +234,33 @@ public class AttentionalBlindnessManager : MonoBehaviour
     }
 
     // ── Outcomes ──────────────────────────────────────────────────────────────
-    private void OnTargetFound()
+    private void OnOddItemFound()
     {
         _awaitingSelection = false;
         _trialComplete = true;
         _foundTime = Time.time - _trialStartTime;
 
-        StopAnomalies();
         instructionPanel.SetActive(false);
 
-        _feedbackDisplay?.ShowSuccess($"Correct! You found the {targetDisplayName}!");
-
-        Debug.Log($"[AttentionalBlindness] Correct! '{targetDisplayName}' found in {_foundTime:F2}s");
-
-        StartCoroutine(ShowReportAfterDelay(2f));
-    }
-
-    private void OnWrongItemSelected(string itemName)
-    {
-        Debug.Log($"[AttentionalBlindness] Wrong item: '{itemName}'");
-        _feedbackDisplay?.ShowError($"That's not the {targetDisplayName}. Keep looking!");
-    }
-
-    private IEnumerator ShowReportAfterDelay(float delay)
-    {
-        yield return new WaitForSeconds(delay);
-        reportQuestionText.text = "While searching for the item,\ndid you notice anything unusual\nhappening on the shelves?";
-        reportPanel.SetActive(true);
-    }
-
-    // ── Awareness report ──────────────────────────────────────────────────────
-    private void OnAwarenessReport(bool noticed)
-    {
-        reportPanel.SetActive(false);
+        // Show summary instantly
+        string timeRating = _foundTime < 10f ? "Excellent!" : _foundTime < 20f ? "Good" : "Keep practicing";
 
         resultsSummaryText.text =
-            $"Trial Complete\n\n" +
-            $"Target:             {targetDisplayName}\n" +
-            $"Search time:        {_foundTime:F1}s\n" +
-            $"Noticed anomaly:    {(noticed ? "Yes" : "No")}\n\n" +
-            (noticed
-                ? "You noticed the blinking items while searching."
-                : "You did not notice the blinking items.\nThis is the attentional blindness effect.");
+            $"Odd Item Found!\n\n" +
+            $"Search time:    {_foundTime:F1}s\n" +
+            $"Rating:         {timeRating}\n\n" +
+            $"The odd item was the {targetDisplayName}.";
 
         resultsPanel.SetActive(true);
 
-        Debug.Log($"[AttentionalBlindness] Result — " +
-                  $"Target: {targetDisplayName} | " +
-                  $"Search time: {_foundTime:F2}s | " +
-                  $"Noticed anomaly: {noticed}");
+        Debug.Log($"[OddItemDetection] Odd item found in {_foundTime:F2}s");
 
-        // TODO: SessionDataManager.Instance.RecordAttentionalBlindnessTrial(targetDisplayName, _foundTime, noticed);
+        // TODO: SessionDataManager.Instance.RecordOddItemTrial(targetDisplayName, _foundTime);
+    }
+
+    private void OnWrongItemSelected()
+    {
+        _feedbackDisplay?.ShowError("That item belongs here. Keep looking!");
+        Debug.Log("[OddItemDetection] Wrong item selected.");
     }
 }

@@ -2681,7 +2681,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!223 &917147133
 Canvas:
   m_ObjectHideFlags: 0
@@ -2961,15 +2961,10 @@ MonoBehaviour:
   triggerAction: {fileID: -2439264783773714294, guid: b6d5c44ebe3244b7692e81ae8265eb22, type: 3}
   uniqueTargetPrefab: {fileID: 102057865630125702, guid: 1e990e856a122754b8386dd5b0d1d24e, type: 3}
   targetDisplayName: Cereal
-  anomalyCount: 1
   raycastDistance: 10
   instructionDelay: 0.5
   instructionPanel: {fileID: 554384413}
   instructionText: {fileID: 455962726}
-  reportPanel: {fileID: 917147132}
-  reportQuestionText: {fileID: 223461079}
-  yesButton: {fileID: 1476044983}
-  noButton: {fileID: 1006469616}
   resultsPanel: {fileID: 702332530}
   resultsSummaryText: {fileID: 315091757}
 --- !u!4 &1033889996
