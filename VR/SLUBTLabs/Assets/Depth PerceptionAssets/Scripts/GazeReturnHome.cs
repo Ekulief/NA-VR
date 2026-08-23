@@ -85,6 +85,12 @@ public class GazeReturnHome : MonoBehaviour
             Debug.LogError($"[SLUBT Labs] Could not find '{xrOriginName}' — check the name matches exactly.");
             return;
         }
+        GameObject feedbackCanvas = GameObject.Find("FeedbackOverlayCanvas");
+        if (feedbackCanvas != null)
+            Destroy(feedbackCanvas);
+        GameObject[] spawnedItems = GameObject.FindGameObjectsWithTag("SpawnedItem");
+        foreach (GameObject item in spawnedItems)
+            Destroy(item);
 
         DontDestroyOnLoad(camRig);
 

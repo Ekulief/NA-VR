@@ -1,143 +1,135 @@
 ﻿using System.Collections;
 using UnityEngine;
+using UnityEngine.UI;
 using TMPro;
 
 /// <summary>
-/// SLUBT Labs — Runtime Feedback Display
-/// Creates a world space feedback canvas at runtime parented to Camera Offset.
-/// Attach to AttentionalBlindnessManager or any experiment manager that needs
-/// face-following feedback text.
-///
-/// SETUP:
-///   a) Attach to your AttentionalBlindnessManager GameObject.
-///   b) Call ShowFeedback("message", color, duration) from any script.
-///   c) No Inspector wiring needed — finds Camera Offset automatically.
+/// SLUBT Labs —  Feedback Display
+/// Creates a Screen Space - Camera canvas overlay at runtime.
+/// Always appears in front of the player's view in VR — no positioning needed.
+/// Attach to the same GameObject as AttentionalBlindnessManager.
 /// </summary>
 public class FeedbackDisplay : MonoBehaviour
 {
-    [Header("Canvas Config")]
-    public float distanceFromCamera = 1.5f;
-    public float canvasWidth = 800f;
-    public float canvasHeight = 200f;
-    public float fontSize = 52f;
+    [Header("Config")]
+    public float displayDuration = 2f;
+    public float fontSize = 72f;
 
     // ── Internal ──────────────────────────────────────────────────────────────
-    private TMP_Text _feedbackText;
+    private GameObject _canvasObj;
+    private TMP_Text _text;
     private Coroutine _hideCoroutine;
     private bool _initialised = false;
 
     // ── Unity lifecycle ───────────────────────────────────────────────────────
     private void Start()
     {
-        StartCoroutine(InitialiseAfterFrame());
+        StartCoroutine(BuildAfterFrame());
     }
 
-    private IEnumerator InitialiseAfterFrame()
+    private IEnumerator BuildAfterFrame()
     {
-        // Wait one frame so VR Player is fully loaded into the scene
         yield return null;
-
-        // Find Camera Offset inside VR Player
-        Transform cameraOffset = FindCameraOffset();
-
-        if (cameraOffset == null)
-        {
-            Debug.LogWarning("[FeedbackDisplay] Could not find Camera Offset — " +
-                             "feedback canvas will not follow player.");
-            yield break;
-        }
-
-        BuildFeedbackCanvas(cameraOffset);
+        BuildCanvas();
         _initialised = true;
-
-        Debug.Log($"[FeedbackDisplay] Feedback canvas created on '{cameraOffset.name}'.");
+        Debug.Log("[FeedbackDisplay] Overlay canvas built and ready.");
     }
 
     // ── Canvas builder ────────────────────────────────────────────────────────
-    private void BuildFeedbackCanvas(Transform parent)
+    private void BuildCanvas()
     {
-        // Canvas GameObject
-        GameObject canvasObj = new GameObject("FeedbackCanvas");
-        canvasObj.transform.SetParent(parent, false);
-        canvasObj.transform.localPosition = new Vector3(0f, 0f, distanceFromCamera);
-        canvasObj.transform.localRotation = Quaternion.identity;
-        canvasObj.transform.localScale = new Vector3(0.001f, 0.001f, 0.001f);
+        // Canvas
+        _canvasObj = new GameObject("FeedbackOverlayCanvas");
+        DontDestroyOnLoad(_canvasObj);
 
-        // Canvas component
-        Canvas canvas = canvasObj.AddComponent<Canvas>();
-        canvas.renderMode = RenderMode.WorldSpace;
+        Canvas canvas = _canvasObj.AddComponent<Canvas>();
+        canvas.renderMode = RenderMode.ScreenSpaceCamera;
+        canvas.worldCamera = Camera.main;
+        canvas.planeDistance = 0.5f;
+        canvas.sortingOrder = 999;
 
-        // Size
-        RectTransform rt = canvasObj.GetComponent<RectTransform>();
-        rt.sizeDelta = new Vector2(canvasWidth, canvasHeight);
+        _canvasObj.AddComponent<CanvasScaler>();
+        _canvasObj.AddComponent<GraphicRaycaster>();
 
-        // TMP Text
+        // Top of screen panel - no background
+        GameObject panelObj = new GameObject("FeedbackPanel");
+        panelObj.transform.SetParent(_canvasObj.transform, false);
+
+        RectTransform panelRt = panelObj.AddComponent<RectTransform>();
+        panelRt.anchorMin = new Vector2(0.2f, 0.78f);
+        panelRt.anchorMax = new Vector2(0.8f, 0.95f);
+        panelRt.offsetMin = Vector2.zero;
+        panelRt.offsetMax = Vector2.zero;
+
+        // No background image
+
+        // Text
         GameObject textObj = new GameObject("FeedbackText");
-        textObj.transform.SetParent(canvasObj.transform, false);
+        textObj.transform.SetParent(panelObj.transform, false);
 
         RectTransform textRt = textObj.AddComponent<RectTransform>();
         textRt.anchorMin = Vector2.zero;
         textRt.anchorMax = Vector2.one;
-        textRt.offsetMin = Vector2.zero;
-        textRt.offsetMax = Vector2.zero;
+        textRt.offsetMin = new Vector2(24f, 16f);
+        textRt.offsetMax = new Vector2(-24f, -16f);
 
-        _feedbackText = textObj.AddComponent<TextMeshProUGUI>();
-        _feedbackText.fontSize = fontSize;
-        _feedbackText.alignment = TextAlignmentOptions.Center;
-        _feedbackText.text = "";
-        _feedbackText.color = Color.white;
+        _text = textObj.AddComponent<TextMeshProUGUI>();
+        _text.fontSize = fontSize;
+        _text.alignment = TextAlignmentOptions.Center;
+        _text.textWrappingMode = TextWrappingModes.NoWrap;
+        _text.color = Color.white;
+        _text.text = "";
+
+        // Start hidden
+        _canvasObj.SetActive(false);
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
-
-    /// <summary>Show a feedback message for a set duration then hide it.</summary>
-    public void ShowFeedback(string message, Color color, float duration = 2f)
+    public void ShowFeedback(string message, Color textColor, float duration = -1f)
     {
-        if (!_initialised || _feedbackText == null)
+        if (!_initialised || _text == null)
         {
-            Debug.LogWarning("[FeedbackDisplay] Not yet initialised.");
+            Debug.LogWarning("[FeedbackDisplay] Not initialised yet.");
             return;
         }
 
         if (_hideCoroutine != null)
             StopCoroutine(_hideCoroutine);
 
-        _feedbackText.text = message;
-        _feedbackText.color = color;
-        _hideCoroutine = StartCoroutine(HideAfter(duration));
+        _text.text = message;
+        _text.color = textColor;
+        _canvasObj.SetActive(true);
+
+        float dur = duration < 0 ? displayDuration : duration;
+        _hideCoroutine = StartCoroutine(HideAfter(dur));
     }
 
-    /// <summary>Hide feedback immediately.</summary>
+    public void ShowSuccess(string message, float duration = -1f)
+    {
+        ShowFeedback(message, Color.green, duration);
+    }
+
+    public void ShowError(string message, float duration = -1f)
+    {
+        ShowFeedback(message, new Color(1f, 0.3f, 0.3f), duration);
+    }
+
     public void HideFeedback()
     {
-        if (_feedbackText != null)
-            _feedbackText.text = "";
+        if (_hideCoroutine != null)
+        {
+            StopCoroutine(_hideCoroutine);
+            _hideCoroutine = null;
+        }
+
+        if (_canvasObj != null)
+            _canvasObj.SetActive(false);
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
     private IEnumerator HideAfter(float duration)
     {
         yield return new WaitForSeconds(duration);
-        if (_feedbackText != null)
-            _feedbackText.text = "";
-    }
-
-    private Transform FindCameraOffset()
-    {
-        // Search by common names
-        string[] names = { "Camera Offset", "CameraOffset", "VR Player" };
-        foreach (string n in names)
-        {
-            GameObject found = GameObject.Find(n);
-            if (found != null)
-                return found.transform;
-        }
-
-        // Fallback — find Main Camera and use its parent
-        Camera main = Camera.main;
-        if (main != null && main.transform.parent != null)
-            return main.transform.parent;
-
-        return null;
+        if (_canvasObj != null)
+            _canvasObj.SetActive(false);
     }
 }

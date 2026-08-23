@@ -8,16 +8,15 @@ using UnityEngine;
 ///
 /// MULTI-SHELF SETUP:
 ///   Place this script on each shelf. Leave targetPrefab empty on all shelves.
-///   From a separate ShelfManager script, call SetTarget(prefab) on whichever
-///   shelf you want to hide the target in, then call RespawnShelf() to regenerate.
+///   AttentionalBlindnessManager calls InjectTarget() on one randomly chosen shelf
+///   to place the unique target item among the distractors.
 ///
 /// SETUP:
 ///   a) Create an empty GameObject, name it "ShelfSpawner".
 ///   b) Add a Box Collider. Resize it to match your shelf surface. Check Is Trigger.
 ///   c) Attach this script.
 ///   d) Assign distractor prefabs in the Inspector.
-///   e) Leave targetPrefab empty — assign it later via SetTarget() from your manager.
-///   f) Press Play — shelves fill with distractors only until a target is assigned.
+///   e) Leave targetPrefab empty.
 /// </summary>
 [RequireComponent(typeof(BoxCollider))]
 public class ShelfSpawner : MonoBehaviour
@@ -32,8 +31,7 @@ public class ShelfSpawner : MonoBehaviour
     [Tooltip("Drag all your distractor prefabs here.")]
     public List<GameObject> distractorPrefabs = new();
 
-    [Tooltip("Optional — leave empty for distractor-only shelves. " +
-             "Assign via SetTarget() from your ShelfManager script.")]
+    [Tooltip("Optional — leave empty. Set via InjectTarget() from AttentionalBlindnessManager.")]
     public GameObject targetPrefab;
 
     [Header("Experiment")]
@@ -43,40 +41,31 @@ public class ShelfSpawner : MonoBehaviour
     private List<GameObject> _spawnedItems = new();
     private int _targetSlotIndex = -1;
     private BoxCollider _bounds;
+    private GameObject _itemHolder;
 
     // ── Unity lifecycle ───────────────────────────────────────────────────────
     private void Start()
     {
         _bounds = GetComponent<BoxCollider>();
         _bounds.isTrigger = true;
+
+        // Create holder in the same scene as this ShelfSpawner
+        _itemHolder = new GameObject($"{gameObject.name}_Items");
+        UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(
+            _itemHolder, gameObject.scene);
+
         SpawnShelf();
     }
-
     // ── Public API ────────────────────────────────────────────────────────────
 
-    /// <summary>Assign a target prefab to this shelf from an external manager.</summary>
-    public void SetTarget(GameObject prefab)
-    {
-        targetPrefab = prefab;
-    }
-
-    /// <summary>Clear target from this shelf — makes it distractor-only again.</summary>
-    public void ClearTarget()
-    {
-        targetPrefab = null;
-    }
-
-    /// <summary>Clears and regenerates the shelf with current settings.</summary>
     public void RespawnShelf()
     {
         ClearShelf();
         SpawnShelf();
     }
 
-    /// <summary>Returns true if this shelf has a target assigned.</summary>
     public bool HasTarget() => targetPrefab != null;
 
-    /// <summary>Returns the world position of the target item. Vector3.zero if no target.</summary>
     public Vector3 GetTargetPosition()
     {
         if (_targetSlotIndex >= 0 && _targetSlotIndex < _spawnedItems.Count)
@@ -84,12 +73,55 @@ public class ShelfSpawner : MonoBehaviour
         return Vector3.zero;
     }
 
+    /// <summary>
+    /// Injects a unique target prefab into a random slot on this shelf.
+    /// Destroys whatever distractor was in that slot and replaces it with the target.
+    /// Returns the spawned target instance — AttentionalBlindnessManager holds this reference.
+    /// </summary>
+    public GameObject InjectTarget(GameObject targetPrefabToInject)
+    {
+        if (_spawnedItems.Count == 0)
+        {
+            Debug.LogWarning($"[ShelfSpawner] '{gameObject.name}' has no spawned items to inject into.");
+            return null;
+        }
+
+        // Pick a random slot to replace with the target
+        int slot = Random.Range(0, _spawnedItems.Count);
+
+        // Destroy the distractor that was there
+        if (_spawnedItems[slot] != null)
+            Destroy(_spawnedItems[slot]);
+
+        // Spawn target at the same position parented under the holder
+        Vector3 position = GetSlotPosition(slot);
+        Quaternion rotation = Quaternion.Euler(
+            0f,
+            Random.Range(-randomRotationOffset, randomRotationOffset),
+            0f
+        );
+
+        GameObject target = Instantiate(targetPrefabToInject, position, rotation, _itemHolder.transform);
+        target.tag = "SpawnedItem";
+        _spawnedItems[slot] = target;
+        _targetSlotIndex = slot;
+
+        if (logTargetPosition)
+            Debug.Log($"[ShelfSpawner] Target '{targetPrefabToInject.name}' injected at slot {slot} " +
+                      $"on '{gameObject.name}' — world pos: {position}");
+
+        return target;
+    }
+
+    /// <summary>Returns all currently spawned items on this shelf.</summary>
+    public List<GameObject> GetSpawnedItems() => _spawnedItems;
+
     // ── Spawning ──────────────────────────────────────────────────────────────
     private void SpawnShelf()
     {
         if (distractorPrefabs == null || distractorPrefabs.Count == 0)
         {
-            Debug.LogError("[ShelfSpawner] No distractor prefabs assigned!");
+            Debug.LogError($"[ShelfSpawner] '{gameObject.name}' has no distractor prefabs assigned!");
             return;
         }
 
@@ -102,11 +134,6 @@ public class ShelfSpawner : MonoBehaviour
         float startZ = bounds.min.z + spacingZ * 0.5f;
 
         int totalSlots = columns * rows;
-
-        // Only reserve a target slot if a target prefab is assigned
-        _targetSlotIndex = targetPrefab != null ? Random.Range(0, totalSlots) : -1;
-
-        int slotIndex = 0;
 
         for (int row = 0; row < rows; row++)
         {
@@ -130,33 +157,43 @@ public class ShelfSpawner : MonoBehaviour
                     0f
                 );
 
-                GameObject prefabToSpawn = (slotIndex == _targetSlotIndex && targetPrefab != null)
-                    ? targetPrefab
-                    : distractorPrefabs[Random.Range(0, distractorPrefabs.Count)];
+                GameObject prefab = distractorPrefabs[Random.Range(0, distractorPrefabs.Count)];
 
-                GameObject spawned = Instantiate(prefabToSpawn, basePosition + randomOffset, spawnRotation);
+                // Parent under _itemHolder so items get destroyed with the scene
+                GameObject spawned = Instantiate(prefab, basePosition + randomOffset, spawnRotation, _itemHolder.transform);
+                spawned.tag = "SpawnedItem";
                 _spawnedItems.Add(spawned);
-
-                slotIndex++;
-            };
+            }
         }
 
         if (logTargetPosition)
-        {
-            if (targetPrefab != null)
-                Debug.Log($"[ShelfSpawner] '{gameObject.name}' — {totalSlots} items spawned. " +
-                          $"Target '{targetPrefab.name}' at slot {_targetSlotIndex} " +
-                          $"— world pos: {_spawnedItems[_targetSlotIndex].transform.position}");
-            else
-                Debug.Log($"[ShelfSpawner] '{gameObject.name}' — {totalSlots} distractor items spawned. No target assigned.");
-        }
+            Debug.Log($"[ShelfSpawner] '{gameObject.name}' spawned {totalSlots} distractor items.");
+    }
+
+    private Vector3 GetSlotPosition(int slot)
+    {
+        Bounds bounds = _bounds.bounds;
+        float topY = bounds.max.y;
+
+        float spacingX = bounds.size.x / Mathf.Max(columns, 1);
+        float spacingZ = bounds.size.z / Mathf.Max(rows, 1);
+        float startX = bounds.min.x + spacingX * 0.5f;
+        float startZ = bounds.min.z + spacingZ * 0.5f;
+
+        int col = slot % columns;
+        int row = slot / columns;
+
+        return new Vector3(
+            startX + col * spacingX + Random.Range(-randomPositionOffset, randomPositionOffset),
+            topY,
+            startZ + row * spacingZ + Random.Range(-randomPositionOffset, randomPositionOffset)
+        );
     }
 
     private void ClearShelf()
     {
         foreach (GameObject item in _spawnedItems)
             if (item != null) Destroy(item);
-
         _spawnedItems.Clear();
         _targetSlotIndex = -1;
     }

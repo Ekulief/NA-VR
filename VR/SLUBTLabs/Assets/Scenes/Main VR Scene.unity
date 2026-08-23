@@ -5693,7 +5693,7 @@ MonoBehaviour:
   xrOrigin: {fileID: 840514130}
   mainSceneObjects:
   - {fileID: 575312096}
-  - {fileID: 0}
+  - {fileID: 2103634118}
   - {fileID: 433250523}
   - {fileID: 485786536}
   - {fileID: 1670514923}
