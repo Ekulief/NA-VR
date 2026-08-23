@@ -846,7 +846,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 180, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 222, y: 92}
+  m_AnchoredPosition: {x: 222, y: 246}
   m_SizeDelta: {x: 200, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &223461079
@@ -937,7 +937,7 @@ MonoBehaviour:
   m_VertexBufferAutoSizeReduction: 0
   m_useMaxVisibleDescender: 1
   m_pageToDisplay: 1
-  m_margin: {x: 0, y: 0, z: -458.31888, w: 0}
+  m_margin: {x: -108.04564, y: 0, z: -568.008, w: -71.24613}
   m_isUsingLegacyAnimationComponent: 0
   m_isVolumetricText: 0
   m_hasFontAssetChanged: 0
@@ -1042,7 +1042,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 180, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 102, y: 259}
+  m_AnchoredPosition: {x: 102, y: 366}
   m_SizeDelta: {x: 200, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &258738373
@@ -1236,7 +1236,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 180, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 266, y: 11}
+  m_AnchoredPosition: {x: 266, y: 124}
   m_SizeDelta: {x: 200, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &315091757
@@ -1327,7 +1327,7 @@ MonoBehaviour:
   m_VertexBufferAutoSizeReduction: 0
   m_useMaxVisibleDescender: 1
   m_pageToDisplay: 1
-  m_margin: {x: 0, y: 0, z: -444.46594, w: -141.85757}
+  m_margin: {x: -57.095245, y: 0, z: -617.1899, w: -52.721107}
   m_isUsingLegacyAnimationComponent: 0
   m_isVolumetricText: 0
   m_hasFontAssetChanged: 0
@@ -2389,8 +2389,8 @@ RectTransform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 702332530}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: -4.688}
-  m_LocalScale: {x: 0.002, y: 0.001, z: 0.001}
+  m_LocalPosition: {x: 0, y: 0, z: -4.6909}
+  m_LocalScale: {x: 0.0022688, y: 0.0018832608, z: 0.0011344}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1406910115}
@@ -2399,7 +2399,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 19.869, y: 1.665}
+  m_AnchoredPosition: {x: 19.869, y: 1.395}
   m_SizeDelta: {x: 1017.75, y: 837.25}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1001 &800064266
@@ -2674,6 +2674,7 @@ GameObject:
   - component: {fileID: 917147135}
   - component: {fileID: 917147134}
   - component: {fileID: 917147133}
+  - component: {fileID: 917147137}
   m_Layer: 5
   m_Name: ReportPanel
   m_TagString: Untagged
@@ -2751,7 +2752,7 @@ RectTransform:
   m_GameObject: {fileID: 917147132}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: -4.775}
-  m_LocalScale: {x: 0.0025550001, y: 0.0021567747, z: 0.001}
+  m_LocalScale: {x: 0.003523345, y: 0.0025100745, z: 0.001}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 258738372}
@@ -2762,9 +2763,28 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 25.32, y: 1.285}
+  m_AnchoredPosition: {x: 25.636, y: 1.285}
   m_SizeDelta: {x: 1017.75, y: 837.25}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &917147137
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 917147132}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7951c64acb0fa62458bf30a60089fe2d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.XR.Interaction.Toolkit::UnityEngine.XR.Interaction.Toolkit.UI.TrackedDeviceGraphicRaycaster
+  m_IgnoreReversedGraphics: 0
+  m_CheckFor2DOcclusion: 0
+  m_CheckFor3DOcclusion: 0
+  m_BlockingMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_RaycastTriggerInteraction: 1
 --- !u!1 &1006469613
 GameObject:
   m_ObjectHideFlags: 0
@@ -2778,7 +2798,6 @@ GameObject:
   - component: {fileID: 1006469617}
   - component: {fileID: 1006469616}
   - component: {fileID: 1006469615}
-  - component: {fileID: 1006469619}
   m_Layer: 6
   m_Name: ReportPanelNo
   m_TagString: Untagged
@@ -2803,7 +2822,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 280, y: -192}
+  m_AnchoredPosition: {x: 280, y: -277}
   m_SizeDelta: {x: 160, y: 30}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!65 &1006469615
@@ -2825,7 +2844,7 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 50, y: 50, z: 1}
+  m_Size: {x: 50, y: 40, z: 0}
   m_Center: {x: 0, y: 0, z: 0}
 --- !u!114 &1006469616
 MonoBehaviour:
@@ -2909,25 +2928,6 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1006469613}
   m_CullTransparentMesh: 1
---- !u!114 &1006469619
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1006469613}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7951c64acb0fa62458bf30a60089fe2d, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.XR.Interaction.Toolkit::UnityEngine.XR.Interaction.Toolkit.UI.TrackedDeviceGraphicRaycaster
-  m_IgnoreReversedGraphics: 0
-  m_CheckFor2DOcclusion: 0
-  m_CheckFor3DOcclusion: 0
-  m_BlockingMask:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_RaycastTriggerInteraction: 1
 --- !u!1 &1033889994
 GameObject:
   m_ObjectHideFlags: 0
@@ -2959,10 +2959,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AttentionalBlindnessManager
   triggerAction: {fileID: -2439264783773714294, guid: b6d5c44ebe3244b7692e81ae8265eb22, type: 3}
-  targetItemName: Milk
+  uniqueTargetPrefab: {fileID: 102057865630125702, guid: 1e990e856a122754b8386dd5b0d1d24e, type: 3}
+  targetDisplayName: Cereal
   anomalyCount: 1
   raycastDistance: 10
-  instructionDelay: 1.5
+  instructionDelay: 0.5
   instructionPanel: {fileID: 554384413}
   instructionText: {fileID: 455962726}
   reportPanel: {fileID: 917147132}
@@ -2997,11 +2998,9 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: c87d9bade7028014aa18cec07b98c99d, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: '::'
-  distanceFromCamera: 1.5
-  canvasWidth: 800
-  canvasHeight: 200
-  fontSize: 52
+  m_EditorClassIdentifier: Assembly-CSharp::FeedbackDisplay
+  displayDuration: 1
+  fontSize: 45
 --- !u!1 &1034417521
 GameObject:
   m_ObjectHideFlags: 0
@@ -3705,7 +3704,6 @@ GameObject:
   - component: {fileID: 1476044984}
   - component: {fileID: 1476044983}
   - component: {fileID: 1476044982}
-  - component: {fileID: 1476044986}
   m_Layer: 6
   m_Name: ReportPanelYes
   m_TagString: Untagged
@@ -3730,7 +3728,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -263, y: -192}
+  m_AnchoredPosition: {x: -263, y: -277}
   m_SizeDelta: {x: 160, y: 30}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!65 &1476044982
@@ -3836,25 +3834,6 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1476044980}
   m_CullTransparentMesh: 1
---- !u!114 &1476044986
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1476044980}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7951c64acb0fa62458bf30a60089fe2d, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.XR.Interaction.Toolkit::UnityEngine.XR.Interaction.Toolkit.UI.TrackedDeviceGraphicRaycaster
-  m_IgnoreReversedGraphics: 0
-  m_CheckFor2DOcclusion: 0
-  m_CheckFor3DOcclusion: 0
-  m_BlockingMask:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_RaycastTriggerInteraction: 1
 --- !u!1001 &1505187929
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -4563,6 +4542,10 @@ PrefabInstance:
     - target: {fileID: 2962304979446349808, guid: 040ee1e74a313c8459306139f9d93f83, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5147037990442806270, guid: 040ee1e74a313c8459306139f9d93f83, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0.007
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
