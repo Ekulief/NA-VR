@@ -15,7 +15,7 @@ EditorBuildSettings:
     path: Assets/Scenes/Main VR Scene.unity
     guid: 434e4f1c1129ff74283bd1f40294a2e1
   - enabled: 1
-    path: Assets/Scenes/Attentional Blindness Scene.unity
+    path: Assets/Scenes/OddItemDetection.unity
     guid: 57087892fdd76644cb65e5ab602605c8
   m_configObjects:
     Unity.XR.Oculus.Settings: {fileID: 11400000, guid: 3645edfc125e3f24eac48d9028e76e75, type: 2}

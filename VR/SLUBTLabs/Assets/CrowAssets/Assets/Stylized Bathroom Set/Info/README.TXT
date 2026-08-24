@@ -1,0 +1,1 @@
+READMEShader Usage - URP/HDRP OnlyThis pack includes custom Shader Graph shaders.Adjustable properties:- Base Color- Smoothness- MetallicTo Edit:1. Select a material2. Adjust values in the InspectorCompatible with:- URP 2022.3+- HDRP 2022.3+

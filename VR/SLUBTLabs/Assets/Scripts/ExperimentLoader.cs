@@ -113,23 +113,12 @@ public class ExperimentLoader : MonoBehaviour
         GameObject respawnObject = null;
 
         // Automatically scan your main Hub scene roots for an object named exactly "Respawn"
+        // Search all scenes including Main for Respawn
         Scene hubScene = SceneManager.GetSceneAt(0);
-        foreach (GameObject root in hubScene.GetRootGameObjects())
-        {
-            if (root.name == "Respawn")
-            {
-                respawnObject = root;
-                foundRespawnObject = true;
-                break;
-            }
-            Transform found = root.transform.Find("Respawn");
-            if (found != null)
-            {
-                respawnObject = found.gameObject;
-                foundRespawnObject = true;
-                break;
-            }
-        }
+        SceneManager.SetActiveScene(hubScene); // make sure we search the right scene
+
+        respawnObject = GameObject.Find("Respawn");
+        foundRespawnObject = respawnObject != null;
 
         if (!foundRespawnObject)
         {

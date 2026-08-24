@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: b03ee26135aa14042bd9fd435bed7148
+ScriptedImporter:
+  internalIDToNameTable: []
+  externalObjects: {}
+  serializedVersion: 2
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+  script: {fileID: 11500000, guid: 625f186215c104763be7675aa2d941aa, type: 3}
+AssetOrigin:
+  serializedVersion: 1
+  productId: 379366
+  packageName: Low Poly Stylized Bathroom Props
+  packageVersion: 1.0.1
+  assetPath: Assets/CrowAssets/Assets/Stylized Bathroom Set/HDRP/Shaders/SG_Transparent_HDRP.shadergraph
+  uploadId: 930060
