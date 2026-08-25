@@ -77,7 +77,14 @@ public class ExperimentLoader : MonoBehaviour
         // 4. Move XR Origin to the dynamic spawn point
         if (xrOrigin != null)
         {
-            xrOrigin.transform.position = spawnPoint.transform.position;
+            // Get Camera Offset height so player stands at correct eye level
+            Transform cameraOffset = xrOrigin.transform.Find("Camera Offset");
+            float camOffsetY = cameraOffset != null ? cameraOffset.localPosition.y : 0f;
+
+            Vector3 targetPos = spawnPoint.transform.position;
+            targetPos.y -= camOffsetY;
+
+            xrOrigin.transform.position = targetPos;
             xrOrigin.transform.rotation = spawnPoint.transform.rotation;
         }
         else
@@ -151,15 +158,17 @@ public class ExperimentLoader : MonoBehaviour
         // Apply tracking offset compensation so camera lands exactly on Respawn
         if (xrOrigin != null && respawnObject != null)
         {
-            Vector3 trackingOffset = Camera.main.transform.position - xrOrigin.transform.position;
-            Vector3 targetRigPosition = respawnObject.transform.position - trackingOffset;
+            Transform cameraOffset = xrOrigin.transform.Find("Camera Offset");
+            float camOffsetY = cameraOffset != null ? cameraOffset.localPosition.y : 0f;
 
-            xrOrigin.transform.position = targetRigPosition;
+            Vector3 targetPos = respawnObject.transform.position;
+            targetPos.y -= camOffsetY;
+
+            xrOrigin.transform.position = targetPos;
             xrOrigin.transform.rotation = respawnObject.transform.rotation;
 
-            Debug.Log($"[SLUBT Labs] Returned to hub. Tracking offset compensated: {trackingOffset}");
+            Debug.Log($"[SLUBT Labs] Returned to hub at {targetPos}");
         }
-
         if (fadeCanvas != null)
             yield return StartCoroutine(Fade(1f, 0f));
 
