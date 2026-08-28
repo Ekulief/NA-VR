@@ -12,8 +12,8 @@ Material:
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords:
-  - _METALLICSPECGLOSSMAP
   - _NORMALMAP
+  - _SPECULAR_SETUP
   m_InvalidKeywords: []
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
@@ -23,7 +23,7 @@ Material:
     RenderType: Opaque
   disabledShaderPasses:
   - MOTIONVECTORS
-  m_LockedProperties: 
+  m_LockedProperties: _BumpMap _BumpScale _MetallicGlossMap _Smoothness
   m_SavedProperties:
     serializedVersion: 3
     m_TexEnvs:
@@ -114,7 +114,7 @@ Material:
     - _SrcBlend: 1
     - _SrcBlendAlpha: 1
     - _Surface: 0
-    - _WorkflowMode: 1
+    - _WorkflowMode: 0
     - _XRMotionVectorsPass: 1
     - _ZWrite: 1
     m_Colors:
