@@ -25,7 +25,7 @@ RenderSettings:
   m_AmbientGroundColor: {r: 0.047, g: 0.043, b: 0.035, a: 1}
   m_AmbientIntensity: 1
   m_AmbientMode: 0
-  m_SubtractiveShadowColor: {r: 0.42, g: 0.478, b: 0.627, a: 1}
+  m_SubtractiveShadowColor: {r: 0.42128155, g: 0.5065874, b: 0.6150943, a: 1}
   m_SkyboxMaterial: {fileID: 10304, guid: 0000000000000000f000000000000000, type: 0}
   m_HaloStrength: 0.5
   m_FlareStrength: 1
@@ -464,7 +464,7 @@ Transform:
   m_GameObject: {fileID: 63020542}
   serializedVersion: 2
   m_LocalRotation: {x: 0.40821788, y: -0.23456968, z: 0.10938163, w: 0.8754261}
-  m_LocalPosition: {x: -15.271421, y: 3, z: 0}
+  m_LocalPosition: {x: -13.71, y: 6.73, z: -2.71}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -6360,6 +6360,7 @@ MonoBehaviour:
   - {fileID: 100071391}
   - {fileID: 573193949}
   - {fileID: 1925057223}
+  - {fileID: 719132810}
   - {fileID: 0}
   fadeCanvas: {fileID: 2070281696}
   fadeDuration: 0.4
