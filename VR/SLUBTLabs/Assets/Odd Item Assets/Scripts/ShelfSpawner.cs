@@ -49,13 +49,13 @@ public class ShelfSpawner : MonoBehaviour
         _bounds = GetComponent<BoxCollider>();
         _bounds.isTrigger = true;
 
-        // Create holder in the same scene as this ShelfSpawner
+        // All spawned items are parented under this holder so they get
+        // destroyed automatically when the scene unloads
         _itemHolder = new GameObject($"{gameObject.name}_Items");
-        UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(
-            _itemHolder, gameObject.scene);
 
         SpawnShelf();
     }
+
     // ── Public API ────────────────────────────────────────────────────────────
 
     public void RespawnShelf()

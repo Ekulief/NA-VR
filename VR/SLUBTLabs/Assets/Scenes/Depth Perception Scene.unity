@@ -1195,8 +1195,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c19d7d3f8f198744f83ecf403d0aec9f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DepthPerceptionUI
-  maxHeightMetres: 100
-  stepAmount: 1
+  config: {fileID: 11400000, guid: 274793649e2df7b4b81e78adcf58a0e6, type: 2}
   heightDisplayText: {fileID: 769156320}
   heightLabelText: {fileID: 0}
   incrementButton: {fileID: 1715591348}
@@ -1205,6 +1204,7 @@ MonoBehaviour:
   submitButton: {fileID: 976675681}
   returnHomeButton: {fileID: 1183630394}
   confirmationPanel: {fileID: 527985407}
+  hubReturnPosition: {x: 0, y: 0, z: 0}
 --- !u!114 &243530694
 MonoBehaviour:
   m_ObjectHideFlags: 0
