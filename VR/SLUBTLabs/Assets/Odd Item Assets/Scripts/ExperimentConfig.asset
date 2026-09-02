@@ -1,0 +1,52 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5dd9b683b0accb048b5a10932f82be25, type: 3}
+  m_Name: ExperimentConfig
+  m_EditorClassIdentifier: Assembly-CSharp::ExperimentConfig
+  sessionId: session-001
+  participantId: participant-001
+  globalInstructionDelay: 1.5
+  oddItem_TargetDisplayName: the odd item
+  oddItem_SearchTimeLimitSeconds: 120
+  oddItem_InstructionText: 'Find the item that doesn''t belong on the shelves.
+
+
+    Point
+    at it and pull the trigger to confirm.'
+  oddItem_WrongItemFeedback: That item belongs here. Keep looking!
+  oddItem_RaycastDistance: 10
+  depth_MaxHeightMetres: 100
+  depth_StepAmount: 1
+  depth_InstructionText: 'You are standing on top of a building.
+
+    How high up
+    do you think you are?
+
+
+    Use the +/- buttons or slider to input your estimate.'
+  depth_ActualHeightMetres: 50
+  rt_TotalTrials: 10
+  rt_MinForeperiodSeconds: 1
+  rt_MaxForeperiodSeconds: 3.5
+  rt_StimulusTimeoutSeconds: 3
+  rt_InterTrialIntervalSeconds: 1
+  rt_InstructionText: 'Press the trigger when you see the green panel.
+
+
+    Press
+    trigger to begin.'
+  shelf_Columns: 5
+  shelf_Rows: 2
+  shelf_RandomPositionOffset: 0.04
+  shelf_RandomRotationOffset: 15
+  useRemoteConfig: 0
+  remoteConfigTimeoutSeconds: 5
