@@ -1085,6 +1085,7 @@ GameObject:
   - component: {fileID: 243530689}
   - component: {fileID: 243530693}
   - component: {fileID: 243530694}
+  - component: {fileID: 243530695}
   m_Layer: 5
   m_Name: DepthPerceoptionUI
   m_TagString: Untagged
@@ -1224,6 +1225,19 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   m_RaycastTriggerInteraction: 1
+--- !u!114 &243530695
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 243530688}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b60adaa80426d694687f36f554b5e14b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ExperimentConfigLoader
+  config: {fileID: 11400000, guid: 274793649e2df7b4b81e78adcf58a0e6, type: 2}
 --- !u!4 &260286508 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 4558070733231408, guid: a9da80f587bbf9046aefc4a4cfb8a7fc, type: 3}
