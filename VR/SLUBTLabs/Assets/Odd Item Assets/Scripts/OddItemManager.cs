@@ -22,8 +22,10 @@ public class OddItemManager : MonoBehaviour
     [Header("Input")]
     public InputActionReference triggerAction;
 
-    [Header("Target")]
-    public GameObject uniqueTargetPrefab;
+    [Header("Odd Items")]
+    [Tooltip("List of possible odd item prefabs — one is randomly chosen each trial. " +
+             "None of these should appear in any ShelfSpawner distractor list.")]
+    public List<GameObject> oddItemPrefabs = new();
 
     [Header("UI — Instruction Panel")]
     public GameObject instructionPanel;
@@ -38,14 +40,13 @@ public class OddItemManager : MonoBehaviour
     private float _foundTime;
     private List<GameObject> _allSpawnedItems = new();
     private GameObject _targetInstance;
+    private GameObject _chosenOddItemPrefab;
     private bool _awaitingSelection = false;
     private bool _trialComplete = false;
-    private bool _initialised = false;
     private FeedbackDisplay _feedbackDisplay;
     private Transform _rightControllerTransform;
 
     // ── Resolved config values (cached at init) ───────────────────────────────
-    private string _targetDisplayName;
     private float _searchTimeLimit;
     private float _raycastDistance;
     private float _instructionDelay;
@@ -71,48 +72,44 @@ public class OddItemManager : MonoBehaviour
         instructionPanel.SetActive(false);
         resultsPanel.SetActive(false);
         _feedbackDisplay = GetComponent<FeedbackDisplay>();
-        StartCoroutine(InitialiseAfterSpawn());
-    }
 
-    // ── Initialisation ────────────────────────────────────────────────────────
-    private IEnumerator InitialiseAfterSpawn()
-    {
-        if (_initialised) yield break;
-        _initialised = true;
-
-        // Wait for config loader to finish fetching remote config
-        yield return new WaitUntil(() => ExperimentConfigLoader.IsReady);
-
-        // Cache config values — falls back to defaults if config not assigned
-        ExperimentConfig cfg = config ?? ExperimentConfigLoader.Current;
+        // Apply config immediately — no blocking wait
+        ExperimentConfig cfg = config;
         if (cfg != null)
         {
-            _targetDisplayName = cfg.oddItem_TargetDisplayName;
             _searchTimeLimit = cfg.oddItem_SearchTimeLimitSeconds;
             _raycastDistance = cfg.oddItem_RaycastDistance;
             _instructionDelay = cfg.globalInstructionDelay;
         }
         else
         {
-            Debug.LogWarning("[OddItemDetection] No ExperimentConfig found — using hardcoded defaults.");
-            _targetDisplayName = "the odd item";
-            _searchTimeLimit = 120f;
+            _searchTimeLimit = 0f;
             _raycastDistance = 10f;
             _instructionDelay = 1.5f;
         }
 
-        // Wait one extra frame for ShelfSpawners to finish
+        StartCoroutine(InitialiseAfterSpawn());
+    }
+
+    // ── Initialisation ────────────────────────────────────────────────────────
+    private IEnumerator InitialiseAfterSpawn()
+    {
+        // Wait one frame for ShelfSpawners to finish Start()
         yield return null;
 
-        _rightControllerTransform = FindRightController();
-
-        if (uniqueTargetPrefab == null)
+        if (oddItemPrefabs == null || oddItemPrefabs.Count == 0)
         {
-            Debug.LogError("[OddItemDetection] uniqueTargetPrefab is not assigned!");
+            Debug.LogError("[OddItemDetection] oddItemPrefabs list is empty! Add at least one odd item prefab.");
             yield break;
         }
 
-        // Inject unique odd item into a random shelf
+        // Randomly pick one odd item from the list
+        _chosenOddItemPrefab = oddItemPrefabs[Random.Range(0, oddItemPrefabs.Count)];
+        Debug.Log($"[OddItemDetection] Chosen odd item: '{_chosenOddItemPrefab.name}'");
+
+        _rightControllerTransform = FindRightController();
+
+        // Inject chosen odd item into a random shelf
         ShelfSpawner[] allShelves = FindObjectsByType<ShelfSpawner>(FindObjectsSortMode.None);
         if (allShelves.Length == 0)
         {
@@ -121,13 +118,19 @@ public class OddItemManager : MonoBehaviour
         }
 
         ShelfSpawner chosenShelf = allShelves[Random.Range(0, allShelves.Length)];
-        _targetInstance = chosenShelf.InjectTarget(uniqueTargetPrefab);
+        _targetInstance = chosenShelf.InjectTarget(_chosenOddItemPrefab);
 
         if (_targetInstance == null)
         {
             Debug.LogError("[OddItemDetection] Target injection failed!");
             yield break;
         }
+
+        Debug.Log($"[OddItemDetection] '{_chosenOddItemPrefab.name}' injected on " +
+                  $"'{chosenShelf.gameObject.name}' at {_targetInstance.transform.position}");
+
+        // Capture layout for participant comparison
+        LayoutManager.Instance?.CaptureLayout(_targetInstance, _chosenOddItemPrefab);
 
         CollectSpawnedItems();
 
@@ -174,16 +177,15 @@ public class OddItemManager : MonoBehaviour
     // ── Trial ─────────────────────────────────────────────────────────────────
     private void BeginTrial()
     {
-        ExperimentConfig cfg = config ?? ExperimentConfigLoader.Current;
+        ExperimentConfig cfg = config;
         instructionText.text = cfg != null
             ? cfg.oddItem_InstructionText
-            : $"Find the item that doesn't belong.\nPoint at it and pull the trigger.";
+            : "Find the item that doesn't belong.\nPoint at it and pull the trigger.";
 
         instructionPanel.SetActive(true);
         _trialStartTime = Time.time;
         _awaitingSelection = true;
 
-        // Optional: start search time limit countdown
         if (_searchTimeLimit > 0)
             StartCoroutine(SearchTimeLimitCountdown());
     }
@@ -202,6 +204,8 @@ public class OddItemManager : MonoBehaviour
                 $"Search time: {_searchTimeLimit:F0}s (limit reached)\n\n" +
                 $"The odd item was not found in time.";
             resultsPanel.SetActive(true);
+
+            LayoutManager.Instance?.SaveSession(_searchTimeLimit, foundItem: false);
         }
     }
 
@@ -254,19 +258,22 @@ public class OddItemManager : MonoBehaviour
             $"Odd Item Found!\n\n" +
             $"Search time:    {_foundTime:F1}s\n" +
             $"Rating:         {timeRating}\n\n" +
-            $"The odd item was {_targetDisplayName}.";
+            $"The odd item was the {_chosenOddItemPrefab.name}.";
 
         resultsPanel.SetActive(true);
 
-        Debug.Log($"[OddItemDetection] Found in {_foundTime:F2}s — " +
-                  $"Participant: {ExperimentConfigLoader.Current?.participantId}");
+        Debug.Log($"[OddItemDetection] Found '{_chosenOddItemPrefab.name}' in {_foundTime:F2}s — " +
+                  $"Participant: {config?.participantId}");
 
-        // TODO: SessionDataManager.Instance.RecordOddItemTrial(_targetDisplayName, _foundTime);
+        // Save session with layout for comparison
+        LayoutManager.Instance?.SaveSession(_foundTime, foundItem: true);
+
+        // TODO: SessionDataManager.Instance.RecordOddItemTrial(_chosenOddItemPrefab.name, _foundTime);
     }
 
     private void OnWrongItemSelected()
     {
-        ExperimentConfig cfg = config ?? ExperimentConfigLoader.Current;
+        ExperimentConfig cfg = config;
         string feedback = cfg != null ? cfg.oddItem_WrongItemFeedback : "That item belongs here. Keep looking!";
         _feedbackDisplay?.ShowError(feedback);
     }
