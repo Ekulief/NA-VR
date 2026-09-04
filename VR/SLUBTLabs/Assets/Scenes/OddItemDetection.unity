@@ -1443,6 +1443,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c47aef74e5c91cb469ded3cf5e9bca47, type: 3}
   m_Name: 
   m_EditorClassIdentifier: '::'
+  config: {fileID: 0}
   columns: 5
   rows: 2
   randomPositionOffset: 0.08
@@ -1550,6 +1551,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c47aef74e5c91cb469ded3cf5e9bca47, type: 3}
   m_Name: 
   m_EditorClassIdentifier: '::'
+  config: {fileID: 0}
   columns: 5
   rows: 2
   randomPositionOffset: 0.04
@@ -3004,6 +3006,8 @@ GameObject:
   - component: {fileID: 1033889996}
   - component: {fileID: 1033889995}
   - component: {fileID: 1033889997}
+  - component: {fileID: 1033889998}
+  - component: {fileID: 1033889999}
   m_Layer: 0
   m_Name: OddItemDetectionManager
   m_TagString: Untagged
@@ -3023,11 +3027,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0c72ad453531ec548991bdecbc8d7a43, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AttentionalBlindnessManager
+  config: {fileID: 11400000, guid: 274793649e2df7b4b81e78adcf58a0e6, type: 2}
   triggerAction: {fileID: -2439264783773714294, guid: b6d5c44ebe3244b7692e81ae8265eb22, type: 3}
-  uniqueTargetPrefab: {fileID: 5891736246452683671, guid: a8e00a74eb78eac4fab9e9c8d164514f, type: 3}
-  targetDisplayName: Rubber Duck
-  raycastDistance: 10
-  instructionDelay: 0.5
+  oddItemPrefabs:
+  - {fileID: 5891736246452683671, guid: a8e00a74eb78eac4fab9e9c8d164514f, type: 3}
   instructionPanel: {fileID: 554384413}
   instructionText: {fileID: 455962726}
   resultsPanel: {fileID: 702332530}
@@ -3061,6 +3064,45 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::FeedbackDisplay
   displayDuration: 1
   fontSize: 45
+--- !u!114 &1033889998
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1033889994}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b60adaa80426d694687f36f554b5e14b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ExperimentConfigLoader
+  config: {fileID: 11400000, guid: 274793649e2df7b4b81e78adcf58a0e6, type: 2}
+--- !u!114 &1033889999
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1033889994}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 827c9257c29ed5143bacb54e616499d8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LayoutManager
+  shelves:
+  - {fileID: 437159103}
+  - {fileID: 340149877}
+  - {fileID: 1034417523}
+  - {fileID: 1760862906}
+  - {fileID: 2038644931}
+  - {fileID: 1059494589}
+  - {fileID: 1975290708}
+  - {fileID: 1402125858}
+  - {fileID: 1249323867}
+  maxSavedSessions: 50
+  useReplayLayout: 0
+  replayFilePath: 
+  config: {fileID: 0}
 --- !u!1 &1034417521
 GameObject:
   m_ObjectHideFlags: 0
@@ -3106,6 +3148,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c47aef74e5c91cb469ded3cf5e9bca47, type: 3}
   m_Name: 
   m_EditorClassIdentifier: '::'
+  config: {fileID: 0}
   columns: 3
   rows: 2
   randomPositionOffset: 0.08
@@ -3180,6 +3223,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c47aef74e5c91cb469ded3cf5e9bca47, type: 3}
   m_Name: 
   m_EditorClassIdentifier: '::'
+  config: {fileID: 0}
   columns: 3
   rows: 2
   randomPositionOffset: 0.08
@@ -3444,6 +3488,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c47aef74e5c91cb469ded3cf5e9bca47, type: 3}
   m_Name: 
   m_EditorClassIdentifier: '::'
+  config: {fileID: 0}
   columns: 5
   rows: 2
   randomPositionOffset: 0.08
@@ -3581,6 +3626,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c47aef74e5c91cb469ded3cf5e9bca47, type: 3}
   m_Name: 
   m_EditorClassIdentifier: '::'
+  config: {fileID: 0}
   columns: 5
   rows: 2
   randomPositionOffset: 0.08
@@ -4408,6 +4454,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c47aef74e5c91cb469ded3cf5e9bca47, type: 3}
   m_Name: 
   m_EditorClassIdentifier: '::'
+  config: {fileID: 0}
   columns: 3
   rows: 2
   randomPositionOffset: 0.04
@@ -4771,6 +4818,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c47aef74e5c91cb469ded3cf5e9bca47, type: 3}
   m_Name: 
   m_EditorClassIdentifier: '::'
+  config: {fileID: 0}
   columns: 5
   rows: 2
   randomPositionOffset: 0.04
@@ -4847,6 +4895,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c47aef74e5c91cb469ded3cf5e9bca47, type: 3}
   m_Name: 
   m_EditorClassIdentifier: '::'
+  config: {fileID: 0}
   columns: 5
   rows: 2
   randomPositionOffset: 0.08

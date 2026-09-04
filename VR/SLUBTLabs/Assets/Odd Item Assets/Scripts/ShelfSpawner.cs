@@ -8,8 +8,8 @@ using UnityEngine;
 ///
 /// MULTI-SHELF SETUP:
 ///   Place this script on each shelf. Leave targetPrefab empty on all shelves.
-///   AttentionalBlindnessManager calls InjectTarget() on one randomly chosen shelf
-///   to place the unique target item among the distractors.
+///   OddItemManager calls InjectTarget() on one randomly chosen shelf
+///   to place the unique odd item among the distractors.
 ///
 /// SETUP:
 ///   a) Create an empty GameObject, name it "ShelfSpawner".
@@ -21,6 +21,10 @@ using UnityEngine;
 [RequireComponent(typeof(BoxCollider))]
 public class ShelfSpawner : MonoBehaviour
 {
+    [Header("Config")]
+    [Tooltip("Optional — assign your ExperimentConfig asset to override grid settings from web app.")]
+    public ExperimentConfig config;
+
     [Header("Grid Configuration")]
     public int columns = 5;
     public int rows = 2;
@@ -31,7 +35,7 @@ public class ShelfSpawner : MonoBehaviour
     [Tooltip("Drag all your distractor prefabs here.")]
     public List<GameObject> distractorPrefabs = new();
 
-    [Tooltip("Optional — leave empty. Set via InjectTarget() from AttentionalBlindnessManager.")]
+    [Tooltip("Optional — leave empty. Set via InjectTarget() from OddItemManager.")]
     public GameObject targetPrefab;
 
     [Header("Experiment")]
@@ -49,13 +53,25 @@ public class ShelfSpawner : MonoBehaviour
         _bounds = GetComponent<BoxCollider>();
         _bounds.isTrigger = true;
 
-        // Create holder in the same scene as this ShelfSpawner
+        // Apply config overrides if assigned
+        ExperimentConfig cfg = config;
+        if (cfg != null)
+        {
+            columns = cfg.shelf_Columns;
+            rows = cfg.shelf_Rows;
+            randomPositionOffset = cfg.shelf_RandomPositionOffset;
+            randomRotationOffset = cfg.shelf_RandomRotationOffset;
+        }
+
+        // All spawned items are parented under this holder so they get
+        // destroyed automatically when the scene unloads
         _itemHolder = new GameObject($"{gameObject.name}_Items");
         UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(
             _itemHolder, gameObject.scene);
 
         SpawnShelf();
     }
+
     // ── Public API ────────────────────────────────────────────────────────────
 
     public void RespawnShelf()
@@ -76,7 +92,7 @@ public class ShelfSpawner : MonoBehaviour
     /// <summary>
     /// Injects a unique target prefab into a random slot on this shelf.
     /// Destroys whatever distractor was in that slot and replaces it with the target.
-    /// Returns the spawned target instance — AttentionalBlindnessManager holds this reference.
+    /// Returns the spawned target instance — OddItemManager holds this reference.
     /// </summary>
     public GameObject InjectTarget(GameObject targetPrefabToInject)
     {
@@ -115,6 +131,57 @@ public class ShelfSpawner : MonoBehaviour
 
     /// <summary>Returns all currently spawned items on this shelf.</summary>
     public List<GameObject> GetSpawnedItems() => _spawnedItems;
+
+    /// <summary>
+    /// Reconstructs a saved shelf layout from a LayoutManager snapshot.
+    /// Called by LayoutManager during replay mode.
+    /// Each item is placed at its exact saved position and rotation.
+    /// </summary>
+    public void ApplySnapshot(LayoutManager.ShelfSnapshot snapshot)
+    {
+        ClearShelf();
+
+        foreach (LayoutManager.ItemSnapshot itemSnap in snapshot.items)
+        {
+            // Find the matching prefab by name
+            GameObject prefab = null;
+
+            if (itemSnap.isOddItem)
+            {
+                // Odd item — search all oddItemPrefabs on OddItemManager
+                OddItemManager mgr = FindAnyObjectByType<OddItemManager>();
+                if (mgr != null)
+                    prefab = mgr.oddItemPrefabs.Find(p =>
+                        p.name == itemSnap.prefabName);
+            }
+            else
+            {
+                // Distractor — search this shelf's distractor list
+                prefab = distractorPrefabs.Find(p => p.name == itemSnap.prefabName);
+            }
+
+            if (prefab == null)
+            {
+                Debug.LogWarning($"[ShelfSpawner] Replay: could not find prefab '{itemSnap.prefabName}' " +
+                                 $"on shelf '{gameObject.name}'. Skipping slot {itemSnap.slot}.");
+                _spawnedItems.Add(null);
+                continue;
+            }
+
+            Vector3 pos = itemSnap.position.ToVector3();
+            Quaternion rot = Quaternion.Euler(0f, itemSnap.rotation, 0f);
+
+            GameObject spawned = Instantiate(prefab, pos, rot, _itemHolder.transform);
+            spawned.tag = "SpawnedItem";
+            _spawnedItems.Add(spawned);
+
+            if (itemSnap.isOddItem)
+                _targetSlotIndex = itemSnap.slot;
+        }
+
+        Debug.Log($"[ShelfSpawner] Snapshot applied to '{gameObject.name}' — " +
+                  $"{_spawnedItems.Count} items reconstructed.");
+    }
 
     // ── Spawning ──────────────────────────────────────────────────────────────
     private void SpawnShelf()
