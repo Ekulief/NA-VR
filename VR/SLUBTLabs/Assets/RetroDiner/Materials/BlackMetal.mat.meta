@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 0aa417b0ceb653743898e8b6b04f3899
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 391942
+  packageName: Retro Diner - Stylized 3D Restaurant Environment (URP)
+  packageVersion: 1.0
+  assetPath: Assets/RetroDiner/Materials/BlackMetal.mat
+  uploadId: 949856

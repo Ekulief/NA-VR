@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 29f5fd6e1036f8048ab16755f76c011d
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 391942
+  packageName: Retro Diner - Stylized 3D Restaurant Environment (URP)
+  packageVersion: 1.0
+  assetPath: Assets/RetroDiner/Materials/Ceiling.mat
+  uploadId: 949856
