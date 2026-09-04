@@ -9,37 +9,23 @@ using TMPro;
 
 /// <summary>
 /// SLUBT Labs — Odd Item Detection Manager
-///
-/// Participant must find and select the odd item among the shelves as fast as possible.
-/// The moment they select the correct odd item, search time summary appears instantly.
-/// No anomaly blinking, no yes/no report — just pure visual search timing.
-///
-/// FLOW:
-///   1. Waits one frame for ShelfSpawners to finish
-///   2. Injects unique odd item into a random shelf slot
-///   3. Registers colliders with XRSimpleInteractable on all spawned items
-///   4. Shows instruction — participant searches for the odd item
-///   5. Correct item selected → summary appears instantly with search time
-///   6. Wrong item selected → brief feedback, keep searching
+/// All experiment parameters are read from ExperimentConfig at runtime.
+/// To change parameters: edit the ExperimentConfig asset or push values
+/// from the web app via ExperimentConfig.ApplyFromJson().
 /// </summary>
-public class AttentionalBlindnessManager : MonoBehaviour
+public class OddItemManager : MonoBehaviour
 {
+    [Header("Config")]
+    [Tooltip("Assign your ExperimentConfig asset here.")]
+    public ExperimentConfig config;
+
     [Header("Input")]
-    [Tooltip("Assign: XRI Default Input Actions → XRI Right Hand Interaction → Activate")]
     public InputActionReference triggerAction;
 
-    [Header("Experiment Config")]
-    [Tooltip("The unique odd item prefab — must NOT be in any ShelfSpawner distractor list.")]
-    public GameObject uniqueTargetPrefab;
-
-    [Tooltip("Display name shown in the instruction e.g. 'odd item'.")]
-    public string targetDisplayName = "odd item";
-
-    [Tooltip("Max raycast distance for item selection.")]
-    public float raycastDistance = 10f;
-
-    [Tooltip("Seconds after scene load before instruction appears.")]
-    public float instructionDelay = 1.5f;
+    [Header("Odd Items")]
+    [Tooltip("List of possible odd item prefabs — one is randomly chosen each trial. " +
+             "None of these should appear in any ShelfSpawner distractor list.")]
+    public List<GameObject> oddItemPrefabs = new();
 
     [Header("UI — Instruction Panel")]
     public GameObject instructionPanel;
@@ -54,10 +40,16 @@ public class AttentionalBlindnessManager : MonoBehaviour
     private float _foundTime;
     private List<GameObject> _allSpawnedItems = new();
     private GameObject _targetInstance;
+    private GameObject _chosenOddItemPrefab;
     private bool _awaitingSelection = false;
     private bool _trialComplete = false;
     private FeedbackDisplay _feedbackDisplay;
     private Transform _rightControllerTransform;
+
+    // ── Resolved config values (cached at init) ───────────────────────────────
+    private float _searchTimeLimit;
+    private float _raycastDistance;
+    private float _instructionDelay;
 
     // ── Unity lifecycle ───────────────────────────────────────────────────────
     private void OnEnable()
@@ -79,8 +71,22 @@ public class AttentionalBlindnessManager : MonoBehaviour
     {
         instructionPanel.SetActive(false);
         resultsPanel.SetActive(false);
-
         _feedbackDisplay = GetComponent<FeedbackDisplay>();
+
+        // Apply config immediately — no blocking wait
+        ExperimentConfig cfg = config;
+        if (cfg != null)
+        {
+            _searchTimeLimit = cfg.oddItem_SearchTimeLimitSeconds;
+            _raycastDistance = cfg.oddItem_RaycastDistance;
+            _instructionDelay = cfg.globalInstructionDelay;
+        }
+        else
+        {
+            _searchTimeLimit = 0f;
+            _raycastDistance = 10f;
+            _instructionDelay = 1.5f;
+        }
 
         StartCoroutine(InitialiseAfterSpawn());
     }
@@ -88,19 +94,22 @@ public class AttentionalBlindnessManager : MonoBehaviour
     // ── Initialisation ────────────────────────────────────────────────────────
     private IEnumerator InitialiseAfterSpawn()
     {
+        // Wait one frame for ShelfSpawners to finish Start()
         yield return null;
 
-        _rightControllerTransform = FindRightController();
-        if (_rightControllerTransform == null)
-            Debug.LogWarning("[OddItemDetection] Could not find Right Controller.");
-
-        if (uniqueTargetPrefab == null)
+        if (oddItemPrefabs == null || oddItemPrefabs.Count == 0)
         {
-            Debug.LogError("[OddItemDetection] uniqueTargetPrefab is not assigned!");
+            Debug.LogError("[OddItemDetection] oddItemPrefabs list is empty! Add at least one odd item prefab.");
             yield break;
         }
 
-        // Inject unique odd item into a random shelf
+        // Randomly pick one odd item from the list
+        _chosenOddItemPrefab = oddItemPrefabs[Random.Range(0, oddItemPrefabs.Count)];
+        Debug.Log($"[OddItemDetection] Chosen odd item: '{_chosenOddItemPrefab.name}'");
+
+        _rightControllerTransform = FindRightController();
+
+        // Inject chosen odd item into a random shelf
         ShelfSpawner[] allShelves = FindObjectsByType<ShelfSpawner>(FindObjectsSortMode.None);
         if (allShelves.Length == 0)
         {
@@ -109,7 +118,7 @@ public class AttentionalBlindnessManager : MonoBehaviour
         }
 
         ShelfSpawner chosenShelf = allShelves[Random.Range(0, allShelves.Length)];
-        _targetInstance = chosenShelf.InjectTarget(uniqueTargetPrefab);
+        _targetInstance = chosenShelf.InjectTarget(_chosenOddItemPrefab);
 
         if (_targetInstance == null)
         {
@@ -117,16 +126,18 @@ public class AttentionalBlindnessManager : MonoBehaviour
             yield break;
         }
 
-        Debug.Log($"[OddItemDetection] Odd item injected on '{chosenShelf.gameObject.name}' " +
-                  $"at {_targetInstance.transform.position}");
+        Debug.Log($"[OddItemDetection] '{_chosenOddItemPrefab.name}' injected on " +
+                  $"'{chosenShelf.gameObject.name}' at {_targetInstance.transform.position}");
 
-        // Collect all spawned items and set up interactables
+        // Capture layout for participant comparison
+        LayoutManager.Instance?.CaptureLayout(_targetInstance, _chosenOddItemPrefab);
+
         CollectSpawnedItems();
 
         foreach (GameObject item in _allSpawnedItems)
             SetupInteractable(item);
 
-        yield return new WaitForSeconds(instructionDelay);
+        yield return new WaitForSeconds(_instructionDelay);
         BeginTrial();
     }
 
@@ -136,32 +147,19 @@ public class AttentionalBlindnessManager : MonoBehaviour
         foreach (string n in names)
         {
             GameObject found = GameObject.Find(n);
-            if (found != null)
-                return found.transform;
+            if (found != null) return found.transform;
         }
-
-        var rayInteractor = FindAnyObjectByType<UnityEngine.XR.Interaction.Toolkit.Interactors.XRRayInteractor>();
-        if (rayInteractor != null)
-            return rayInteractor.transform;
-
-        return null;
+        var ray = FindAnyObjectByType<UnityEngine.XR.Interaction.Toolkit.Interactors.XRRayInteractor>();
+        return ray != null ? ray.transform : null;
     }
 
     private void SetupInteractable(GameObject item)
     {
         XRSimpleInteractable interactable = item.GetComponent<XRSimpleInteractable>();
-        if (interactable == null)
-        {
-            Debug.LogWarning($"[OddItemDetection] '{item.name}' has no XRSimpleInteractable.");
-            return;
-        }
+        if (interactable == null) return;
 
         Collider col = item.GetComponentInChildren<Collider>();
-        if (col == null)
-        {
-            Debug.LogWarning($"[OddItemDetection] '{item.name}' has no Collider.");
-            return;
-        }
+        if (col == null) return;
 
         if (!interactable.colliders.Contains(col))
             interactable.colliders.Add(col);
@@ -172,52 +170,65 @@ public class AttentionalBlindnessManager : MonoBehaviour
     private void CollectSpawnedItems()
     {
         _allSpawnedItems.Clear();
-        GameObject[] found = GameObject.FindGameObjectsWithTag("SpawnedItem");
-        _allSpawnedItems.AddRange(found);
+        _allSpawnedItems.AddRange(GameObject.FindGameObjectsWithTag("SpawnedItem"));
         Debug.Log($"[OddItemDetection] Collected {_allSpawnedItems.Count} spawned items.");
     }
 
-    // ── Trial flow ────────────────────────────────────────────────────────────
+    // ── Trial ─────────────────────────────────────────────────────────────────
     private void BeginTrial()
     {
-        instructionText.text = $"Find the item that doesn't belong on the shelves.\n\n" +
-                               $"Point at it and pull the <b>trigger</b> to confirm.";
-        instructionPanel.SetActive(true);
+        ExperimentConfig cfg = config;
+        instructionText.text = cfg != null
+            ? cfg.oddItem_InstructionText
+            : "Find the item that doesn't belong.\nPoint at it and pull the trigger.";
 
+        instructionPanel.SetActive(true);
         _trialStartTime = Time.time;
         _awaitingSelection = true;
 
-        Debug.Log("[OddItemDetection] Trial started — participant searching for odd item.");
+        if (_searchTimeLimit > 0)
+            StartCoroutine(SearchTimeLimitCountdown());
     }
 
-    // ── Item selection via XRSimpleInteractable ───────────────────────────────
+    private IEnumerator SearchTimeLimitCountdown()
+    {
+        yield return new WaitForSeconds(_searchTimeLimit);
+        if (_awaitingSelection && !_trialComplete)
+        {
+            _awaitingSelection = false;
+            _trialComplete = true;
+            instructionPanel.SetActive(false);
+
+            resultsSummaryText.text =
+                $"Time's up!\n\n" +
+                $"Search time: {_searchTimeLimit:F0}s (limit reached)\n\n" +
+                $"The odd item was not found in time.";
+            resultsPanel.SetActive(true);
+
+            LayoutManager.Instance?.SaveSession(_searchTimeLimit, foundItem: false);
+        }
+    }
+
+    // ── Selection ─────────────────────────────────────────────────────────────
     private void OnItemSelected(GameObject item)
     {
         if (!_awaitingSelection || _trialComplete) return;
-
-        if (item == _targetInstance)
-            OnOddItemFound();
-        else
-            OnWrongItemSelected();
+        if (item == _targetInstance) OnOddItemFound();
+        else OnWrongItemSelected();
     }
 
-    // ── Manual trigger fallback ───────────────────────────────────────────────
     private void OnTriggerPressed(InputAction.CallbackContext ctx)
     {
         if (!_awaitingSelection || _trialComplete) return;
         if (_rightControllerTransform == null) return;
 
         Ray ray = new Ray(_rightControllerTransform.position, _rightControllerTransform.forward);
-
-        if (Physics.Raycast(ray, out RaycastHit hit, raycastDistance))
+        if (Physics.Raycast(ray, out RaycastHit hit, _raycastDistance))
         {
             GameObject hitRoot = GetSpawnedItemRoot(hit.collider.gameObject);
             if (hitRoot == null) return;
-
-            if (hitRoot == _targetInstance)
-                OnOddItemFound();
-            else
-                OnWrongItemSelected();
+            if (hitRoot == _targetInstance) OnOddItemFound();
+            else OnWrongItemSelected();
         }
     }
 
@@ -226,8 +237,7 @@ public class AttentionalBlindnessManager : MonoBehaviour
         Transform t = hit.transform;
         while (t != null)
         {
-            if (t.CompareTag("SpawnedItem"))
-                return t.gameObject;
+            if (t.CompareTag("SpawnedItem")) return t.gameObject;
             t = t.parent;
         }
         return null;
@@ -242,25 +252,29 @@ public class AttentionalBlindnessManager : MonoBehaviour
 
         instructionPanel.SetActive(false);
 
-        // Show summary instantly
         string timeRating = _foundTime < 10f ? "Excellent!" : _foundTime < 20f ? "Good" : "Keep practicing";
 
         resultsSummaryText.text =
             $"Odd Item Found!\n\n" +
             $"Search time:    {_foundTime:F1}s\n" +
             $"Rating:         {timeRating}\n\n" +
-            $"The odd item was the {targetDisplayName}.";
+            $"The odd item was the {_chosenOddItemPrefab.name}.";
 
         resultsPanel.SetActive(true);
 
-        Debug.Log($"[OddItemDetection] Odd item found in {_foundTime:F2}s");
+        Debug.Log($"[OddItemDetection] Found '{_chosenOddItemPrefab.name}' in {_foundTime:F2}s — " +
+                  $"Participant: {config?.participantId}");
 
-        // TODO: SessionDataManager.Instance.RecordOddItemTrial(targetDisplayName, _foundTime);
+        // Save session with layout for comparison
+        LayoutManager.Instance?.SaveSession(_foundTime, foundItem: true);
+
+        // TODO: SessionDataManager.Instance.RecordOddItemTrial(_chosenOddItemPrefab.name, _foundTime);
     }
 
     private void OnWrongItemSelected()
     {
-        _feedbackDisplay?.ShowError("That item belongs here. Keep looking!");
-        Debug.Log("[OddItemDetection] Wrong item selected.");
+        ExperimentConfig cfg = config;
+        string feedback = cfg != null ? cfg.oddItem_WrongItemFeedback : "That item belongs here. Keep looking!";
+        _feedbackDisplay?.ShowError(feedback);
     }
 }
