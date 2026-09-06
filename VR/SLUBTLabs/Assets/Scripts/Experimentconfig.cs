@@ -43,6 +43,22 @@ public class ExperimentConfig : ScriptableObject
     [Tooltip("Max ray distance for item selection.")]
     public float oddItem_RaycastDistance = 10f;
 
+    [Header("Odd Item Detection — Time Ratings")]
+    [Tooltip("Search time in seconds to get an Excellent rating.")]
+    public float oddItem_ExcellentThresholdSeconds = 10f;
+
+    [Tooltip("Search time in seconds to get a Good rating. Above this = Keep Practicing.")]
+    public float oddItem_GoodThresholdSeconds = 20f;
+
+    [Tooltip("Label shown when time is under Excellent threshold.")]
+    public string oddItem_RatingExcellent = "Excellent!";
+
+    [Tooltip("Label shown when time is between Excellent and Good thresholds.")]
+    public string oddItem_RatingGood = "Good";
+
+    [Tooltip("Label shown when time is above Good threshold.")]
+    public string oddItem_RatingKeepPracticing = "Keep Practicing";
+
     // ── Depth Perception ──────────────────────────────────────────────────────
     [Header("Depth Perception")]
     [Tooltip("Maximum selectable height in metres.")]
