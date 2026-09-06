@@ -14,10 +14,10 @@ OcclusionCullingSettings:
 RenderSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 10
-  m_Fog: 0
-  m_FogColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
+  m_Fog: 1
+  m_FogColor: {r: 0.6352795, g: 0.7823586, b: 0.8113208, a: 1}
   m_FogMode: 3
-  m_FogDensity: 0.01
+  m_FogDensity: 0.003
   m_LinearFogStart: 0
   m_LinearFogEnd: 300
   m_AmbientSkyColor: {r: 0.212, g: 0.227, b: 0.259, a: 1}
@@ -37,7 +37,7 @@ RenderSettings:
   m_ReflectionBounces: 1
   m_ReflectionIntensity: 1
   m_CustomReflection: {fileID: 0}
-  m_Sun: {fileID: 0}
+  m_Sun: {fileID: 1395864048}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
@@ -93,8 +93,8 @@ LightmapSettings:
     m_ExportTrainingData: 0
     m_TrainingDataDestination: TrainingData
     m_LightProbeSampleCountMultiplier: 4
-  m_LightingDataAsset: {fileID: 20201, guid: 0000000000000000f000000000000000, type: 0}
-  m_LightingSettings: {fileID: 0}
+  m_LightingDataAsset: {fileID: 112000002, guid: 8d9b910e8ea957746a5a862f481625ed, type: 2}
+  m_LightingSettings: {fileID: 4890085278179872738, guid: c0adc302504b629428417b0fb3cf9fe0, type: 2}
 --- !u!196 &4
 NavMeshSettings:
   serializedVersion: 2
@@ -130,6 +130,10 @@ PrefabInstance:
     - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_Name
       value: Prop_RoofVent_05 (22)
+      objectReference: {fileID: 0}
+    - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 5246596163166214069, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_LocalPosition.x
@@ -193,6 +197,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_Intel_01 (2)
       objectReference: {fileID: 0}
+    - target: {fileID: 3509985614647424934, guid: 1f880c5cafce520469e48424766934a8, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 4322938860091354396, guid: 1f880c5cafce520469e48424766934a8, type: 3}
       propertyPath: m_LocalPosition.x
       value: -27.78106
@@ -254,6 +262,10 @@ PrefabInstance:
     - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_Name
       value: Prop_RoofVent_05 (11)
+      objectReference: {fileID: 0}
+    - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 5246596163166214069, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_LocalPosition.x
@@ -468,6 +480,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_Intel_03
       objectReference: {fileID: 0}
+    - target: {fileID: 7934015489117801331, guid: ef037d55b037b75468f482b06a470519, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -568,6 +584,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofWindow_07 (2)
       objectReference: {fileID: 0}
+    - target: {fileID: 3805677815586169614, guid: a3547b8c6d9feb2409fe80fecfedd546, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 4583445490911771060, guid: a3547b8c6d9feb2409fe80fecfedd546, type: 3}
       propertyPath: m_LocalPosition.x
       value: -32.289207
@@ -629,6 +649,10 @@ PrefabInstance:
     - target: {fileID: 3805677815586169614, guid: a3547b8c6d9feb2409fe80fecfedd546, type: 3}
       propertyPath: m_Name
       value: Prop_RoofWindow_07 (7)
+      objectReference: {fileID: 0}
+    - target: {fileID: 3805677815586169614, guid: a3547b8c6d9feb2409fe80fecfedd546, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 4583445490911771060, guid: a3547b8c6d9feb2409fe80fecfedd546, type: 3}
       propertyPath: m_LocalPosition.x
@@ -694,7 +718,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &53610914
 Transform:
@@ -713,68 +737,6 @@ Transform:
   - {fileID: 1309140164}
   m_Father: {fileID: 1421680934}
   m_LocalEulerAnglesHint: {x: 0, y: -90, z: 0}
---- !u!1001 &57106690
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 812188536}
-    m_Modifications:
-    - target: {fileID: 7209024061696697993, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: 13.886438
-      objectReference: {fileID: 0}
-    - target: {fileID: 7209024061696697993, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 13.943698
-      objectReference: {fileID: 0}
-    - target: {fileID: 7209024061696697993, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: -14.306974
-      objectReference: {fileID: 0}
-    - target: {fileID: 7209024061696697993, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 7209024061696697993, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: -0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7209024061696697993, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: -0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7209024061696697993, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: -0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7209024061696697993, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7209024061696697993, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7209024061696697993, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8016488275312950323, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-      propertyPath: m_Name
-      value: Prop_RoofWaterStore_04
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
---- !u!4 &57106691 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 7209024061696697993, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-  m_PrefabInstance: {fileID: 57106690}
-  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &58337787
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -826,6 +788,10 @@ PrefabInstance:
     - target: {fileID: 3268768773439043897, guid: c41eb077b1ebd604eb88f9f8912f0c56, type: 3}
       propertyPath: m_Name
       value: Prop_RoofVent_02 (5)
+      objectReference: {fileID: 0}
+    - target: {fileID: 3268768773439043897, guid: c41eb077b1ebd604eb88f9f8912f0c56, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -992,6 +958,10 @@ PrefabInstance:
     - target: {fileID: 3509985614647424934, guid: 1f880c5cafce520469e48424766934a8, type: 3}
       propertyPath: m_Name
       value: Prop_Intel_01 (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 3509985614647424934, guid: 1f880c5cafce520469e48424766934a8, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 4322938860091354396, guid: 1f880c5cafce520469e48424766934a8, type: 3}
       propertyPath: m_LocalPosition.x
@@ -1370,7 +1340,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &91205463
 Transform:
@@ -1402,6 +1372,10 @@ PrefabInstance:
     - target: {fileID: 3509985614647424934, guid: 1f880c5cafce520469e48424766934a8, type: 3}
       propertyPath: m_Name
       value: Prop_Intel_01 (3)
+      objectReference: {fileID: 0}
+    - target: {fileID: 3509985614647424934, guid: 1f880c5cafce520469e48424766934a8, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 4322938860091354396, guid: 1f880c5cafce520469e48424766934a8, type: 3}
       propertyPath: m_LocalPosition.x
@@ -1464,6 +1438,10 @@ PrefabInstance:
     - target: {fileID: 7464816678671278552, guid: beb2a92edfd5bd94ab939dab548e161b, type: 3}
       propertyPath: m_Name
       value: Prop_RoofVent_07 (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 7464816678671278552, guid: beb2a92edfd5bd94ab939dab548e161b, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 7841764846489877346, guid: beb2a92edfd5bd94ab939dab548e161b, type: 3}
       propertyPath: m_LocalPosition.x
@@ -1756,6 +1734,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoadCone_01 (2)
       objectReference: {fileID: 0}
+    - target: {fileID: 5562890943874257140, guid: b5ec79143a507e74d878f65422c4f863, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -1780,7 +1762,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &139635581
 Transform:
@@ -1880,6 +1862,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofVent_05 (13)
       objectReference: {fileID: 0}
+    - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 5246596163166214069, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_LocalPosition.x
       value: 7.8500004
@@ -1938,9 +1924,25 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 1392833624}
     m_Modifications:
+    - target: {fileID: 1507145481464020, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 1520711273483040, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
       propertyPath: m_Name
       value: Big_trash_bin prefab (6)
+      objectReference: {fileID: 0}
+    - target: {fileID: 1520711273483040, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 1631846186159236, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 1809725292833654, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 4884130492571914, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
       propertyPath: m_LocalPosition.x
@@ -2003,6 +2005,10 @@ PrefabInstance:
     - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_Name
       value: Prop_RoofVent_05
+      objectReference: {fileID: 0}
+    - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 5246596163166214069, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_LocalPosition.x
@@ -2168,6 +2174,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_Intel_04 (3)
       objectReference: {fileID: 0}
+    - target: {fileID: 8740576562649096075, guid: 1843c19bfdd02f846ab0f0f8d61725bb, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -2177,68 +2187,6 @@ PrefabInstance:
 Transform:
   m_CorrespondingSourceObject: {fileID: 8216558853156603185, guid: 1843c19bfdd02f846ab0f0f8d61725bb, type: 3}
   m_PrefabInstance: {fileID: 192327100}
-  m_PrefabAsset: {fileID: 0}
---- !u!1001 &197357214
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 812188536}
-    m_Modifications:
-    - target: {fileID: 7209024061696697993, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: 13.886438
-      objectReference: {fileID: 0}
-    - target: {fileID: 7209024061696697993, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 13.943698
-      objectReference: {fileID: 0}
-    - target: {fileID: 7209024061696697993, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: -17.24
-      objectReference: {fileID: 0}
-    - target: {fileID: 7209024061696697993, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 7209024061696697993, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: -0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7209024061696697993, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: -0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7209024061696697993, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: -0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7209024061696697993, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7209024061696697993, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7209024061696697993, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8016488275312950323, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-      propertyPath: m_Name
-      value: Prop_RoofWaterStore_04 (1)
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
---- !u!4 &197357215 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 7209024061696697993, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-  m_PrefabInstance: {fileID: 197357214}
   m_PrefabAsset: {fileID: 0}
 --- !u!1001 &204125460
 PrefabInstance:
@@ -2359,9 +2307,25 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 1392833624}
     m_Modifications:
+    - target: {fileID: 1507145481464020, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 1520711273483040, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
       propertyPath: m_Name
       value: Big_trash_bin prefab (5)
+      objectReference: {fileID: 0}
+    - target: {fileID: 1520711273483040, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 1631846186159236, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 1809725292833654, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 4884130492571914, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
       propertyPath: m_LocalPosition.x
@@ -2464,6 +2428,10 @@ PrefabInstance:
     - target: {fileID: 8758519375245401499, guid: 76ac0fb4e5bfcc14381c17a00cf5bc15, type: 3}
       propertyPath: m_Name
       value: Prop_RoofVent_06 (10)
+      objectReference: {fileID: 0}
+    - target: {fileID: 8758519375245401499, guid: 76ac0fb4e5bfcc14381c17a00cf5bc15, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -2704,6 +2672,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_Intel_04
       objectReference: {fileID: 0}
+    - target: {fileID: 8740576562649096075, guid: 1843c19bfdd02f846ab0f0f8d61725bb, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -2895,7 +2867,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &249897781
 Transform:
@@ -3011,6 +2983,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofWindow_07
       objectReference: {fileID: 0}
+    - target: {fileID: 3805677815586169614, guid: a3547b8c6d9feb2409fe80fecfedd546, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 4583445490911771060, guid: a3547b8c6d9feb2409fe80fecfedd546, type: 3}
       propertyPath: m_LocalPosition.x
       value: -15.07
@@ -3113,6 +3089,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofVent_02 (4)
       objectReference: {fileID: 0}
+    - target: {fileID: 3268768773439043897, guid: c41eb077b1ebd604eb88f9f8912f0c56, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -3174,6 +3154,10 @@ PrefabInstance:
     - target: {fileID: 8758519375245401499, guid: 76ac0fb4e5bfcc14381c17a00cf5bc15, type: 3}
       propertyPath: m_Name
       value: Prop_RoofVent_06 (8)
+      objectReference: {fileID: 0}
+    - target: {fileID: 8758519375245401499, guid: 76ac0fb4e5bfcc14381c17a00cf5bc15, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -3271,6 +3255,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofWaterStore_03
       objectReference: {fileID: 0}
+    - target: {fileID: 2735496403224442025, guid: 483aa33de14f1a34db937ced13d4e295, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 3368059000112115219, guid: 483aa33de14f1a34db937ced13d4e295, type: 3}
       propertyPath: m_LocalPosition.x
       value: -35.86
@@ -3332,6 +3320,10 @@ PrefabInstance:
     - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_Name
       value: Prop_RoofVent_05 (2)
+      objectReference: {fileID: 0}
+    - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 5246596163166214069, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_LocalPosition.x
@@ -3468,6 +3460,10 @@ PrefabInstance:
     - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_Name
       value: Prop_RoofVent_05 (25)
+      objectReference: {fileID: 0}
+    - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 5246596163166214069, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_LocalPosition.x
@@ -3860,6 +3856,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofVent_07 (4)
       objectReference: {fileID: 0}
+    - target: {fileID: 7464816678671278552, guid: beb2a92edfd5bd94ab939dab548e161b, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 7841764846489877346, guid: beb2a92edfd5bd94ab939dab548e161b, type: 3}
       propertyPath: m_LocalPosition.x
       value: -31.26347
@@ -3995,6 +3995,10 @@ PrefabInstance:
     - target: {fileID: 1321557082916968712, guid: 881b67db361f8c143a38219d59804bd9, type: 3}
       propertyPath: m_Name
       value: Prop_TrashBag_02 (4)
+      objectReference: {fileID: 0}
+    - target: {fileID: 1321557082916968712, guid: 881b67db361f8c143a38219d59804bd9, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 1809547128508941234, guid: 881b67db361f8c143a38219d59804bd9, type: 3}
       propertyPath: m_LocalScale.x
@@ -4193,9 +4197,25 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 1392833624}
     m_Modifications:
+    - target: {fileID: 1507145481464020, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 1520711273483040, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
       propertyPath: m_Name
       value: Big_trash_bin prefab (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 1520711273483040, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 1631846186159236, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 1809725292833654, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 4884130492571914, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
       propertyPath: m_LocalPosition.x
@@ -4407,6 +4427,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofVent_05 (14)
       objectReference: {fileID: 0}
+    - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 5246596163166214069, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_LocalPosition.x
       value: 9.879999
@@ -4469,6 +4493,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofVent_05 (18)
       objectReference: {fileID: 0}
+    - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 5246596163166214069, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_LocalPosition.x
       value: 5.8666134
@@ -4530,6 +4558,10 @@ PrefabInstance:
     - target: {fileID: 2573102882553576264, guid: 39a8f7fcd28406945854ee9653da230d, type: 3}
       propertyPath: m_Name
       value: Prop_StreetSign_T
+      objectReference: {fileID: 0}
+    - target: {fileID: 2573102882553576264, guid: 39a8f7fcd28406945854ee9653da230d, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 2953991768511865330, guid: 39a8f7fcd28406945854ee9653da230d, type: 3}
       propertyPath: m_LocalScale.x
@@ -5029,9 +5061,17 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 1810703973}
     m_Modifications:
+    - target: {fileID: 1026490736275818, guid: 80c5916b9606ce646be16611d9a06d13, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 1228088659953116, guid: 80c5916b9606ce646be16611d9a06d13, type: 3}
       propertyPath: m_Name
       value: bench prefab
+      objectReference: {fileID: 0}
+    - target: {fileID: 1228088659953116, guid: 80c5916b9606ce646be16611d9a06d13, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 4488567837450824, guid: 80c5916b9606ce646be16611d9a06d13, type: 3}
       propertyPath: m_LocalPosition.x
@@ -5271,6 +5311,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofVent_09 (2)
       objectReference: {fileID: 0}
+    - target: {fileID: 885629353238408710, guid: 8a4d827d320c77445badcc14a0c3654b, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -5357,6 +5401,10 @@ PrefabInstance:
     - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_Name
       value: Prop_RoofVent_05 (12)
+      objectReference: {fileID: 0}
+    - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 5246596163166214069, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_LocalPosition.x
@@ -5649,6 +5697,10 @@ PrefabInstance:
     - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_Name
       value: Prop_RoofVent_05 (4)
+      objectReference: {fileID: 0}
+    - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 5246596163166214069, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_LocalPosition.x
@@ -6050,7 +6102,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &437598423
 Transform:
@@ -6342,6 +6394,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofVent_06 (9)
       objectReference: {fileID: 0}
+    - target: {fileID: 8758519375245401499, guid: 76ac0fb4e5bfcc14381c17a00cf5bc15, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -6351,130 +6407,6 @@ PrefabInstance:
 Transform:
   m_CorrespondingSourceObject: {fileID: 8270669791708088097, guid: 76ac0fb4e5bfcc14381c17a00cf5bc15, type: 3}
   m_PrefabInstance: {fileID: 459035195}
-  m_PrefabAsset: {fileID: 0}
---- !u!1001 &459857560
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 812188536}
-    m_Modifications:
-    - target: {fileID: 8293137107384463736, guid: 237c3212204343943833e21e2dc42675, type: 3}
-      propertyPath: m_Name
-      value: Prop_Chimney_03
-      objectReference: {fileID: 0}
-    - target: {fileID: 8673076285547916226, guid: 237c3212204343943833e21e2dc42675, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: -27.996096
-      objectReference: {fileID: 0}
-    - target: {fileID: 8673076285547916226, guid: 237c3212204343943833e21e2dc42675, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 13.933686
-      objectReference: {fileID: 0}
-    - target: {fileID: 8673076285547916226, guid: 237c3212204343943833e21e2dc42675, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: -41.89149
-      objectReference: {fileID: 0}
-    - target: {fileID: 8673076285547916226, guid: 237c3212204343943833e21e2dc42675, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 8673076285547916226, guid: 237c3212204343943833e21e2dc42675, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: -0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8673076285547916226, guid: 237c3212204343943833e21e2dc42675, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: -0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8673076285547916226, guid: 237c3212204343943833e21e2dc42675, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: -0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8673076285547916226, guid: 237c3212204343943833e21e2dc42675, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8673076285547916226, guid: 237c3212204343943833e21e2dc42675, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8673076285547916226, guid: 237c3212204343943833e21e2dc42675, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.z
-      value: 0
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: 237c3212204343943833e21e2dc42675, type: 3}
---- !u!4 &459857561 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 8673076285547916226, guid: 237c3212204343943833e21e2dc42675, type: 3}
-  m_PrefabInstance: {fileID: 459857560}
-  m_PrefabAsset: {fileID: 0}
---- !u!1001 &460594671
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 812188536}
-    m_Modifications:
-    - target: {fileID: 7209024061696697993, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: 13.886438
-      objectReference: {fileID: 0}
-    - target: {fileID: 7209024061696697993, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 13.943698
-      objectReference: {fileID: 0}
-    - target: {fileID: 7209024061696697993, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: -20.01
-      objectReference: {fileID: 0}
-    - target: {fileID: 7209024061696697993, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 7209024061696697993, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: -0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7209024061696697993, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: -0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7209024061696697993, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: -0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7209024061696697993, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7209024061696697993, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7209024061696697993, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8016488275312950323, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-      propertyPath: m_Name
-      value: Prop_RoofWaterStore_04 (2)
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
---- !u!4 &460594672 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 7209024061696697993, guid: 78049b883c6549443a44bd045f2b8ce6, type: 3}
-  m_PrefabInstance: {fileID: 460594671}
   m_PrefabAsset: {fileID: 0}
 --- !u!1001 &461623911
 PrefabInstance:
@@ -6487,6 +6419,10 @@ PrefabInstance:
     - target: {fileID: 8329679192468709426, guid: 47306f9326ee563408b420aa09b37e95, type: 3}
       propertyPath: m_Name
       value: Prop_RoofWaterStore_01 (10)
+      objectReference: {fileID: 0}
+    - target: {fileID: 8329679192468709426, guid: 47306f9326ee563408b420aa09b37e95, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 8706346190003714696, guid: 47306f9326ee563408b420aa09b37e95, type: 3}
       propertyPath: m_LocalPosition.x
@@ -6808,6 +6744,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofVent_05 (8)
       objectReference: {fileID: 0}
+    - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 5246596163166214069, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_LocalPosition.x
       value: -7.95
@@ -6910,6 +6850,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofVent_02 (6)
       objectReference: {fileID: 0}
+    - target: {fileID: 3268768773439043897, guid: c41eb077b1ebd604eb88f9f8912f0c56, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -7004,7 +6948,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &511646047
 Transform:
@@ -7037,6 +6981,10 @@ PrefabInstance:
     - target: {fileID: 8329679192468709426, guid: 47306f9326ee563408b420aa09b37e95, type: 3}
       propertyPath: m_Name
       value: Prop_RoofWaterStore_01 (2)
+      objectReference: {fileID: 0}
+    - target: {fileID: 8329679192468709426, guid: 47306f9326ee563408b420aa09b37e95, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 8706346190003714696, guid: 47306f9326ee563408b420aa09b37e95, type: 3}
       propertyPath: m_LocalScale.x
@@ -7508,7 +7456,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &517034579
 Transform:
@@ -7544,7 +7492,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &526414321
 Transform:
@@ -7733,7 +7681,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &553475337
 Transform:
@@ -7841,6 +7789,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofVent_05 (7)
       objectReference: {fileID: 0}
+    - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 5246596163166214069, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_LocalPosition.x
       value: -32.6
@@ -7902,6 +7854,10 @@ PrefabInstance:
     - target: {fileID: 7464816678671278552, guid: beb2a92edfd5bd94ab939dab548e161b, type: 3}
       propertyPath: m_Name
       value: Prop_RoofVent_07 (3)
+      objectReference: {fileID: 0}
+    - target: {fileID: 7464816678671278552, guid: beb2a92edfd5bd94ab939dab548e161b, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 7841764846489877346, guid: beb2a92edfd5bd94ab939dab548e161b, type: 3}
       propertyPath: m_LocalPosition.x
@@ -8005,6 +7961,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofVent_06 (5)
       objectReference: {fileID: 0}
+    - target: {fileID: 8758519375245401499, guid: 76ac0fb4e5bfcc14381c17a00cf5bc15, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -8067,6 +8027,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_Intel_03 (2)
       objectReference: {fileID: 0}
+    - target: {fileID: 7934015489117801331, guid: ef037d55b037b75468f482b06a470519, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -8088,6 +8052,10 @@ PrefabInstance:
     - target: {fileID: 1321557082916968712, guid: 881b67db361f8c143a38219d59804bd9, type: 3}
       propertyPath: m_Name
       value: Prop_TrashBag_02 (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 1321557082916968712, guid: 881b67db361f8c143a38219d59804bd9, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 1809547128508941234, guid: 881b67db361f8c143a38219d59804bd9, type: 3}
       propertyPath: m_LocalPosition.x
@@ -8191,6 +8159,10 @@ PrefabInstance:
     - target: {fileID: 8465261948836377368, guid: e91f9824db835f84c9efba315741239a, type: 3}
       propertyPath: m_Name
       value: Prop_RoadCone_03 (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 8465261948836377368, guid: e91f9824db835f84c9efba315741239a, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 9093179177027611042, guid: e91f9824db835f84c9efba315741239a, type: 3}
       propertyPath: m_LocalPosition.x
@@ -8328,6 +8300,10 @@ PrefabInstance:
     - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_Name
       value: Prop_RoofVent_05 (9)
+      objectReference: {fileID: 0}
+    - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 5246596163166214069, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_LocalPosition.x
@@ -8473,6 +8449,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofVent_05 (24)
       objectReference: {fileID: 0}
+    - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 5246596163166214069, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_LocalPosition.x
       value: -28.579279
@@ -8609,6 +8589,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofVent_05 (10)
       objectReference: {fileID: 0}
+    - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 5246596163166214069, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_LocalPosition.x
       value: -9.27
@@ -8711,6 +8695,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofVent_09
       objectReference: {fileID: 0}
+    - target: {fileID: 885629353238408710, guid: 8a4d827d320c77445badcc14a0c3654b, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -8732,6 +8720,10 @@ PrefabInstance:
     - target: {fileID: 1321557082916968712, guid: 881b67db361f8c143a38219d59804bd9, type: 3}
       propertyPath: m_Name
       value: Prop_TrashBag_02 (2)
+      objectReference: {fileID: 0}
+    - target: {fileID: 1321557082916968712, guid: 881b67db361f8c143a38219d59804bd9, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 1809547128508941234, guid: 881b67db361f8c143a38219d59804bd9, type: 3}
       propertyPath: m_LocalPosition.x
@@ -8794,6 +8786,10 @@ PrefabInstance:
     - target: {fileID: 2735496403224442025, guid: 483aa33de14f1a34db937ced13d4e295, type: 3}
       propertyPath: m_Name
       value: Prop_RoofWaterStore_03 (8)
+      objectReference: {fileID: 0}
+    - target: {fileID: 2735496403224442025, guid: 483aa33de14f1a34db937ced13d4e295, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 3368059000112115219, guid: 483aa33de14f1a34db937ced13d4e295, type: 3}
       propertyPath: m_LocalPosition.x
@@ -9176,6 +9172,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_Chimney_01
       objectReference: {fileID: 0}
+    - target: {fileID: 1532789948227224260, guid: 0f40785005e191b4bb81f1902cbf9dd7, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 2165739916014639230, guid: 0f40785005e191b4bb81f1902cbf9dd7, type: 3}
       propertyPath: m_LocalPosition.x
       value: 5.5591564
@@ -9237,6 +9237,10 @@ PrefabInstance:
     - target: {fileID: 2735496403224442025, guid: 483aa33de14f1a34db937ced13d4e295, type: 3}
       propertyPath: m_Name
       value: Prop_RoofWaterStore_03 (4)
+      objectReference: {fileID: 0}
+    - target: {fileID: 2735496403224442025, guid: 483aa33de14f1a34db937ced13d4e295, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 3368059000112115219, guid: 483aa33de14f1a34db937ced13d4e295, type: 3}
       propertyPath: m_LocalPosition.x
@@ -9340,6 +9344,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_Intel_04 (2)
       objectReference: {fileID: 0}
+    - target: {fileID: 8740576562649096075, guid: 1843c19bfdd02f846ab0f0f8d61725bb, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -9349,68 +9357,6 @@ PrefabInstance:
 Transform:
   m_CorrespondingSourceObject: {fileID: 8216558853156603185, guid: 1843c19bfdd02f846ab0f0f8d61725bb, type: 3}
   m_PrefabInstance: {fileID: 739868910}
-  m_PrefabAsset: {fileID: 0}
---- !u!1001 &742331905
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 812188536}
-    m_Modifications:
-    - target: {fileID: 8293137107384463736, guid: 237c3212204343943833e21e2dc42675, type: 3}
-      propertyPath: m_Name
-      value: Prop_Chimney_03 (2)
-      objectReference: {fileID: 0}
-    - target: {fileID: 8673076285547916226, guid: 237c3212204343943833e21e2dc42675, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: -27.996096
-      objectReference: {fileID: 0}
-    - target: {fileID: 8673076285547916226, guid: 237c3212204343943833e21e2dc42675, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 13.933686
-      objectReference: {fileID: 0}
-    - target: {fileID: 8673076285547916226, guid: 237c3212204343943833e21e2dc42675, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: -28.45
-      objectReference: {fileID: 0}
-    - target: {fileID: 8673076285547916226, guid: 237c3212204343943833e21e2dc42675, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 8673076285547916226, guid: 237c3212204343943833e21e2dc42675, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: -0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8673076285547916226, guid: 237c3212204343943833e21e2dc42675, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: -0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8673076285547916226, guid: 237c3212204343943833e21e2dc42675, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: -0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8673076285547916226, guid: 237c3212204343943833e21e2dc42675, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8673076285547916226, guid: 237c3212204343943833e21e2dc42675, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8673076285547916226, guid: 237c3212204343943833e21e2dc42675, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.z
-      value: 0
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: 237c3212204343943833e21e2dc42675, type: 3}
---- !u!4 &742331906 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 8673076285547916226, guid: 237c3212204343943833e21e2dc42675, type: 3}
-  m_PrefabInstance: {fileID: 742331905}
   m_PrefabAsset: {fileID: 0}
 --- !u!1001 &746516611
 PrefabInstance:
@@ -9463,6 +9409,10 @@ PrefabInstance:
     - target: {fileID: 3268768773439043897, guid: c41eb077b1ebd604eb88f9f8912f0c56, type: 3}
       propertyPath: m_Name
       value: Prop_RoofVent_02 (3)
+      objectReference: {fileID: 0}
+    - target: {fileID: 3268768773439043897, guid: c41eb077b1ebd604eb88f9f8912f0c56, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -9673,6 +9623,10 @@ PrefabInstance:
     - target: {fileID: 9162471113531258047, guid: 66d271533f6d75c49ae9d706f6882fe6, type: 3}
       propertyPath: m_Name
       value: Prop_Plant_01 (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 9162471113531258047, guid: 66d271533f6d75c49ae9d706f6882fe6, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -9952,7 +9906,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &770211194
 Transform:
@@ -10275,7 +10229,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &804142774
 Transform:
@@ -10346,6 +10300,10 @@ PrefabInstance:
     - target: {fileID: 7771878337976604534, guid: f8385571a36064444a70e14e44f04c34, type: 3}
       propertyPath: m_Name
       value: Prop_RoofWindow_05 (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 7771878337976604534, guid: f8385571a36064444a70e14e44f04c34, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -10481,7 +10439,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &812188536
 Transform:
@@ -10522,9 +10480,6 @@ Transform:
   - {fileID: 678176053}
   - {fileID: 388217738}
   - {fileID: 1131950842}
-  - {fileID: 459857561}
-  - {fileID: 835830838}
-  - {fileID: 742331906}
   - {fileID: 1932881852}
   - {fileID: 1416613785}
   - {fileID: 555195544}
@@ -10559,9 +10514,6 @@ Transform:
   - {fileID: 1560219490}
   - {fileID: 1289240571}
   - {fileID: 2012794768}
-  - {fileID: 57106691}
-  - {fileID: 197357215}
-  - {fileID: 460594672}
   - {fileID: 1740797237}
   - {fileID: 2025718359}
   - {fileID: 2023561033}
@@ -10671,6 +10623,10 @@ PrefabInstance:
     - target: {fileID: 8758519375245401499, guid: 76ac0fb4e5bfcc14381c17a00cf5bc15, type: 3}
       propertyPath: m_Name
       value: Prop_RoofVent_06 (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 8758519375245401499, guid: 76ac0fb4e5bfcc14381c17a00cf5bc15, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -10900,68 +10856,6 @@ Transform:
   - {fileID: 1389056491}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1001 &835830837
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 812188536}
-    m_Modifications:
-    - target: {fileID: 8293137107384463736, guid: 237c3212204343943833e21e2dc42675, type: 3}
-      propertyPath: m_Name
-      value: Prop_Chimney_03 (1)
-      objectReference: {fileID: 0}
-    - target: {fileID: 8673076285547916226, guid: 237c3212204343943833e21e2dc42675, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: -27.996096
-      objectReference: {fileID: 0}
-    - target: {fileID: 8673076285547916226, guid: 237c3212204343943833e21e2dc42675, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 13.933686
-      objectReference: {fileID: 0}
-    - target: {fileID: 8673076285547916226, guid: 237c3212204343943833e21e2dc42675, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: -35.27
-      objectReference: {fileID: 0}
-    - target: {fileID: 8673076285547916226, guid: 237c3212204343943833e21e2dc42675, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 8673076285547916226, guid: 237c3212204343943833e21e2dc42675, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: -0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8673076285547916226, guid: 237c3212204343943833e21e2dc42675, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: -0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8673076285547916226, guid: 237c3212204343943833e21e2dc42675, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: -0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8673076285547916226, guid: 237c3212204343943833e21e2dc42675, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8673076285547916226, guid: 237c3212204343943833e21e2dc42675, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8673076285547916226, guid: 237c3212204343943833e21e2dc42675, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.z
-      value: 0
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: 237c3212204343943833e21e2dc42675, type: 3}
---- !u!4 &835830838 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 8673076285547916226, guid: 237c3212204343943833e21e2dc42675, type: 3}
-  m_PrefabInstance: {fileID: 835830837}
-  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &836234054
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -11014,6 +10908,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_Plant_01 (2)
       objectReference: {fileID: 0}
+    - target: {fileID: 9162471113531258047, guid: 66d271533f6d75c49ae9d706f6882fe6, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -11035,6 +10933,10 @@ PrefabInstance:
     - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_Name
       value: Prop_RoofVent_05 (20)
+      objectReference: {fileID: 0}
+    - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 5246596163166214069, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_LocalPosition.x
@@ -11349,6 +11251,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_Intel_02
       objectReference: {fileID: 0}
+    - target: {fileID: 5220039666687775294, guid: f71344d1aa617ad49aa35c379a97d6c7, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -11449,6 +11355,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofVent_05 (21)
       objectReference: {fileID: 0}
+    - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 5246596163166214069, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_LocalPosition.x
       value: 9.879999
@@ -11510,6 +11420,10 @@ PrefabInstance:
     - target: {fileID: 2372632824419678790, guid: 254f79700fcec624b999a0cfe960fb90, type: 3}
       propertyPath: m_Name
       value: Prop_ElectracityCabinet_03
+      objectReference: {fileID: 0}
+    - target: {fileID: 2372632824419678790, guid: 254f79700fcec624b999a0cfe960fb90, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 3145368890054746364, guid: 254f79700fcec624b999a0cfe960fb90, type: 3}
       propertyPath: m_LocalScale.x
@@ -11580,6 +11494,10 @@ PrefabInstance:
     - target: {fileID: 8329679192468709426, guid: 47306f9326ee563408b420aa09b37e95, type: 3}
       propertyPath: m_Name
       value: Prop_RoofWaterStore_01
+      objectReference: {fileID: 0}
+    - target: {fileID: 8329679192468709426, guid: 47306f9326ee563408b420aa09b37e95, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 8706346190003714696, guid: 47306f9326ee563408b420aa09b37e95, type: 3}
       propertyPath: m_LocalScale.x
@@ -11705,7 +11623,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &907010762
 Transform:
@@ -11924,6 +11842,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofWaterStore_03 (7)
       objectReference: {fileID: 0}
+    - target: {fileID: 2735496403224442025, guid: 483aa33de14f1a34db937ced13d4e295, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 3368059000112115219, guid: 483aa33de14f1a34db937ced13d4e295, type: 3}
       propertyPath: m_LocalPosition.x
       value: -5.802712
@@ -12026,6 +11948,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_TrashBag_01 (4)
       objectReference: {fileID: 0}
+    - target: {fileID: 7546771523220581105, guid: 90f04355ba51ba74e8446c8a05abd7cd, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -12047,6 +11973,10 @@ PrefabInstance:
     - target: {fileID: 5158498826984448136, guid: af59dafe9d2b0e24a8ed1f5cae3dd8f1, type: 3}
       propertyPath: m_Name
       value: Prop_Plant_03
+      objectReference: {fileID: 0}
+    - target: {fileID: 5158498826984448136, guid: af59dafe9d2b0e24a8ed1f5cae3dd8f1, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 5538719416283118130, guid: af59dafe9d2b0e24a8ed1f5cae3dd8f1, type: 3}
       propertyPath: m_LocalPosition.x
@@ -12112,7 +12042,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &924731466
 Transform:
@@ -12219,6 +12149,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofWindow_05
       objectReference: {fileID: 0}
+    - target: {fileID: 7771878337976604534, guid: f8385571a36064444a70e14e44f04c34, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -12281,6 +12215,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoadCone_01 (1)
       objectReference: {fileID: 0}
+    - target: {fileID: 5562890943874257140, guid: b5ec79143a507e74d878f65422c4f863, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -12302,6 +12240,10 @@ PrefabInstance:
     - target: {fileID: 553111504632756283, guid: 3795d6c7fec68bd40af6ae712c09c722, type: 3}
       propertyPath: m_Name
       value: Prop_RoofVent_01 (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 553111504632756283, guid: 3795d6c7fec68bd40af6ae712c09c722, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 929671540753130113, guid: 3795d6c7fec68bd40af6ae712c09c722, type: 3}
       propertyPath: m_LocalPosition.x
@@ -12364,6 +12306,10 @@ PrefabInstance:
     - target: {fileID: 3805677815586169614, guid: a3547b8c6d9feb2409fe80fecfedd546, type: 3}
       propertyPath: m_Name
       value: Prop_RoofWindow_07 (5)
+      objectReference: {fileID: 0}
+    - target: {fileID: 3805677815586169614, guid: a3547b8c6d9feb2409fe80fecfedd546, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 4583445490911771060, guid: a3547b8c6d9feb2409fe80fecfedd546, type: 3}
       propertyPath: m_LocalPosition.x
@@ -12578,6 +12524,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoadCone_01 (3)
       objectReference: {fileID: 0}
+    - target: {fileID: 5562890943874257140, guid: b5ec79143a507e74d878f65422c4f863, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -12599,6 +12549,10 @@ PrefabInstance:
     - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_Name
       value: Prop_RoofVent_05 (6)
+      objectReference: {fileID: 0}
+    - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 5246596163166214069, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_LocalPosition.x
@@ -12701,6 +12655,10 @@ PrefabInstance:
     - target: {fileID: 7546771523220581105, guid: 90f04355ba51ba74e8446c8a05abd7cd, type: 3}
       propertyPath: m_Name
       value: Prop_TrashBag_01 (3)
+      objectReference: {fileID: 0}
+    - target: {fileID: 7546771523220581105, guid: 90f04355ba51ba74e8446c8a05abd7cd, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -12807,7 +12765,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &968879071
 Transform:
@@ -13110,6 +13068,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_TrashBag_02 (3)
       objectReference: {fileID: 0}
+    - target: {fileID: 1321557082916968712, guid: 881b67db361f8c143a38219d59804bd9, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 1809547128508941234, guid: 881b67db361f8c143a38219d59804bd9, type: 3}
       propertyPath: m_LocalPosition.x
       value: -1.6434898
@@ -13171,6 +13133,10 @@ PrefabInstance:
     - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_Name
       value: Prop_RoofVent_05 (26)
+      objectReference: {fileID: 0}
+    - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 5246596163166214069, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_LocalPosition.x
@@ -13303,6 +13269,10 @@ PrefabInstance:
     - target: {fileID: 1321557082916968712, guid: 881b67db361f8c143a38219d59804bd9, type: 3}
       propertyPath: m_Name
       value: Prop_TrashBag_02
+      objectReference: {fileID: 0}
+    - target: {fileID: 1321557082916968712, guid: 881b67db361f8c143a38219d59804bd9, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 1809547128508941234, guid: 881b67db361f8c143a38219d59804bd9, type: 3}
       propertyPath: m_LocalPosition.x
@@ -13533,7 +13503,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &1029592781
 Transform:
@@ -13569,7 +13539,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &1032061383
 Transform:
@@ -13868,6 +13838,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofVent_06 (4)
       objectReference: {fileID: 0}
+    - target: {fileID: 8758519375245401499, guid: 76ac0fb4e5bfcc14381c17a00cf5bc15, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -13929,6 +13903,10 @@ PrefabInstance:
     - target: {fileID: 5562890943874257140, guid: b5ec79143a507e74d878f65422c4f863, type: 3}
       propertyPath: m_Name
       value: Prop_RoadCone_01
+      objectReference: {fileID: 0}
+    - target: {fileID: 5562890943874257140, guid: b5ec79143a507e74d878f65422c4f863, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -14080,7 +14058,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &1059740417
 Transform:
@@ -14187,6 +14165,10 @@ PrefabInstance:
     - target: {fileID: 3805677815586169614, guid: a3547b8c6d9feb2409fe80fecfedd546, type: 3}
       propertyPath: m_Name
       value: Prop_RoofWindow_07 (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 3805677815586169614, guid: a3547b8c6d9feb2409fe80fecfedd546, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 4583445490911771060, guid: a3547b8c6d9feb2409fe80fecfedd546, type: 3}
       propertyPath: m_LocalPosition.x
@@ -14382,9 +14364,25 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 1392833624}
     m_Modifications:
+    - target: {fileID: 1507145481464020, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 1520711273483040, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
       propertyPath: m_Name
       value: Big_trash_bin prefab (4)
+      objectReference: {fileID: 0}
+    - target: {fileID: 1520711273483040, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 1631846186159236, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 1809725292833654, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 4884130492571914, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
       propertyPath: m_LocalPosition.x
@@ -14447,6 +14445,10 @@ PrefabInstance:
     - target: {fileID: 8329679192468709426, guid: 47306f9326ee563408b420aa09b37e95, type: 3}
       propertyPath: m_Name
       value: Prop_RoofWaterStore_01 (9)
+      objectReference: {fileID: 0}
+    - target: {fileID: 8329679192468709426, guid: 47306f9326ee563408b420aa09b37e95, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 8706346190003714696, guid: 47306f9326ee563408b420aa09b37e95, type: 3}
       propertyPath: m_LocalPosition.x
@@ -14620,6 +14622,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_CTPTrashCan_01 (1)
       objectReference: {fileID: 0}
+    - target: {fileID: 7610191141841524461, guid: e27f6d0f11d27244e8161b7f0622acc3, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -14755,7 +14761,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &1123612413
 Transform:
@@ -14830,6 +14836,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofVent_09 (1)
       objectReference: {fileID: 0}
+    - target: {fileID: 885629353238408710, guid: 8a4d827d320c77445badcc14a0c3654b, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -14851,6 +14861,10 @@ PrefabInstance:
     - target: {fileID: 3805677815586169614, guid: a3547b8c6d9feb2409fe80fecfedd546, type: 3}
       propertyPath: m_Name
       value: Prop_RoofWindow_07 (4)
+      objectReference: {fileID: 0}
+    - target: {fileID: 3805677815586169614, guid: a3547b8c6d9feb2409fe80fecfedd546, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 4583445490911771060, guid: a3547b8c6d9feb2409fe80fecfedd546, type: 3}
       propertyPath: m_LocalPosition.x
@@ -15051,6 +15065,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_StreetSign_T (1)
       objectReference: {fileID: 0}
+    - target: {fileID: 2573102882553576264, guid: 39a8f7fcd28406945854ee9653da230d, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 2953991768511865330, guid: 39a8f7fcd28406945854ee9653da230d, type: 3}
       propertyPath: m_LocalScale.x
       value: 0.5
@@ -15239,6 +15257,10 @@ PrefabInstance:
     - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_Name
       value: Prop_RoofVent_05 (16)
+      objectReference: {fileID: 0}
+    - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 5246596163166214069, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_LocalPosition.x
@@ -15772,6 +15794,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofWaterStore_01 (11)
       objectReference: {fileID: 0}
+    - target: {fileID: 8329679192468709426, guid: 47306f9326ee563408b420aa09b37e95, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 8706346190003714696, guid: 47306f9326ee563408b420aa09b37e95, type: 3}
       propertyPath: m_LocalPosition.x
       value: 37.52
@@ -15904,6 +15930,10 @@ PrefabInstance:
     - target: {fileID: 7934015489117801331, guid: ef037d55b037b75468f482b06a470519, type: 3}
       propertyPath: m_Name
       value: Prop_Intel_03 (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 7934015489117801331, guid: ef037d55b037b75468f482b06a470519, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -16271,6 +16301,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofVent_06 (6)
       objectReference: {fileID: 0}
+    - target: {fileID: 8758519375245401499, guid: 76ac0fb4e5bfcc14381c17a00cf5bc15, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -16292,6 +16326,10 @@ PrefabInstance:
     - target: {fileID: 2735496403224442025, guid: 483aa33de14f1a34db937ced13d4e295, type: 3}
       propertyPath: m_Name
       value: Prop_RoofWaterStore_03 (2)
+      objectReference: {fileID: 0}
+    - target: {fileID: 2735496403224442025, guid: 483aa33de14f1a34db937ced13d4e295, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 3368059000112115219, guid: 483aa33de14f1a34db937ced13d4e295, type: 3}
       propertyPath: m_LocalPosition.x
@@ -16540,6 +16578,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofVent_05 (29)
       objectReference: {fileID: 0}
+    - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 5246596163166214069, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_LocalPosition.x
       value: -35.22
@@ -16713,6 +16755,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_TrashBag_03
       objectReference: {fileID: 0}
+    - target: {fileID: 3839937426720405642, guid: 589b98b3e53a1954a8c97c5ade8db01b, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 4468100873302958640, guid: 589b98b3e53a1954a8c97c5ade8db01b, type: 3}
       propertyPath: m_LocalPosition.x
       value: -28.02
@@ -16777,7 +16823,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &1276025945
 Transform:
@@ -16810,6 +16856,10 @@ PrefabInstance:
     - target: {fileID: 8329679192468709426, guid: 47306f9326ee563408b420aa09b37e95, type: 3}
       propertyPath: m_Name
       value: Prop_RoofWaterStore_01 (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 8329679192468709426, guid: 47306f9326ee563408b420aa09b37e95, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 8706346190003714696, guid: 47306f9326ee563408b420aa09b37e95, type: 3}
       propertyPath: m_LocalScale.x
@@ -16889,6 +16939,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofWindow_06 (4)
       objectReference: {fileID: 0}
+    - target: {fileID: 2830499843245537118, guid: 2268cf222f2159243875437fad2c2821, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 3173951629317811684, guid: 2268cf222f2159243875437fad2c2821, type: 3}
       propertyPath: m_LocalPosition.x
       value: -27.96
@@ -16950,6 +17004,10 @@ PrefabInstance:
     - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_Name
       value: Prop_RoofVent_05 (28)
+      objectReference: {fileID: 0}
+    - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 5246596163166214069, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_LocalPosition.x
@@ -17015,7 +17073,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &1309140164
 Transform:
@@ -17088,6 +17146,10 @@ PrefabInstance:
     - target: {fileID: 7610191141841524461, guid: e27f6d0f11d27244e8161b7f0622acc3, type: 3}
       propertyPath: m_Name
       value: Prop_CTPTrashCan_01
+      objectReference: {fileID: 0}
+    - target: {fileID: 7610191141841524461, guid: e27f6d0f11d27244e8161b7f0622acc3, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -17261,6 +17323,10 @@ PrefabInstance:
     - target: {fileID: 3268768773439043897, guid: c41eb077b1ebd604eb88f9f8912f0c56, type: 3}
       propertyPath: m_Name
       value: Prop_RoofVent_02
+      objectReference: {fileID: 0}
+    - target: {fileID: 3268768773439043897, guid: c41eb077b1ebd604eb88f9f8912f0c56, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -17438,7 +17504,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &1389056491
 Transform:
@@ -17475,7 +17541,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &1392833624
 Transform:
@@ -17543,7 +17609,7 @@ Light:
   m_Enabled: 1
   serializedVersion: 12
   m_Type: 1
-  m_Color: {r: 1, g: 0.95686275, b: 0.8392157, a: 1}
+  m_Color: {r: 1, g: 0.94583523, b: 0.79811317, a: 1}
   m_Intensity: 1
   m_Range: 10
   m_SpotAngle: 30
@@ -17583,12 +17649,12 @@ Light:
     serializedVersion: 2
     m_Bits: 4294967295
   m_RenderingLayerMask: 1
-  m_Lightmapping: 4
+  m_Lightmapping: 2
   m_LightShadowCasterMode: 0
   m_AreaSize: {x: 1, y: 1}
   m_BounceIntensity: 1
-  m_ColorTemperature: 6570
-  m_UseColorTemperature: 0
+  m_ColorTemperature: 6010
+  m_UseColorTemperature: 1
   m_BoundingSphereOverride: {x: 0, y: 0, z: 0, w: 0}
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
@@ -17729,6 +17795,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofVent_05 (1)
       objectReference: {fileID: 0}
+    - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 5246596163166214069, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_LocalPosition.x
       value: 1.0199995
@@ -17791,6 +17861,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofWaterStore_03 (3)
       objectReference: {fileID: 0}
+    - target: {fileID: 2735496403224442025, guid: 483aa33de14f1a34db937ced13d4e295, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 3368059000112115219, guid: 483aa33de14f1a34db937ced13d4e295, type: 3}
       propertyPath: m_LocalPosition.x
       value: -34.101654
@@ -17852,6 +17926,10 @@ PrefabInstance:
     - target: {fileID: 7464816678671278552, guid: beb2a92edfd5bd94ab939dab548e161b, type: 3}
       propertyPath: m_Name
       value: Prop_RoofVent_07 (2)
+      objectReference: {fileID: 0}
+    - target: {fileID: 7464816678671278552, guid: beb2a92edfd5bd94ab939dab548e161b, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 7841764846489877346, guid: beb2a92edfd5bd94ab939dab548e161b, type: 3}
       propertyPath: m_LocalPosition.x
@@ -17917,7 +17995,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &1421680934
 Transform:
@@ -17950,6 +18028,10 @@ PrefabInstance:
     - target: {fileID: 2830499843245537118, guid: 2268cf222f2159243875437fad2c2821, type: 3}
       propertyPath: m_Name
       value: Prop_RoofWindow_06 (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 2830499843245537118, guid: 2268cf222f2159243875437fad2c2821, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 3173951629317811684, guid: 2268cf222f2159243875437fad2c2821, type: 3}
       propertyPath: m_LocalPosition.x
@@ -18052,6 +18134,10 @@ PrefabInstance:
     - target: {fileID: 8758519375245401499, guid: 76ac0fb4e5bfcc14381c17a00cf5bc15, type: 3}
       propertyPath: m_Name
       value: Prop_RoofVent_06 (2)
+      objectReference: {fileID: 0}
+    - target: {fileID: 8758519375245401499, guid: 76ac0fb4e5bfcc14381c17a00cf5bc15, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -18194,9 +18280,17 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 1810703973}
     m_Modifications:
+    - target: {fileID: 1026490736275818, guid: 80c5916b9606ce646be16611d9a06d13, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 1228088659953116, guid: 80c5916b9606ce646be16611d9a06d13, type: 3}
       propertyPath: m_Name
       value: bench prefab (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 1228088659953116, guid: 80c5916b9606ce646be16611d9a06d13, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 4488567837450824, guid: 80c5916b9606ce646be16611d9a06d13, type: 3}
       propertyPath: m_LocalPosition.x
@@ -18300,6 +18394,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_Plant_01
       objectReference: {fileID: 0}
+    - target: {fileID: 9162471113531258047, guid: 66d271533f6d75c49ae9d706f6882fe6, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -18318,9 +18416,25 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 1392833624}
     m_Modifications:
+    - target: {fileID: 1507145481464020, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 1520711273483040, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
       propertyPath: m_Name
       value: Big_trash_bin prefab (7)
+      objectReference: {fileID: 0}
+    - target: {fileID: 1520711273483040, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 1631846186159236, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 1809725292833654, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 4884130492571914, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
       propertyPath: m_LocalPosition.x
@@ -18507,6 +18621,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofWindow_06
       objectReference: {fileID: 0}
+    - target: {fileID: 2830499843245537118, guid: 2268cf222f2159243875437fad2c2821, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 3173951629317811684, guid: 2268cf222f2159243875437fad2c2821, type: 3}
       propertyPath: m_LocalPosition.x
       value: -27.96
@@ -18568,6 +18686,10 @@ PrefabInstance:
     - target: {fileID: 8329679192468709426, guid: 47306f9326ee563408b420aa09b37e95, type: 3}
       propertyPath: m_Name
       value: Prop_RoofWaterStore_01 (4)
+      objectReference: {fileID: 0}
+    - target: {fileID: 8329679192468709426, guid: 47306f9326ee563408b420aa09b37e95, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 8706346190003714696, guid: 47306f9326ee563408b420aa09b37e95, type: 3}
       propertyPath: m_LocalScale.x
@@ -18647,6 +18769,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofVent_05 (15)
       objectReference: {fileID: 0}
+    - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 5246596163166214069, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_LocalPosition.x
       value: 5.8666134
@@ -18708,6 +18834,10 @@ PrefabInstance:
     - target: {fileID: 8329679192468709426, guid: 47306f9326ee563408b420aa09b37e95, type: 3}
       propertyPath: m_Name
       value: Prop_RoofWaterStore_01 (7)
+      objectReference: {fileID: 0}
+    - target: {fileID: 8329679192468709426, guid: 47306f9326ee563408b420aa09b37e95, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 8706346190003714696, guid: 47306f9326ee563408b420aa09b37e95, type: 3}
       propertyPath: m_LocalPosition.x
@@ -18884,7 +19014,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &1500191690
 Transform:
@@ -19417,9 +19547,25 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 1392833624}
     m_Modifications:
+    - target: {fileID: 1507145481464020, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 1520711273483040, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
       propertyPath: m_Name
       value: Big_trash_bin prefab (2)
+      objectReference: {fileID: 0}
+    - target: {fileID: 1520711273483040, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 1631846186159236, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 1809725292833654, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 4884130492571914, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
       propertyPath: m_LocalPosition.x
@@ -19483,6 +19629,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofWaterStore_03 (1)
       objectReference: {fileID: 0}
+    - target: {fileID: 2735496403224442025, guid: 483aa33de14f1a34db937ced13d4e295, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 3368059000112115219, guid: 483aa33de14f1a34db937ced13d4e295, type: 3}
       propertyPath: m_LocalPosition.x
       value: -35.86
@@ -19545,6 +19695,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofWindow_06 (5)
       objectReference: {fileID: 0}
+    - target: {fileID: 2830499843245537118, guid: 2268cf222f2159243875437fad2c2821, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 3173951629317811684, guid: 2268cf222f2159243875437fad2c2821, type: 3}
       propertyPath: m_LocalPosition.x
       value: -27.96
@@ -19606,6 +19760,10 @@ PrefabInstance:
     - target: {fileID: 3509985614647424934, guid: 1f880c5cafce520469e48424766934a8, type: 3}
       propertyPath: m_Name
       value: Prop_Intel_01
+      objectReference: {fileID: 0}
+    - target: {fileID: 3509985614647424934, guid: 1f880c5cafce520469e48424766934a8, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 4322938860091354396, guid: 1f880c5cafce520469e48424766934a8, type: 3}
       propertyPath: m_LocalPosition.x
@@ -19734,9 +19892,25 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 1392833624}
     m_Modifications:
+    - target: {fileID: 1507145481464020, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 1520711273483040, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
       propertyPath: m_Name
       value: Big_trash_bin prefab
+      objectReference: {fileID: 0}
+    - target: {fileID: 1520711273483040, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 1631846186159236, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 1809725292833654, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 4884130492571914, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
       propertyPath: m_LocalPosition.x
@@ -19840,6 +20014,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_Intel_04 (1)
       objectReference: {fileID: 0}
+    - target: {fileID: 8740576562649096075, guid: 1843c19bfdd02f846ab0f0f8d61725bb, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -19901,6 +20079,10 @@ PrefabInstance:
     - target: {fileID: 7546771523220581105, guid: 90f04355ba51ba74e8446c8a05abd7cd, type: 3}
       propertyPath: m_Name
       value: Prop_TrashBag_01 (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 7546771523220581105, guid: 90f04355ba51ba74e8446c8a05abd7cd, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -20040,7 +20222,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &1609350293
 Transform:
@@ -20329,6 +20511,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofVent_05 (27)
       objectReference: {fileID: 0}
+    - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 5246596163166214069, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_LocalPosition.x
       value: -31.98
@@ -20390,6 +20576,10 @@ PrefabInstance:
     - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_Name
       value: Prop_RoofVent_05 (5)
+      objectReference: {fileID: 0}
+    - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 5246596163166214069, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_LocalPosition.x
@@ -20566,6 +20756,10 @@ PrefabInstance:
     - target: {fileID: 7546771523220581105, guid: 90f04355ba51ba74e8446c8a05abd7cd, type: 3}
       propertyPath: m_Name
       value: Prop_TrashBag_01 (5)
+      objectReference: {fileID: 0}
+    - target: {fileID: 7546771523220581105, guid: 90f04355ba51ba74e8446c8a05abd7cd, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -20799,9 +20993,25 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 1392833624}
     m_Modifications:
+    - target: {fileID: 1507145481464020, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 1520711273483040, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
       propertyPath: m_Name
       value: Big_trash_bin prefab (3)
+      objectReference: {fileID: 0}
+    - target: {fileID: 1520711273483040, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 1631846186159236, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 1809725292833654, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 4884130492571914, guid: 331560f2206dc024cb084301a19c05ad, type: 3}
       propertyPath: m_LocalPosition.x
@@ -20865,6 +21075,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofWindow_07 (6)
       objectReference: {fileID: 0}
+    - target: {fileID: 3805677815586169614, guid: a3547b8c6d9feb2409fe80fecfedd546, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 4583445490911771060, guid: a3547b8c6d9feb2409fe80fecfedd546, type: 3}
       propertyPath: m_LocalPosition.x
       value: -35.73
@@ -20927,6 +21141,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofWindow_06 (2)
       objectReference: {fileID: 0}
+    - target: {fileID: 2830499843245537118, guid: 2268cf222f2159243875437fad2c2821, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 3173951629317811684, guid: 2268cf222f2159243875437fad2c2821, type: 3}
       propertyPath: m_LocalPosition.x
       value: -27.96
@@ -20988,6 +21206,10 @@ PrefabInstance:
     - target: {fileID: 8329679192468709426, guid: 47306f9326ee563408b420aa09b37e95, type: 3}
       propertyPath: m_Name
       value: Prop_RoofWaterStore_01 (3)
+      objectReference: {fileID: 0}
+    - target: {fileID: 8329679192468709426, guid: 47306f9326ee563408b420aa09b37e95, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 8706346190003714696, guid: 47306f9326ee563408b420aa09b37e95, type: 3}
       propertyPath: m_LocalScale.x
@@ -21128,6 +21350,10 @@ PrefabInstance:
     - target: {fileID: 4677566573622310684, guid: f7d9fce91721779419f3bf22b82da35d, type: 3}
       propertyPath: m_Name
       value: Prop_RoofVent_03
+      objectReference: {fileID: 0}
+    - target: {fileID: 4677566573622310684, guid: f7d9fce91721779419f3bf22b82da35d, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 5449881839568154022, guid: f7d9fce91721779419f3bf22b82da35d, type: 3}
       propertyPath: m_LocalScale.x
@@ -21734,6 +21960,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofWindow_07 (3)
       objectReference: {fileID: 0}
+    - target: {fileID: 3805677815586169614, guid: a3547b8c6d9feb2409fe80fecfedd546, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 4583445490911771060, guid: a3547b8c6d9feb2409fe80fecfedd546, type: 3}
       propertyPath: m_LocalPosition.x
       value: -32.289207
@@ -21906,6 +22136,10 @@ PrefabInstance:
     - target: {fileID: 2735496403224442025, guid: 483aa33de14f1a34db937ced13d4e295, type: 3}
       propertyPath: m_Name
       value: Prop_RoofWaterStore_03 (5)
+      objectReference: {fileID: 0}
+    - target: {fileID: 2735496403224442025, guid: 483aa33de14f1a34db937ced13d4e295, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 3368059000112115219, guid: 483aa33de14f1a34db937ced13d4e295, type: 3}
       propertyPath: m_LocalPosition.x
@@ -22141,6 +22375,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofVent_06 (7)
       objectReference: {fileID: 0}
+    - target: {fileID: 8758519375245401499, guid: 76ac0fb4e5bfcc14381c17a00cf5bc15, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -22162,6 +22400,10 @@ PrefabInstance:
     - target: {fileID: 7464816678671278552, guid: beb2a92edfd5bd94ab939dab548e161b, type: 3}
       propertyPath: m_Name
       value: Prop_RoofVent_07 (5)
+      objectReference: {fileID: 0}
+    - target: {fileID: 7464816678671278552, guid: beb2a92edfd5bd94ab939dab548e161b, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 7841764846489877346, guid: beb2a92edfd5bd94ab939dab548e161b, type: 3}
       propertyPath: m_LocalPosition.x
@@ -22265,6 +22507,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_TrashBag_01
       objectReference: {fileID: 0}
+    - target: {fileID: 7546771523220581105, guid: 90f04355ba51ba74e8446c8a05abd7cd, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -22286,6 +22532,10 @@ PrefabInstance:
     - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_Name
       value: Prop_RoofVent_05 (17)
+      objectReference: {fileID: 0}
+    - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 5246596163166214069, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_LocalPosition.x
@@ -22351,7 +22601,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &1800796783
 Transform:
@@ -22492,7 +22742,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &1810703973
 Transform:
@@ -23035,9 +23285,17 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 1389056491}
     m_Modifications:
+    - target: {fileID: 1184142013480454, guid: 9a52ba64c3a0abf49ad9515917ade04b, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 1213795830858570, guid: 9a52ba64c3a0abf49ad9515917ade04b, type: 3}
       propertyPath: m_Name
       value: Shop_B_prefab
+      objectReference: {fileID: 0}
+    - target: {fileID: 1213795830858570, guid: 9a52ba64c3a0abf49ad9515917ade04b, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 4207401275094340, guid: 9a52ba64c3a0abf49ad9515917ade04b, type: 3}
       propertyPath: m_LocalPosition.x
@@ -23187,9 +23445,17 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 1389056491}
     m_Modifications:
+    - target: {fileID: 1184142013480454, guid: 9a52ba64c3a0abf49ad9515917ade04b, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 1213795830858570, guid: 9a52ba64c3a0abf49ad9515917ade04b, type: 3}
       propertyPath: m_Name
       value: Shop_B_prefab (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 1213795830858570, guid: 9a52ba64c3a0abf49ad9515917ade04b, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 4207401275094340, guid: 9a52ba64c3a0abf49ad9515917ade04b, type: 3}
       propertyPath: m_LocalPosition.x
@@ -23252,6 +23518,10 @@ PrefabInstance:
     - target: {fileID: 8329679192468709426, guid: 47306f9326ee563408b420aa09b37e95, type: 3}
       propertyPath: m_Name
       value: Prop_RoofWaterStore_01 (8)
+      objectReference: {fileID: 0}
+    - target: {fileID: 8329679192468709426, guid: 47306f9326ee563408b420aa09b37e95, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 8706346190003714696, guid: 47306f9326ee563408b420aa09b37e95, type: 3}
       propertyPath: m_LocalPosition.x
@@ -23391,7 +23661,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &1893882416
 Transform:
@@ -23464,6 +23734,10 @@ PrefabInstance:
     - target: {fileID: 7546771523220581105, guid: 90f04355ba51ba74e8446c8a05abd7cd, type: 3}
       propertyPath: m_Name
       value: Prop_TrashBag_01 (2)
+      objectReference: {fileID: 0}
+    - target: {fileID: 7546771523220581105, guid: 90f04355ba51ba74e8446c8a05abd7cd, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -23568,6 +23842,10 @@ PrefabInstance:
     - target: {fileID: 4759823016186238885, guid: 7c3c24a7eabdc8d4cb4403c27a777960, type: 3}
       propertyPath: m_Name
       value: Prop_RoofVent_08 (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 4759823016186238885, guid: 7c3c24a7eabdc8d4cb4403c27a777960, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 5279794896338816287, guid: 7c3c24a7eabdc8d4cb4403c27a777960, type: 3}
       propertyPath: m_LocalPosition.x
@@ -23865,6 +24143,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofVent_05 (3)
       objectReference: {fileID: 0}
+    - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 5246596163166214069, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_LocalPosition.x
       value: 1.0199995
@@ -24124,6 +24406,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofVent_07
       objectReference: {fileID: 0}
+    - target: {fileID: 7464816678671278552, guid: beb2a92edfd5bd94ab939dab548e161b, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 7841764846489877346, guid: beb2a92edfd5bd94ab939dab548e161b, type: 3}
       propertyPath: m_LocalPosition.x
       value: -31.26347
@@ -24371,6 +24657,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofVent_01
       objectReference: {fileID: 0}
+    - target: {fileID: 553111504632756283, guid: 3795d6c7fec68bd40af6ae712c09c722, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 929671540753130113, guid: 3795d6c7fec68bd40af6ae712c09c722, type: 3}
       propertyPath: m_LocalPosition.x
       value: 5.3780193
@@ -24472,6 +24762,10 @@ PrefabInstance:
     - target: {fileID: 3268768773439043897, guid: c41eb077b1ebd604eb88f9f8912f0c56, type: 3}
       propertyPath: m_Name
       value: Prop_RoofVent_02 (2)
+      objectReference: {fileID: 0}
+    - target: {fileID: 3268768773439043897, guid: c41eb077b1ebd604eb88f9f8912f0c56, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -24606,6 +24900,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofVent_08
       objectReference: {fileID: 0}
+    - target: {fileID: 4759823016186238885, guid: 7c3c24a7eabdc8d4cb4403c27a777960, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 5279794896338816287, guid: 7c3c24a7eabdc8d4cb4403c27a777960, type: 3}
       propertyPath: m_LocalPosition.x
       value: -28.82785
@@ -24667,6 +24965,10 @@ PrefabInstance:
     - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_Name
       value: Prop_RoofVent_05 (23)
+      objectReference: {fileID: 0}
+    - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 5246596163166214069, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_LocalPosition.x
@@ -24881,6 +25183,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofVent_02 (1)
       objectReference: {fileID: 0}
+    - target: {fileID: 3268768773439043897, guid: c41eb077b1ebd604eb88f9f8912f0c56, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -24905,7 +25211,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &2011192172
 Transform:
@@ -24978,6 +25284,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_Intel_03 (3)
       objectReference: {fileID: 0}
+    - target: {fileID: 7934015489117801331, guid: ef037d55b037b75468f482b06a470519, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -24999,6 +25309,10 @@ PrefabInstance:
     - target: {fileID: 2830499843245537118, guid: 2268cf222f2159243875437fad2c2821, type: 3}
       propertyPath: m_Name
       value: Prop_RoofWindow_06 (3)
+      objectReference: {fileID: 0}
+    - target: {fileID: 2830499843245537118, guid: 2268cf222f2159243875437fad2c2821, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 3173951629317811684, guid: 2268cf222f2159243875437fad2c2821, type: 3}
       propertyPath: m_LocalPosition.x
@@ -25173,6 +25487,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofWaterStore_01 (6)
       objectReference: {fileID: 0}
+    - target: {fileID: 8329679192468709426, guid: 47306f9326ee563408b420aa09b37e95, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 8706346190003714696, guid: 47306f9326ee563408b420aa09b37e95, type: 3}
       propertyPath: m_LocalPosition.x
       value: -9.532201
@@ -25237,7 +25555,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &2025425317
 Transform:
@@ -25268,6 +25586,10 @@ PrefabInstance:
     - target: {fileID: 2735496403224442025, guid: 483aa33de14f1a34db937ced13d4e295, type: 3}
       propertyPath: m_Name
       value: Prop_RoofWaterStore_03 (6)
+      objectReference: {fileID: 0}
+    - target: {fileID: 2735496403224442025, guid: 483aa33de14f1a34db937ced13d4e295, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 3368059000112115219, guid: 483aa33de14f1a34db937ced13d4e295, type: 3}
       propertyPath: m_LocalPosition.x
@@ -25371,6 +25693,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofVent_06 (3)
       objectReference: {fileID: 0}
+    - target: {fileID: 8758519375245401499, guid: 76ac0fb4e5bfcc14381c17a00cf5bc15, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -25470,6 +25796,10 @@ PrefabInstance:
     - target: {fileID: 8758519375245401499, guid: 76ac0fb4e5bfcc14381c17a00cf5bc15, type: 3}
       propertyPath: m_Name
       value: Prop_RoofVent_06
+      objectReference: {fileID: 0}
+    - target: {fileID: 8758519375245401499, guid: 76ac0fb4e5bfcc14381c17a00cf5bc15, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -25725,7 +26055,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &2056973821
 Transform:
@@ -25992,6 +26322,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofWaterStore_01 (5)
       objectReference: {fileID: 0}
+    - target: {fileID: 8329679192468709426, guid: 47306f9326ee563408b420aa09b37e95, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 8706346190003714696, guid: 47306f9326ee563408b420aa09b37e95, type: 3}
       propertyPath: m_LocalScale.x
       value: 1.47
@@ -26069,6 +26403,10 @@ PrefabInstance:
     - target: {fileID: 4759823016186238885, guid: 7c3c24a7eabdc8d4cb4403c27a777960, type: 3}
       propertyPath: m_Name
       value: Prop_RoofVent_08 (2)
+      objectReference: {fileID: 0}
+    - target: {fileID: 4759823016186238885, guid: 7c3c24a7eabdc8d4cb4403c27a777960, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 5279794896338816287, guid: 7c3c24a7eabdc8d4cb4403c27a777960, type: 3}
       propertyPath: m_LocalPosition.x
@@ -26248,7 +26586,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &2096218522
 Transform:
@@ -26355,6 +26693,10 @@ PrefabInstance:
     - target: {fileID: 2372632824419678790, guid: 254f79700fcec624b999a0cfe960fb90, type: 3}
       propertyPath: m_Name
       value: Prop_ElectracityCabinet_03 (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 2372632824419678790, guid: 254f79700fcec624b999a0cfe960fb90, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 3145368890054746364, guid: 254f79700fcec624b999a0cfe960fb90, type: 3}
       propertyPath: m_LocalScale.x
@@ -26586,6 +26928,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoadCone_03
       objectReference: {fileID: 0}
+    - target: {fileID: 8465261948836377368, guid: e91f9824db835f84c9efba315741239a, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 9093179177027611042, guid: e91f9824db835f84c9efba315741239a, type: 3}
       propertyPath: m_LocalPosition.x
       value: -31.38
@@ -26648,6 +26994,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Prop_RoofVent_05 (19)
       objectReference: {fileID: 0}
+    - target: {fileID: 4865145186327678223, guid: a50b88962386bb845953bff01758eb7f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 5246596163166214069, guid: a50b88962386bb845953bff01758eb7f, type: 3}
       propertyPath: m_LocalPosition.x
       value: 5.8666134
@@ -26709,6 +27059,10 @@ PrefabInstance:
     - target: {fileID: 3839937426720405642, guid: 589b98b3e53a1954a8c97c5ade8db01b, type: 3}
       propertyPath: m_Name
       value: Prop_TrashBag_03 (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 3839937426720405642, guid: 589b98b3e53a1954a8c97c5ade8db01b, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 4468100873302958640, guid: 589b98b3e53a1954a8c97c5ade8db01b, type: 3}
       propertyPath: m_LocalPosition.x
@@ -26811,6 +27165,10 @@ PrefabInstance:
     - target: {fileID: 8758519375245401499, guid: 76ac0fb4e5bfcc14381c17a00cf5bc15, type: 3}
       propertyPath: m_Name
       value: Prop_RoofVent_06 (11)
+      objectReference: {fileID: 0}
+    - target: {fileID: 8758519375245401499, guid: 76ac0fb4e5bfcc14381c17a00cf5bc15, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
