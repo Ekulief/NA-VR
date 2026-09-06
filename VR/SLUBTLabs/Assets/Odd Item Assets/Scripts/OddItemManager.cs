@@ -70,6 +70,7 @@ public class OddItemManager : MonoBehaviour
     private void Start()
     {
         instructionPanel.SetActive(false);
+        
         resultsPanel.SetActive(false);
         _feedbackDisplay = GetComponent<FeedbackDisplay>();
 
@@ -251,9 +252,22 @@ public class OddItemManager : MonoBehaviour
         _foundTime = Time.time - _trialStartTime;
 
         instructionPanel.SetActive(false);
-
-        string timeRating = _foundTime < 10f ? "Excellent!" : _foundTime < 20f ? "Good" : "Keep practicing";
-
+        _feedbackDisplay?.ShowSuccess("Correct! That's the odd item!");
+        string timeRating;
+        ExperimentConfig cfg = config;
+        if (cfg != null)
+        {
+            if (_foundTime < cfg.oddItem_ExcellentThresholdSeconds)
+                timeRating = cfg.oddItem_RatingExcellent;
+            else if (_foundTime < cfg.oddItem_GoodThresholdSeconds)
+                timeRating = cfg.oddItem_RatingGood;
+            else
+                timeRating = cfg.oddItem_RatingKeepPracticing;
+        }
+        else
+        {
+            timeRating = _foundTime < 10f ? "Excellent!" : _foundTime < 20f ? "Good" : "Keep Practicing";
+        }
         resultsSummaryText.text =
             $"Odd Item Found!\n\n" +
             $"Search time:    {_foundTime:F1}s\n" +
@@ -277,4 +291,5 @@ public class OddItemManager : MonoBehaviour
         string feedback = cfg != null ? cfg.oddItem_WrongItemFeedback : "That item belongs here. Keep looking!";
         _feedbackDisplay?.ShowError(feedback);
     }
+
 }

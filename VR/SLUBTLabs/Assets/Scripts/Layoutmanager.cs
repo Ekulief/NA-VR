@@ -15,9 +15,10 @@ using UnityEngine;
 ///   c) OddItemManager calls CaptureLayout() and SaveSession() — no other wiring needed.
 ///
 /// USAGE:
-///   Normal mode  → layout is random each session, saved for reference.
-///   Replay mode  → tick useReplayLayout, assign a saved JSON file path,
-///                  and the exact same layout is reconstructed for each participant.
+///   Normal mode  → layout is random each session, saved automatically.
+///   Replay mode  → tick useReplayLayout, click Refresh Session List,
+///                  pick a session from the dropdown, hit Play.
+///                  All participants will see that exact shelf configuration.
 ///
 /// SAVE LOCATION:
 ///   Application.persistentDataPath/layouts/
@@ -47,9 +48,15 @@ public class LayoutManager : MonoBehaviour
              "All participants will see the exact same shelf configuration.")]
     public bool useReplayLayout = false;
 
-    [Tooltip("Full path to the layout JSON file to replay. " +
-             "Leave empty to pick the most recent saved layout automatically.")]
-    public string replayFilePath = "";
+    [Tooltip("Index of the session to replay from the list below. " +
+             "0 = most recent. Use the Editor button to refresh the list.")]
+    public int selectedSessionIndex = 0;
+
+    [Tooltip("Read-only list of saved session file names — refreshed by the Editor button.")]
+    public List<string> savedSessionNames = new();
+
+    [HideInInspector]
+    public List<string> savedSessionPaths = new();
 
     [Header("Config")]
     public ExperimentConfig config;
@@ -64,11 +71,38 @@ public class LayoutManager : MonoBehaviour
         _saveDir = Path.Combine(Application.persistentDataPath, "layouts");
         Directory.CreateDirectory(_saveDir);
 
+        RefreshSessionList();
+
         if (useReplayLayout)
             StartCoroutine(LoadAndApplyReplayLayout());
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Refreshes the saved session list — call this from the Inspector button
+    /// or at runtime to update the dropdown.
+    /// </summary>
+    public void RefreshSessionList()
+    {
+        savedSessionNames.Clear();
+        savedSessionPaths.Clear();
+
+        string dir = Path.Combine(Application.persistentDataPath, "layouts");
+        if (!Directory.Exists(dir)) return;
+
+        string[] files = Directory.GetFiles(dir, "*.json");
+        Array.Sort(files);
+        Array.Reverse(files); // most recent first
+
+        foreach (string file in files)
+        {
+            savedSessionPaths.Add(file);
+            savedSessionNames.Add(Path.GetFileNameWithoutExtension(file));
+        }
+
+        Debug.Log($"[LayoutManager] Found {savedSessionNames.Count} saved sessions.");
+    }
 
     /// <summary>
     /// Call this from OddItemManager after the target is injected and items are spawned.
@@ -86,7 +120,6 @@ public class LayoutManager : MonoBehaviour
             shelves = new List<ShelfSnapshot>()
         };
 
-        // Capture each shelf's items
         foreach (ShelfSpawner shelf in shelves)
         {
             if (shelf == null) continue;
@@ -121,9 +154,8 @@ public class LayoutManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Call this from OddItemManager when the participant finds the odd item.
-    /// Adds the result to the layout snapshot and saves everything to JSON.
-    /// Returns the file path that was written.
+    /// Call this from OddItemManager when the participant finds the odd item or times out.
+    /// Saves the layout + result to JSON.
     /// </summary>
     public string SaveSession(float searchTimeSeconds, bool foundItem = true)
     {
@@ -142,68 +174,49 @@ public class LayoutManager : MonoBehaviour
         string path = Path.Combine(_saveDir, fileName);
         string json = JsonUtility.ToJson(_currentLayout, prettyPrint: true);
 
+        // Prune old sessions if limit set
         if (maxSavedSessions > 0)
         {
-            var all = GetAllSavedSessionPaths();
-            while (all.Count > maxSavedSessions)
+            RefreshSessionList();
+            while (savedSessionPaths.Count >= maxSavedSessions)
             {
-                File.Delete(all[0]);
-                all.RemoveAt(0);
+                File.Delete(savedSessionPaths[savedSessionPaths.Count - 1]);
+                savedSessionPaths.RemoveAt(savedSessionPaths.Count - 1);
+                savedSessionNames.RemoveAt(savedSessionNames.Count - 1);
             }
         }
+
         File.WriteAllText(path, json);
+        RefreshSessionList();
+
         Debug.Log($"[LayoutManager] Session saved → {path}");
         return path;
-
     }
 
-    /// <summary>
-    /// Returns the layout snapshot currently in memory.
-    /// Useful for the web dashboard to read the layout after a session.
-    /// </summary>
     public LayoutSnapshot GetCurrentLayout() => _currentLayout;
 
-    /// <summary>
-    /// Returns JSON of all saved layout files in the layouts directory.
-    /// Call this from a web dashboard integration to list past sessions.
-    /// </summary>
     public List<string> GetAllSavedSessionPaths()
     {
-        var paths = new List<string>();
-        if (!Directory.Exists(_saveDir)) return paths;
-
-        foreach (string file in Directory.GetFiles(_saveDir, "*.json"))
-            paths.Add(file);
-
-        paths.Sort(); // alphabetical = chronological since filenames include timestamp
-        return paths;
+        RefreshSessionList();
+        return savedSessionPaths;
     }
 
     // ── Replay ────────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Loads a saved layout and instructs each ShelfSpawner to reconstruct it exactly.
-    /// Called automatically at Start() when useReplayLayout is true.
-    /// </summary>
     private IEnumerator LoadAndApplyReplayLayout()
     {
-        // Wait one frame for ShelfSpawners to finish their default spawn
-        yield return null;
+        yield return null; // wait for ShelfSpawners
 
-        string path = replayFilePath;
+        RefreshSessionList();
 
-        // If no path specified, use the most recent saved layout
-        if (string.IsNullOrEmpty(path))
+        if (savedSessionPaths.Count == 0)
         {
-            var all = GetAllSavedSessionPaths();
-            if (all.Count == 0)
-            {
-                Debug.LogWarning("[LayoutManager] Replay mode enabled but no saved layouts found. " +
-                                 "Running with random layout.");
-                yield break;
-            }
-            path = all[all.Count - 1]; // most recent
+            Debug.LogWarning("[LayoutManager] Replay mode enabled but no saved sessions found.");
+            yield break;
         }
+
+        // Clamp index to valid range
+        int index = Mathf.Clamp(selectedSessionIndex, 0, savedSessionPaths.Count - 1);
+        string path = savedSessionPaths[index];
 
         if (!File.Exists(path))
         {
@@ -223,7 +236,7 @@ public class LayoutManager : MonoBehaviour
         _currentLayout = snapshot;
         ApplyReplayLayout(snapshot);
 
-        Debug.Log($"[LayoutManager] Replay layout loaded from '{path}' — " +
+        Debug.Log($"[LayoutManager] Replaying session '{savedSessionNames[index]}' — " +
                   $"odd item: '{snapshot.chosenOddItem}'");
     }
 
@@ -234,14 +247,12 @@ public class LayoutManager : MonoBehaviour
             ShelfSpawner shelf = shelves.Find(s => s.gameObject.name == shelfSnap.shelfName);
             if (shelf == null)
             {
-                Debug.LogWarning($"[LayoutManager] Shelf '{shelfSnap.shelfName}' not found in scene.");
+                Debug.LogWarning($"[LayoutManager] Shelf '{shelfSnap.shelfName}' not found.");
                 continue;
             }
-
             shelf.ApplySnapshot(shelfSnap);
         }
-
-        Debug.Log("[LayoutManager] Replay layout applied to all shelves.");
+        Debug.Log("[LayoutManager] Replay layout applied.");
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

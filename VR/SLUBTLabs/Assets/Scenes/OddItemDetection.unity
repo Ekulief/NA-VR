@@ -3101,8 +3101,12 @@ MonoBehaviour:
   - {fileID: 1249323867}
   maxSavedSessions: 50
   useReplayLayout: 0
-  replayFilePath: 
-  config: {fileID: 0}
+  selectedSessionIndex: 0
+  savedSessionNames:
+  - session_unknown_20260903_011828
+  savedSessionPaths:
+  - C:/Users/admin/AppData/LocalLow/SLUBT/SLUBTLabs\layouts\session_unknown_20260903_011828.json
+  config: {fileID: 11400000, guid: 274793649e2df7b4b81e78adcf58a0e6, type: 2}
 --- !u!1 &1034417521
 GameObject:
   m_ObjectHideFlags: 0
