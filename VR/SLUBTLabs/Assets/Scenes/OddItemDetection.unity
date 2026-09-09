@@ -3009,7 +3009,7 @@ GameObject:
   - component: {fileID: 1033889998}
   - component: {fileID: 1033889999}
   m_Layer: 0
-  m_Name: OddItemDetectionManager
+  m_Name: OddItemManager
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -3031,6 +3031,8 @@ MonoBehaviour:
   triggerAction: {fileID: -2439264783773714294, guid: b6d5c44ebe3244b7692e81ae8265eb22, type: 3}
   oddItemPrefabs:
   - {fileID: 5891736246452683671, guid: a8e00a74eb78eac4fab9e9c8d164514f, type: 3}
+  selectedOddItemIndex: 0
+  shuffleItems: 1
   instructionPanel: {fileID: 554384413}
   instructionText: {fileID: 455962726}
   resultsPanel: {fileID: 702332530}
