@@ -122,7 +122,7 @@ public class OddItemManager : MonoBehaviour
             yield break;
         }
         foreach (ShelfSpawner shelf in allShelves)
-            Debug.Log($"Shelf '{shelf.gameObject.name}' has {shelf.GetSpawnedItems().Count} items");
+    Debug.Log($"Shelf '{shelf.gameObject.name}' has {shelf.GetSpawnedItems().Count} items");
         // Shuffle items across all shelves if enabled
         if (shuffleItems)
             ShuffleAcrossShelves(allShelves);
