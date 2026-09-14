@@ -25,7 +25,29 @@ public class ExperimentConfig : ScriptableObject
     [Tooltip("Seconds to wait after scene loads before experiment begins.")]
     public float globalInstructionDelay = 1.5f;
 
-    // ── Odd Item Detection (Attentional Blindness) ────────────────────────────
+    // ── Attentional Blindness (Furniture Counting) ───────────────────────────
+    [Header("Attentional Blindness")]
+    [Tooltip("Seconds after counting starts before the target object begins fading.")]
+    public float ab_FadeDelaySeconds = 8f;
+
+    [Tooltip("Duration in seconds for the target object to complete fading to invisible.")]
+    public float ab_FadeDurationSeconds = 3f;
+
+    [Tooltip("Delay in seconds after the fade finishes before prompting the user for input.")]
+    public float ab_PostFadePauseSeconds = 2f;
+
+    [Tooltip("If true, picks a random furniture target. If false, relies on specificFadeTarget in Manager.")]
+    public bool ab_UseRandomFadeTarget = true;
+
+    [Tooltip("Instruction text shown before participant begins counting.")]
+    [TextArea(2, 4)]
+    public string ab_InstructionText = "<b>Count the furniture</b>\n\nWalk around the scene and count how many\nfurniture items you can see.\n\nPress <b>Start Counting</b> when you are ready.";
+
+    [Tooltip("Question text asked when querying about the anomaly.")]
+    [TextArea(2, 4)]
+    public string ab_AwarenessQuestionText = "While counting the furniture,\ndid you notice anything unusual\nhappening in the scene?";
+
+    // ── Odd Item Detection ───────────────────────────────────────────────────
     [Header("Odd Item Detection")]
     [Tooltip("Display name of the odd item shown in the instruction text.")]
     public string oddItem_TargetDisplayName = "the odd item";
@@ -132,14 +154,6 @@ public class ExperimentConfig : ScriptableObject
     /// </summary>
     public void LoadFromRemoteConfig()
     {
-        // TODO: Replace with Firebase Remote Config implementation
-        // Example pattern:
-        //   var remoteConfig = FirebaseRemoteConfig.DefaultInstance;
-        //   await remoteConfig.FetchAndActivateAsync();
-        //   oddItem_SearchTimeLimitSeconds = (float)remoteConfig.GetValue("oddItem_SearchTimeLimitSeconds").DoubleValue;
-        //   rt_TotalTrials = (int)remoteConfig.GetValue("rt_TotalTrials").LongValue;
-        //   ... etc for all fields
-
         Debug.Log("[ExperimentConfig] Remote config loaded (stub — using local values).");
     }
 
