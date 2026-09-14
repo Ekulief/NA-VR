@@ -124,8 +124,7 @@ public class OddItemManager : MonoBehaviour
         foreach (ShelfSpawner shelf in allShelves)
     Debug.Log($"Shelf '{shelf.gameObject.name}' has {shelf.GetSpawnedItems().Count} items");
         // Shuffle items across all shelves if enabled
-        if (shuffleItems)
-            ShuffleAcrossShelves(allShelves);
+
 
         // Inject odd item into a random shelf
         ShelfSpawner chosenShelf = allShelves[Random.Range(0, allShelves.Length)];
@@ -150,46 +149,32 @@ public class OddItemManager : MonoBehaviour
         yield return new WaitForSeconds(_instructionDelay);
         BeginTrial();
     }
-
-    // ── Shuffle ───────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Collects all spawned items across every shelf and redistributes them
-    /// randomly so items don't always appear on the same shelf.
-    /// </summary>
-    private void ShuffleAcrossShelves(ShelfSpawner[] shelves)
+    private void Awake()
     {
+        if (!shuffleItems) return;
 
+        ShelfSpawner[] shelves = FindObjectsByType<ShelfSpawner>(FindObjectsSortMode.None);
+        if (shelves.Length < 2) return;
+
+        // Collect all distractor lists
+        List<List<GameObject>> allLists = new();
         foreach (ShelfSpawner shelf in shelves)
+            allLists.Add(new List<GameObject>(shelf.distractorPrefabs));
+
+        // Fisher-Yates shuffle the lists
+        for (int i = allLists.Count - 1; i > 0; i--)
         {
-
-            List<GameObject> items = shelf.GetSpawnedItems();
-            if (items == null || items.Count < 2) continue;
-
-            // Collect actual world positions of spawned items
-            List<Vector3> positions = new();
-            foreach (GameObject item in items)
-                if (item != null) positions.Add(item.transform.position);
-
-            // Fisher-Yates shuffle
-            for (int i = positions.Count - 1; i > 0; i--)
-            {
-                int j = Random.Range(0, i + 1);
-                (positions[i], positions[j]) = (positions[j], positions[i]);
-            }
-
-            // Apply shuffled positions back
-            int idx = 0;
-            foreach (GameObject item in items)
-            {
-                if (item == null) continue;
-                item.transform.position = positions[idx];
-                idx++;
-            }
-
-            Debug.Log($"[Shuffle] '{shelf.gameObject.name}' — {positions.Count} positions shuffled.");
+            int j = Random.Range(0, i + 1);
+            (allLists[i], allLists[j]) = (allLists[j], allLists[i]);
         }
+
+        // Reassign shuffled lists back to shelves
+        for (int i = 0; i < shelves.Length; i++)
+            shelves[i].distractorPrefabs = allLists[i];
+
+        Debug.Log("[OddItemDetection] Shelf categories shuffled between shelves.");
     }
+   
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     private Transform FindRightController()
