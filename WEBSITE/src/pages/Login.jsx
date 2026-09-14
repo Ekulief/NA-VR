@@ -49,6 +49,8 @@ export default function Login() {
         navigate("/student");
       } else if (userData.role === "instructor") {
         navigate("/instructor");
+      } else if (userData.role === "admin") {
+        navigate("/admin");
       } else {
         await auth.signOut();
         setError("Your account does not have a valid role.");

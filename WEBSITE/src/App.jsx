@@ -12,6 +12,7 @@ import StudentExperimentBuilder from "./pages/student/StudentExperimentBuilder";
 import InstructorHome from "./pages/instructor/InstructorHome";
 import InstructorCourseExperiments from "./pages/instructor/InstructorCourseExperiments";
 import InstructorExperimentBuilder from "./pages/instructor/InstructorExperimentBuilder";
+import AdminDashboard from "./pages/admin/AdminDashboard";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -51,6 +52,11 @@ function App() {
         <Route
           path="/instructor"
           element={user ? <InstructorHome /> : <Navigate to="/login" replace />}
+        />
+
+        <Route
+          path="/admin"
+          element={user ? <AdminDashboard /> : <Navigate to="/login" replace />}
         />
 
         <Route
