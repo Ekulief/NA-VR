@@ -1,0 +1,255 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7b8a5a7dd54266b47a16f200309c5ecd, type: 3}
+  m_Name: KitchenMemoryDatabase
+  m_EditorClassIdentifier: Assembly-CSharp::MemoryTargetDatabase
+  entries:
+  - gameID: SM_Food_SM_Waffle2
+    objectName: Waffle
+    room: kitchen
+    questions:
+    - questionText: How many Waffles are on the Dining Table?
+      questionType: 1
+      correctAnswer: 2
+      multipleChoiceOptions:
+      - 1
+      - 2
+      - 3
+      - 4
+    - questionText: What is the color of the Waffles?
+      questionType: 2
+      correctAnswer: Brown
+      multipleChoiceOptions:
+      - Brown
+      - Yellow
+      - White
+      - Golden
+  - gameID: Kitchen_Props_B_Spoon
+    objectName: Spoon
+    room: kitchen
+    questions:
+    - questionText: How many spoons are on the Dining Table?
+      questionType: 1
+      correctAnswer: 4
+      multipleChoiceOptions:
+      - 1
+      - 2
+      - 3
+      - 4
+  - gameID: Kitchen_Props_B_Fork
+    objectName: Fork
+    room: kitchen
+    questions:
+    - questionText: How many forks are on the Dining Table?
+      questionType: 1
+      correctAnswer: 4
+      multipleChoiceOptions:
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+  - gameID: Kitchen_Props_B_Knife
+    objectName: Knife
+    room: kitchen
+    questions:
+    - questionText: How many knives are on the Dining Table?
+      questionType: 1
+      correctAnswer: 2
+      multipleChoiceOptions:
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+  - gameID: Kitchen_Props_B_Mug_A4
+    objectName: Coffee Mug (Dining Table)
+    room: kitchen
+    questions:
+    - questionText: How many Coffee Mugs are on the Dining Table?
+      questionType: 1
+      correctAnswer: 2
+      multipleChoiceOptions:
+      - 1
+      - 2
+      - 3
+      - 4
+  - gameID: SM_Food_SM_Apple
+    objectName: Apple
+    room: kitchen
+    questions:
+    - questionText: How many Apples are on the Dining Table?
+      questionType: 1
+      correctAnswer: 3
+      multipleChoiceOptions:
+      - 1
+      - 2
+      - 3
+      - 4
+  - gameID: SM_Food_SM_Pear
+    objectName: Pear
+    room: kitchen
+    questions:
+    - questionText: How many Pears are on the Dining Table?
+      questionType: 1
+      correctAnswer: 4
+      multipleChoiceOptions:
+      - 1
+      - 2
+      - 3
+      - 4
+  - gameID: SM_Food_SM_Bananas
+    objectName: Banana
+    room: kitchen
+    questions:
+    - questionText: How many Bananas are on the Dining Table?
+      questionType: 1
+      correctAnswer: 2
+      multipleChoiceOptions:
+      - 1
+      - 2
+      - 3
+      - 4
+  - gameID: Kitchen_Mat
+    objectName: Floor Mat
+    room: kitchen
+    questions:
+    - questionText: What animal was portrayed on the Floor Mat?
+      questionType: 2
+      correctAnswer: Chicken
+      multipleChoiceOptions:
+      - Chicken
+      - Duck
+      - Rooster
+      - Cat
+  - gameID: ' SM_BreakfastProps_Bread4'
+    objectName: Bread
+    room: kitchen
+    questions:
+    - questionText: How many Bread are on the Dining Table?
+      questionType: 1
+      correctAnswer: 2
+      multipleChoiceOptions:
+      - 1
+      - 2
+      - 3
+      - 4
+  - gameID: Kitchen_Props_B_Glass_Cup
+    objectName: Cup
+    room: kitchen
+    questions:
+    - questionText: How many Cups are on the Dining Table?
+      questionType: 1
+      correctAnswer: 4
+      multipleChoiceOptions:
+      - 1
+      - 2
+      - 3
+      - 4
+  - gameID: SM_Candle
+    objectName: Candle
+    room: kitchen
+    questions:
+    - questionText: How many Candles are on the Dining Table?
+      questionType: 1
+      correctAnswer: 2
+      multipleChoiceOptions:
+      - 1
+      - 2
+      - 3
+      - 4
+  - gameID: Dining_Set_Bowl
+    objectName: Set Bowl
+    room: kitchen
+    questions:
+    - questionText: What color was the Bowl holding the fruits on the Dining Table?
+      questionType: 2
+      correctAnswer: Yellow
+      multipleChoiceOptions:
+      - Yellow
+      - White
+      - Green
+      - Brown
+  - gameID: Kitchen_Props_B_Plate
+    objectName: Plate
+    room: kitchen
+    questions:
+    - questionText: How many Plates are on the Dining Table?
+      questionType: 1
+      correctAnswer: 4
+      multipleChoiceOptions:
+      - 1
+      - 2
+      - 3
+      - 4
+    - questionText: ' What symbol is engraved on the Plate?'
+      questionType: 2
+      correctAnswer: Flower
+      multipleChoiceOptions:
+      - Flower
+      - Star
+      - Leaf
+      - Circle
+    - questionText: What color is the symbol engraved on the Plate?
+      questionType: 2
+      correctAnswer: Yellow
+      multipleChoiceOptions:
+      - White
+      - Yellow
+      - Blue
+      - Green
+  - gameID: Kitchen_Props_A_Clock
+    objectName: Clock
+    room: kitchen
+    questions:
+    - questionText: How many Waffles are on the Dining Table?
+      questionType: 0
+      correctAnswer: Yes
+      multipleChoiceOptions:
+      - Yes
+      - No
+  - gameID: Kitchen_Props_B_Mug_A3
+    objectName: Coffee Mug (Counter)
+    room: kitchen
+    questions:
+    - questionText: Was there a Coffee Mug on the Counter?
+      questionType: 0
+      correctAnswer: Yes
+      multipleChoiceOptions: []
+  - gameID: Kitchen_Fridge
+    objectName: Fridge
+    room: kitchen
+    questions:
+    - questionText: What color is the Refrigerator?
+      questionType: 2
+      correctAnswer: Green
+      multipleChoiceOptions:
+      - Green
+      - White
+      - Red
+      - Yellow
+  - gameID: Kitchen_Fridge_Drawings
+    objectName: Fridge Drawings
+    room: kitchen
+    questions:
+    - questionText: Were there drawings on the Fridge surface?
+      questionType: 0
+      correctAnswer: Yes
+      multipleChoiceOptions: []
+    - questionText: How many drawings were on the Fridge surface?
+      questionType: 1
+      correctAnswer: 4
+      multipleChoiceOptions:
+      - 1
+      - 2
+      - 3
+      - 4
