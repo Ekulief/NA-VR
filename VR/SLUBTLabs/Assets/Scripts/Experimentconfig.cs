@@ -47,6 +47,14 @@ public class ExperimentConfig : ScriptableObject
     [TextArea(2, 4)]
     public string ab_AwarenessQuestionText = "While counting the furniture,\ndid you notice anything unusual\nhappening in the scene?";
 
+    [Tooltip("Result text shown when participant noticed the anomaly.")]
+    [TextArea(2, 3)]
+    public string ab_NoticedText = "You noticed the furniture item fading —\nyour attention was broadly distributed.";
+
+    [Tooltip("Result text shown when participant did not notice the anomaly.")]
+    [TextArea(2, 3)]
+    public string ab_NotNoticedText = "You did not notice the fading item.\nThis is the inattentional blindness effect.";
+
     // ── Odd Item Detection ───────────────────────────────────────────────────
     [Header("Odd Item Detection")]
     [Tooltip("Display name of the odd item shown in the instruction text.")]
