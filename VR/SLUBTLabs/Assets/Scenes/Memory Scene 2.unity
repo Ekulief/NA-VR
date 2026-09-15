@@ -24760,13 +24760,36 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 1030991150, guid: abc00000000003857928226481839869, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1081831797}
   m_SourcePrefab: {fileID: 100100000, guid: abc00000000003857928226481839869, type: 3}
 --- !u!4 &1081831795 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 1030991151, guid: abc00000000003857928226481839869, type: 3}
   m_PrefabInstance: {fileID: 1081831794}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1081831796 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 1030991150, guid: abc00000000003857928226481839869, type: 3}
+  m_PrefabInstance: {fileID: 1081831794}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1081831797
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1081831796}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 786aa6c13bea72748bafd72089f25662, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MemoryTarget
+  objectID: SM_Food_SM_Waffle2
+  room: kitchen
+  questions: []
 --- !u!1001 &1089645310
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -37108,7 +37131,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1030985864, guid: abc00000000009931417572189055212, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 0.21419048
+      value: 0.207
       objectReference: {fileID: 0}
     - target: {fileID: 1030985864, guid: abc00000000009931417572189055212, type: 3}
       propertyPath: m_LocalPosition.y
@@ -37116,7 +37139,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1030985864, guid: abc00000000009931417572189055212, type: 3}
       propertyPath: m_LocalPosition.z
-      value: -1.7074399
+      value: -1.708
       objectReference: {fileID: 0}
     - target: {fileID: 1030985864, guid: abc00000000009931417572189055212, type: 3}
       propertyPath: m_LocalRotation.w
