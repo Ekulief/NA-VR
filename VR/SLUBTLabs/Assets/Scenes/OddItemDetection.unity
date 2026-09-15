@@ -2554,6 +2554,7 @@ GameObject:
   - component: {fileID: 1033889997}
   - component: {fileID: 1033889998}
   - component: {fileID: 1033889999}
+  - component: {fileID: 1033890000}
   m_Layer: 0
   m_Name: OddItemManager
   m_TagString: Untagged
@@ -2654,6 +2655,19 @@ MonoBehaviour:
   - session_unknown_20260903_011828
   savedSessionPaths:
   - C:/Users/admin/AppData/LocalLow/SLUBT/SLUBTLabs\layouts\session_unknown_20260903_011828.json
+  config: {fileID: 11400000, guid: 274793649e2df7b4b81e78adcf58a0e6, type: 2}
+--- !u!114 &1033890000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1033889994}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b60adaa80426d694687f36f554b5e14b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ExperimentConfigLoader
   config: {fileID: 11400000, guid: 274793649e2df7b4b81e78adcf58a0e6, type: 2}
 --- !u!1 &1034417521
 GameObject:
