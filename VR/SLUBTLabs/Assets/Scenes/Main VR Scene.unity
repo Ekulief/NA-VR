@@ -3846,7 +3846,7 @@ GameObject:
   - component: {fileID: 840514134}
   m_Layer: 2
   m_Name: VR Player
-  m_TagString: Untagged
+  m_TagString: Player
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
