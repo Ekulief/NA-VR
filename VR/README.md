@@ -23,10 +23,11 @@ The VR client is the primary interface for students to perform experiments. It i
 ---
 
 ## Setup Instructions
-1. Ensure you have **Git LFS** installed on your machine.
-2. Open **Unity Hub** and select "Add project from disk."
-3. Select this `/VR` folder.
-4. Ensure **Assets > External Dependency Manager** (if using Firebase) has resolved all dependencies.
+1. Download Unity Version 6000.3.12f1 LTS with android build support
+2. Clone the project Repository
+3. Open **Unity Hub** and select "Add project from disk."
+4. Select this `/VR/SLUBTLabs` folder.
+
 
 ## Documentation
 
