@@ -1,10 +1,14 @@
 ﻿using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using Firebase.Firestore;
+using Firebase.Extensions;
 
 /// <summary>
 /// SLUBT Labs — Dynamic Experiment Loader
 /// Keep this script attached to your central manager object.
+/// Updates vrDevices status in Firebase when loading/unloading experiments.
 /// </summary>
 public class ExperimentLoader : MonoBehaviour
 {
@@ -20,10 +24,36 @@ public class ExperimentLoader : MonoBehaviour
     [Tooltip("Fade duration in seconds.")]
     public float fadeDuration = 0.4f;
 
+    [Header("Firebase")]
+    [Tooltip("Assign your ExperimentConfig asset here.")]
+    public ExperimentConfig config;
+
+    [Tooltip("The Firestore document ID of this VR headset in the vrDevices collection.")]
+    public string vrDeviceDocumentId = "";
+
     // State variables
     private bool _isLoading = false;
     private Scene _loadedScene;
     private bool _experimentSceneLoaded = false;
+    private string _currentSceneName = "";
+    private FirebaseFirestore _db;
+
+    // ── Unity lifecycle ───────────────────────────────────────────────────────
+
+    private void Start()
+    {
+        if (FirebaseManager.IsInitialized)
+            _db = FirebaseFirestore.DefaultInstance;
+        else
+            StartCoroutine(WaitForFirebaseInit());
+    }
+
+    private IEnumerator WaitForFirebaseInit()
+    {
+        yield return new WaitUntil(() => FirebaseManager.IsInitialized);
+        _db = FirebaseFirestore.DefaultInstance;
+        Debug.Log("[ExperimentLoader] Firebase ready.");
+    }
 
     // ── Scene loading ─────────────────────────────────────────────────────────
 
@@ -46,6 +76,7 @@ public class ExperimentLoader : MonoBehaviour
     private IEnumerator LoadExperimentScene(string sceneName)
     {
         _isLoading = true;
+        _currentSceneName = sceneName;
 
         // 1. Fade out to loading screen
         if (fadeCanvas != null)
@@ -59,7 +90,7 @@ public class ExperimentLoader : MonoBehaviour
         _experimentSceneLoaded = true;
 
         SceneManager.SetActiveScene(_loadedScene);
-        DynamicGI.UpdateEnvironment();
+        //DynamicGI.UpdateEnvironment();
 
         SetMainSceneVisible(false);
 
@@ -77,7 +108,6 @@ public class ExperimentLoader : MonoBehaviour
         // 4. Move XR Origin to the dynamic spawn point
         if (xrOrigin != null)
         {
-            // Get Camera Offset height so player stands at correct eye level
             Transform cameraOffset = xrOrigin.transform.Find("Camera Offset");
             float camOffsetY = cameraOffset != null ? cameraOffset.localPosition.y : 0f;
 
@@ -92,7 +122,10 @@ public class ExperimentLoader : MonoBehaviour
             Debug.LogWarning("[SLUBT Labs] xrOrigin is not assigned on Experiment Loader. Player won't be repositioned.");
         }
 
-        // 5. Fade back in
+        // 5. Update Firebase device status to In Use
+        UpdateDeviceStatus("In Use", sceneName);
+
+        // 6. Fade back in
         if (fadeCanvas != null)
             yield return StartCoroutine(Fade(1f, 0f));
 
@@ -116,21 +149,13 @@ public class ExperimentLoader : MonoBehaviour
     {
         if (!_experimentSceneLoaded) return;
 
-        bool foundRespawnObject = false;
-        GameObject respawnObject = null;
-
-        // Automatically scan your main Hub scene roots for an object named exactly "Respawn"
-        // Search all scenes including Main for Respawn
         Scene hubScene = SceneManager.GetSceneAt(0);
-        SceneManager.SetActiveScene(hubScene); // make sure we search the right scene
+        SceneManager.SetActiveScene(hubScene);
 
-        respawnObject = GameObject.Find("Respawn");
-        foundRespawnObject = respawnObject != null;
+        GameObject respawnObject = GameObject.Find("Respawn");
 
-        if (!foundRespawnObject)
-        {
-            Debug.LogError("[SLUBT Labs] CRITICAL ERROR: Could not locate a GameObject named exactly 'Respawn' inside your Main VR Scene hierarchy!");
-        }
+        if (respawnObject == null)
+            Debug.LogError("[SLUBT Labs] CRITICAL ERROR: Could not locate 'Respawn' in Main VR Scene!");
 
         StartCoroutine(UnloadExperimentScene(respawnObject));
     }
@@ -151,6 +176,7 @@ public class ExperimentLoader : MonoBehaviour
         yield return new WaitUntil(() => unload.isDone);
 
         _experimentSceneLoaded = false;
+        _currentSceneName = "";
 
         // Wait one frame for XR tracking to settle after scene unload
         yield return null;
@@ -169,11 +195,55 @@ public class ExperimentLoader : MonoBehaviour
 
             Debug.Log($"[SLUBT Labs] Returned to hub at {targetPos}");
         }
+
+        // Update Firebase device status back to Available
+        UpdateDeviceStatus("Available", "");
+
         if (fadeCanvas != null)
             yield return StartCoroutine(Fade(1f, 0f));
 
         _isLoading = false;
     }
+
+    // ── Firebase ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Updates the vrDevices document in Firestore with current headset status.
+    /// Called when loading an experiment (In Use) and returning to hub (Available).
+    /// </summary>
+    private void UpdateDeviceStatus(string status, string experimentSceneName)
+    {
+        if (_db == null || string.IsNullOrEmpty(vrDeviceDocumentId))
+        {
+            Debug.LogWarning("[ExperimentLoader] Firebase not ready or vrDeviceDocumentId not set — skipping status update.");
+            return;
+        }
+
+        string participantId = config != null ? config.participantId : "";
+        string sessionId = config != null ? config.sessionId : "";
+
+        Dictionary<string, object> update = new()
+        {
+            { "Status",               status },
+            { "currentExperimentId",  experimentSceneName },
+            { "currentUserId",        participantId },
+            { "currentSessionStart",  FieldValue.ServerTimestamp },
+            { "notes",                sessionId }
+        };
+
+        _db.Collection("vrDevices")
+           .Document(vrDeviceDocumentId)
+           .UpdateAsync(update)
+           .ContinueWithOnMainThread(task =>
+           {
+               if (task.IsFaulted)
+                   Debug.LogError($"[ExperimentLoader] Failed to update vrDevices: {task.Exception}");
+               else
+                   Debug.Log($"[ExperimentLoader] vrDevices status updated to '{status}'.");
+           });
+         }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private void SetMainSceneVisible(bool visible)
     {
