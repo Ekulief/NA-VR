@@ -1,3 +1,5 @@
+*.bundle filter=lfs diff=lfs merge=lfs -text
+*.so filter=lfs diff=lfs merge=lfs -text
 *.data.gz filter=lfs diff=lfs merge=lfs -text
 *.wasm.gz filter=lfs diff=lfs merge=lfs -text
 *.framework.js.gz filter=lfs diff=lfs merge=lfs -text
