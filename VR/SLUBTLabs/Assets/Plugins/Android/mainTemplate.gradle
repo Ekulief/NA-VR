@@ -9,8 +9,30 @@ dependencies {
     implementation 'com.google.android.gms:play-services-vision:20.1.3'
     implementation 'com.google.android.material:material:1.12.0'
     implementation 'com.google.protobuf:protobuf-javalite:3.19.4'
+// Android Resolver Dependencies Start
+    implementation 'com.google.android.gms:play-services-base:18.10.1' // Assets/Firebase/Editor/AppDependencies.xml:20
+    implementation 'com.google.firebase:firebase-analytics:23.2.0' // Assets/Firebase/Editor/RemoteConfigDependencies.xml:18
+    implementation 'com.google.firebase:firebase-analytics-unity:13.16.0' // Assets/Firebase/Editor/AnalyticsDependencies.xml:21
+    implementation 'com.google.firebase:firebase-app-unity:13.16.0' // Assets/Firebase/Editor/AppDependencies.xml:25
+    implementation 'com.google.firebase:firebase-common:22.2.0' // Assets/Firebase/Editor/AppDependencies.xml:16
+    implementation 'com.google.firebase:firebase-config:23.1.0' // Assets/Firebase/Editor/RemoteConfigDependencies.xml:16
+    implementation 'com.google.firebase:firebase-config-unity:13.16.0' // Assets/Firebase/Editor/RemoteConfigDependencies.xml:23
+    implementation 'com.google.firebase:firebase-firestore:26.6.0' // Assets/Firebase/Editor/FirestoreDependencies.xml:16
+    implementation 'com.google.firebase:firebase-firestore-unity:13.16.0' // Assets/Firebase/Editor/FirestoreDependencies.xml:23
+// Android Resolver Dependencies End
 **DEPS**}
 
+// Android Resolver Exclusions Start
+android {
+  packaging {
+      exclude ('/lib/armeabi/*' + '*')
+      exclude ('/lib/mips/*' + '*')
+      exclude ('/lib/mips64/*' + '*')
+      exclude ('/lib/x86/*' + '*')
+      exclude ('/lib/x86_64/*' + '*')
+  }
+}
+// Android Resolver Exclusions End
 android {
     namespace "com.unity3d.player"
     ndkPath "**NDKPATH**"
