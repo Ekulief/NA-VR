@@ -4,13 +4,7 @@ using UnityEngine;
 /// <summary>
 /// SLUBT Labs — Experiment Config Loader
 /// Attach to your experiment manager GameObjects alongside the experiment script.
-/// Fetches remote config before the experiment starts so all parameters are ready.
-///
-/// SETUP:
-///   a) Create one ExperimentConfig asset: Assets → Create → SLUBT Labs → Experiment Config
-///   b) Assign it to this component in the Inspector
-///   c) Attach this to the same GameObject as your experiment manager
-///   d) Your experiment manager reads from config after this loader finishes
+/// Waits for Firebase initialization, fetches parameters from Firestore, and sets IsReady = true.
 /// </summary>
 public class ExperimentConfigLoader : MonoBehaviour
 {
@@ -38,14 +32,23 @@ public class ExperimentConfigLoader : MonoBehaviour
     {
         if (config.useRemoteConfig)
         {
-            Debug.Log("[ConfigLoader] Fetching remote config...");
+            Debug.Log("[ConfigLoader] Waiting for Firebase initialization...");
 
-            // TODO: Replace with actual Firebase async call
-            // yield return StartCoroutine(FetchFirebaseConfig());
+            // Wait until FirebaseManager dependencies are fully initialized
+            yield return new WaitUntil(() => FirebaseManager.IsInitialized);
 
-            // Stub — simulate network delay
-            yield return new WaitForSeconds(0.5f);
-            config.LoadFromRemoteConfig();
+            Debug.Log("[ConfigLoader] Fetching parameters from Firestore...");
+
+            // Execute the Task returned by FetchFromFirestoreAsync
+            var fetchTask = config.FetchFromFirestoreAsync();
+
+            // Wait for the async Firestore Task to complete
+            yield return new WaitUntil(() => fetchTask.IsCompleted);
+
+            if (fetchTask.IsFaulted)
+            {
+                Debug.LogWarning($"[ConfigLoader] Firestore fetch encountered an error: {fetchTask.Exception}");
+            }
         }
         else
         {

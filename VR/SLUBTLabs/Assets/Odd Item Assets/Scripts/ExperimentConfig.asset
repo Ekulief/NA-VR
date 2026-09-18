@@ -15,24 +15,36 @@ MonoBehaviour:
   sessionId: session-001
   participantId: participant-001
   globalInstructionDelay: 1.5
+  ab_FadeDelaySeconds: 8
+  ab_FadeDurationSeconds: 3
+  ab_PostFadePauseSeconds: 2
+  ab_UseRandomFadeTarget: 1
+  ab_InstructionText: 'Count the furniture. Walk around the scene and count how many
+    furniture items you can see.
+
+
+    Press Begin Experiment when you are ready.'
+  ab_AwarenessQuestionText: While counting the furniture, did you notice anything
+    unusual happening in the scene?
+  ab_NoticedText: "You noticed the furniture item fading \u2014 your attention was
+    broadly distributed."
+  ab_NotNoticedText: You did not notice the fading item. This is the inattentional
+    blindness effect.
   oddItem_TargetDisplayName: the odd item
   oddItem_SearchTimeLimitSeconds: 120
-  oddItem_InstructionText: 'Find the item that doesn''t belong on the shelves.
-
-
-    Point
-    at it and pull the trigger to confirm.'
+  oddItem_InstructionText: Find the item that doesn't belong on the shelves. Point
+    at it and pull the trigger to confirm.
   oddItem_WrongItemFeedback: That item belongs here. Keep looking!
   oddItem_RaycastDistance: 10
+  oddItem_ExcellentThresholdSeconds: 10
+  oddItem_GoodThresholdSeconds: 20
+  oddItem_RatingExcellent: Excellent!
+  oddItem_RatingGood: Good
+  oddItem_RatingKeepPracticing: Keep Practicing
   depth_MaxHeightMetres: 100
   depth_StepAmount: 1
-  depth_InstructionText: 'You are standing on top of a building.
-
-    How high up
-    do you think you are?
-
-
-    Use the +/- buttons or slider to input your estimate.'
+  depth_InstructionText: You are standing on top of a building. How high up do you
+    think you are? Use the +/- buttons or slider to input your estimate.
   depth_ActualHeightMetres: 50
   rt_TotalTrials: 10
   rt_MinForeperiodSeconds: 1
@@ -48,5 +60,4 @@ MonoBehaviour:
   shelf_Rows: 2
   shelf_RandomPositionOffset: 0.04
   shelf_RandomRotationOffset: 15
-  useRemoteConfig: 0
-  remoteConfigTimeoutSeconds: 5
+  useRemoteConfig: 1
