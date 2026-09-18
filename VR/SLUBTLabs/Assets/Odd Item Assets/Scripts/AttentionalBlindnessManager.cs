@@ -6,23 +6,12 @@ using TMPro;
 
 /// <summary>
 /// SLUBT Labs — Attentional Blindness Manager
-/// Primary task: participant counts furniture items in the scene.
-/// Anomaly: one furniture item fades out completely during counting.
-/// After submitting count, participant is asked if they noticed anything unusual.
-///
-/// SETUP:
-///   a) Attach to an empty GameObject called "AttentionalBlindnessManager"
-///   b) Assign all furniture GameObjects to the furnitureItems list
-///   c) If useRandomFadeTarget = true, one is picked randomly each trial
-///   d) If false, assign specificFadeTarget manually
-///   e) Wire all UI references in Inspector
-///
-/// FLOW:
-///   1. Instruction panel → "Count the furniture"
-///   2. After fadeDelay seconds, chosen item fades to invisible
-///   3. Participant presses Done Counting → number input appears
-///   4. Participant submits count → awareness question appears
-///   5. Results shown with count accuracy and awareness result
+/// Flow: 
+/// 1. Waits for Firestore config via ExperimentConfigLoader.IsReady
+/// 2. Instruction Panel visible first (uses ExperimentConfig text)
+/// 3. Click "Start Counting" -> Shows Count Input Panel
+/// 4. Submit Count -> Shows Awareness Panel
+/// 5. Answer Awareness Question -> Shows Results Panel
 /// </summary>
 public class AttentionalBlindnessManager : MonoBehaviour
 {
@@ -34,8 +23,7 @@ public class AttentionalBlindnessManager : MonoBehaviour
     public List<GameObject> furnitureItems = new();
 
     [Header("Fade Target")]
-    [Tooltip("If true, a random furniture item fades each trial. " +
-             "If false, uses specificFadeTarget.")]
+    [Tooltip("If true, a random furniture item fades each trial. If false, uses specificFadeTarget.")]
     public bool useRandomFadeTarget = true;
 
     [Tooltip("The specific furniture item to fade — only used when useRandomFadeTarget is false.")]
@@ -48,7 +36,7 @@ public class AttentionalBlindnessManager : MonoBehaviour
     [Tooltip("How long the fade takes to complete in seconds.")]
     public float fadeDuration = 3f;
 
-    [Header("UI — Instruction Panel")]
+    [Header("UI — Instruction Panel (Visible First)")]
     public GameObject instructionPanel;
     public TMP_Text instructionText;
     public Button startCountingButton;
@@ -81,25 +69,25 @@ public class AttentionalBlindnessManager : MonoBehaviour
     private GameObject _fadeTarget;
     private List<Renderer[]> _fadeTargetRenderers = new();
     private List<float[]> _originalAlphas = new();
-    private FeedbackDisplay _feedbackDisplay;
 
     // ── Unity lifecycle ───────────────────────────────────────────────────────
     private void Start()
     {
-        instructionPanel.SetActive(false);
-        countInputPanel.SetActive(false);
-        awarenessPanel.SetActive(false);
-        resultsPanel.SetActive(false);
+        // Hide all sub-panels initially
+        if (instructionPanel != null) instructionPanel.SetActive(false);
+        if (countInputPanel != null) countInputPanel.SetActive(false);
+        if (awarenessPanel != null) awarenessPanel.SetActive(false);
+        if (resultsPanel != null) resultsPanel.SetActive(false);
 
-        _feedbackDisplay = GetComponent<FeedbackDisplay>();
         _actualCount = furnitureItems.Count;
 
-        startCountingButton.onClick.AddListener(OnStartCounting);
-        incrementCountButton.onClick.AddListener(() => SetCount(_participantCount + 1));
-        decrementCountButton.onClick.AddListener(() => SetCount(_participantCount - 1));
-        submitCountButton.onClick.AddListener(OnSubmitCount);
-        yesButton.onClick.AddListener(() => OnAwarenessResponse(true));
-        noButton.onClick.AddListener(() => OnAwarenessResponse(false));
+        // Wire UI Listeners
+        if (startCountingButton != null) startCountingButton.onClick.AddListener(OnStartCounting);
+        if (incrementCountButton != null) incrementCountButton.onClick.AddListener(() => SetCount(_participantCount + 1));
+        if (decrementCountButton != null) decrementCountButton.onClick.AddListener(() => SetCount(_participantCount - 1));
+        if (submitCountButton != null) submitCountButton.onClick.AddListener(OnSubmitCount);
+        if (yesButton != null) yesButton.onClick.AddListener(() => OnAwarenessResponse(true));
+        if (noButton != null) noButton.onClick.AddListener(() => OnAwarenessResponse(false));
 
         StartCoroutine(BeginExperiment());
     }
@@ -107,6 +95,15 @@ public class AttentionalBlindnessManager : MonoBehaviour
     // ── Experiment flow ───────────────────────────────────────────────────────
     private IEnumerator BeginExperiment()
     {
+        Debug.Log("[AttentionalBlindness] Waiting for Firestore config to be ready...");
+        yield return new WaitUntil(() => ExperimentConfigLoader.IsReady);
+
+        // Assign active config from loader if missing in inspector
+        if (config == null)
+        {
+            config = ExperimentConfigLoader.Current;
+        }
+
         float delay = config != null ? config.globalInstructionDelay : 1.5f;
         yield return new WaitForSeconds(delay);
 
@@ -116,9 +113,10 @@ public class AttentionalBlindnessManager : MonoBehaviour
             fadeDelay = config.ab_FadeDelaySeconds;
             fadeDuration = config.ab_FadeDurationSeconds;
             useRandomFadeTarget = config.ab_UseRandomFadeTarget;
+            Debug.Log("[AttentionalBlindness] Applied parameters from Firestore config.");
         }
 
-        // Pick fade target
+        // Select fade target
         if (useRandomFadeTarget)
         {
             if (furnitureItems.Count == 0)
@@ -139,31 +137,48 @@ public class AttentionalBlindnessManager : MonoBehaviour
             yield break;
         }
 
-        Debug.Log($"[AttentionalBlindness] Fade target: '{_fadeTarget.name}'");
+        Debug.Log($"[AttentionalBlindness] Fade target selected: '{_fadeTarget.name}'");
 
-        // Cache all renderers and their original alpha values
+        // Cache renderers for transparency modifications
         CacheRenderers(_fadeTarget);
 
-        // Show instruction from config or default fallback
-        instructionText.text = config != null ? config.ab_InstructionText :
-            $"<b>Count the furniture</b>\n\n" +
-            $"Walk around the scene and count how many\n" +
-            $"furniture items you can see.\n\n" +
-            $"Press <b>Start Counting</b> when you are ready.";
+        // Show instruction text from config
+        if (instructionText != null)
+        {
+            instructionText.text = (config != null && !string.IsNullOrEmpty(config.ab_InstructionText))
+                ? config.ab_InstructionText
+                : "<b>Count the furniture</b>\n\nWalk around the scene and count how many furniture items you can see.\n\nPress <b>Start Counting</b> when you are ready.";
+        }
 
-        instructionPanel.SetActive(true);
+        // Show Instruction Panel FIRST
+        if (instructionPanel != null) instructionPanel.SetActive(true);
     }
 
     private void OnStartCounting()
     {
-        instructionPanel.SetActive(false);
+        // Hide instructions & start counting phase
+        if (instructionPanel != null) instructionPanel.SetActive(false);
+
         _trialStartTime = Time.time;
 
-        // Start fade after delay
-        StartCoroutine(FadeOutAfterDelay());
+        // Show Count Panel
+        ShowCountInput();
 
-        Debug.Log($"[AttentionalBlindness] Counting started. " +
-                  $"Fade will begin in {fadeDelay}s.");
+        // Trigger item fade sequence after delay
+        StartCoroutine(FadeOutAfterDelay());
+    }
+
+    private void ShowCountInput()
+    {
+        _participantCount = 0;
+        UpdateCountDisplay();
+
+        if (countPromptText != null)
+        {
+            countPromptText.text = "How many furniture items do you count?";
+        }
+
+        if (countInputPanel != null) countInputPanel.SetActive(true);
     }
 
     private IEnumerator FadeOutAfterDelay()
@@ -175,45 +190,37 @@ public class AttentionalBlindnessManager : MonoBehaviour
         Debug.Log($"[AttentionalBlindness] Fading out '{_fadeTarget.name}'...");
         yield return StartCoroutine(FadeOut());
         Debug.Log($"[AttentionalBlindness] '{_fadeTarget.name}' fully faded.");
-
-        // Wait configured duration before showing input
-        float pause = config != null ? config.ab_PostFadePauseSeconds : 2f;
-        yield return new WaitForSeconds(pause);
-
-        if (!_trialComplete)
-            ShowCountInput();
-    }
-
-    private void ShowCountInput()
-    {
-        _participantCount = 0;
-        UpdateCountDisplay();
-        countPromptText.text = "How many furniture items did you count?";
-        countInputPanel.SetActive(true);
     }
 
     private void OnSubmitCount()
     {
         _countSubmitTime = Time.time - _trialStartTime;
-        countInputPanel.SetActive(false);
 
-        awarenessQuestionText.text = config != null ? config.ab_AwarenessQuestionText :
-            "While counting the furniture,\n" +
-            "did you notice anything unusual\n" +
-            "happening in the scene?";
+        // Hide Count Panel immediately upon submission
+        if (countInputPanel != null) countInputPanel.SetActive(false);
 
-        awarenessPanel.SetActive(true);
+        // Show Awareness Question Panel
+        if (awarenessQuestionText != null)
+        {
+            awarenessQuestionText.text = (config != null && !string.IsNullOrEmpty(config.ab_AwarenessQuestionText))
+                ? config.ab_AwarenessQuestionText
+                : "While counting the furniture,\ndid you notice anything unusual\nhappening in the scene?";
+        }
 
-        Debug.Log($"[AttentionalBlindness] Count submitted: {_participantCount} " +
-                  $"(actual: {_actualCount}) after {_countSubmitTime:F1}s");
+        if (awarenessPanel != null) awarenessPanel.SetActive(true);
+
+        Debug.Log($"[AttentionalBlindness] Count submitted: {_participantCount} (actual: {_actualCount}) after {_countSubmitTime:F1}s");
     }
 
     private void OnAwarenessResponse(bool noticed)
     {
         _noticedAnomaly = noticed;
-        awarenessPanel.SetActive(false);
         _trialComplete = true;
 
+        // Hide Awareness Panel immediately
+        if (awarenessPanel != null) awarenessPanel.SetActive(false);
+
+        // Show Results Panel
         ShowResults();
     }
 
@@ -226,27 +233,21 @@ public class AttentionalBlindnessManager : MonoBehaviour
                 ? $"Off by 1 (actual: {_actualCount})"
                 : $"Off by {countDifference} (actual: {_actualCount})";
 
-        resultsSummaryText.text =
-            $"Trial Complete\n\n" +
-            $"Your count:       {_participantCount}\n" +
-            $"Actual count:     {_actualCount}\n" +
-            $"Accuracy:         {countAccuracy}\n\n" +
-            $"Noticed anomaly:  {(_noticedAnomaly ? "Yes" : "No")}\n" +
-            $"Faded item:       {_fadeTarget.name}\n\n" +
-            (_noticedAnomaly
-                ? "You noticed the furniture item fading —\nyour attention was broadly distributed."
-                : "You did not notice the fading item.\nThis is the inattentional blindness effect.");
+        if (resultsSummaryText != null)
+        {
+            resultsSummaryText.text =
+                $"Trial Complete\n\n" +
+                $"Your count:       {_participantCount}\n" +
+                $"Actual count:     {_actualCount}\n" +
+                $"Accuracy:         {countAccuracy}\n\n" +
+                $"Noticed anomaly:  {(_noticedAnomaly ? "Yes" : "No")}\n" +
+                $"Faded item:       {_fadeTarget.name}\n\n" +
+                (_noticedAnomaly
+                    ? "You noticed the furniture item fading —\nyour attention was broadly distributed."
+                    : "You did not notice the fading item.\nThis is the inattentional blindness effect.");
+        }
 
-        resultsPanel.SetActive(true);
-
-        Debug.Log($"[AttentionalBlindness] Result — " +
-                  $"Count: {_participantCount}/{_actualCount} | " +
-                  $"Noticed: {_noticedAnomaly} | " +
-                  $"Fade target: {_fadeTarget.name} | " +
-                  $"Time: {_countSubmitTime:F1}s");
-
-        // TODO: SessionDataManager.Instance.RecordAttentionalBlindnessTrial(
-        //   _participantCount, _actualCount, _noticedAnomaly, _fadeTarget.name, _countSubmitTime);
+        if (resultsPanel != null) resultsPanel.SetActive(true);
     }
 
     // ── Fade logic ────────────────────────────────────────────────────────────
@@ -256,19 +257,16 @@ public class AttentionalBlindnessManager : MonoBehaviour
         _fadeTargetRenderers.Clear();
         _originalAlphas.Clear();
 
-        // Get all renderers including children
         Renderer[] renderers = target.GetComponentsInChildren<Renderer>();
 
         foreach (Renderer r in renderers)
         {
             _fadeTargetRenderers.Add(new Renderer[] { r });
 
-            // Cache original alpha per material
             float[] alphas = new float[r.materials.Length];
             for (int i = 0; i < r.materials.Length; i++)
             {
                 Material mat = r.materials[i];
-                // Enable transparency on the material
                 SetMaterialTransparent(mat);
                 alphas[i] = mat.color.a;
             }
@@ -299,13 +297,11 @@ public class AttentionalBlindnessManager : MonoBehaviour
             yield return null;
         }
 
-        // Make completely invisible
         _fadeTarget.SetActive(false);
     }
 
     private void SetMaterialTransparent(Material mat)
     {
-        // URP transparent mode
         mat.SetFloat("_Surface", 1);
         mat.SetFloat("_Blend", 0);
         mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
@@ -324,7 +320,7 @@ public class AttentionalBlindnessManager : MonoBehaviour
 
     private void UpdateCountDisplay()
     {
-        countDisplayText.text = _participantCount.ToString();
-        decrementCountButton.interactable = _participantCount > 0;
+        if (countDisplayText != null) countDisplayText.text = _participantCount.ToString();
+        if (decrementCountButton != null) decrementCountButton.interactable = _participantCount > 0;
     }
 }
