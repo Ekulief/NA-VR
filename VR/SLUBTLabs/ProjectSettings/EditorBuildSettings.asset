@@ -21,6 +21,9 @@ EditorBuildSettings:
     path: Assets/Scenes/Memory Scene 2.unity
     guid: 6086e02bb211b254a89926a7638c84d7
   - enabled: 1
+    path: Assets/Scenes/Depth Perception Scene 1.unity
+    guid: 8da61edbf580a0f429779d77a925f021
+  - enabled: 1
     path: Assets/Scenes/Memory Scene.unity
     guid: 56faa9309870b3c4d90c6f0fe62ab1a7
   - enabled: 1
