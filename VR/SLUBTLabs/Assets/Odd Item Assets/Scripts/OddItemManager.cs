@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 using UnityEngine.InputSystem;
 using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.Interactables;
@@ -29,13 +30,14 @@ public class OddItemManager : MonoBehaviour
 
     [Header("Shuffle")]
     [Tooltip("If true, item positions within each shelf are shuffled each trial " +
-         "so participants cannot memorize slot positions. " +
-         "Items stay on their own shelf — only positions within each shelf are randomized.")]
+             "so participants cannot memorize slot positions. " +
+             "Items stay on their own shelf — only positions within each shelf are randomized.")]
     public bool shuffleItems = true;
 
     [Header("UI — Instruction Panel")]
     public GameObject instructionPanel;
     public TMP_Text instructionText;
+    public Button startButton;
 
     [Header("UI — Results Panel")]
     public GameObject resultsPanel;
@@ -79,6 +81,12 @@ public class OddItemManager : MonoBehaviour
         resultsPanel.SetActive(false);
         _feedbackDisplay = GetComponent<FeedbackDisplay>();
 
+        // Wire start button click event
+        if (startButton != null)
+        {
+            startButton.onClick.AddListener(OnStartButtonClicked);
+        }
+
         ExperimentConfig cfg = config;
         if (cfg != null)
         {
@@ -121,10 +129,9 @@ public class OddItemManager : MonoBehaviour
             Debug.LogError("[OddItemDetection] No ShelfSpawners found in scene!");
             yield break;
         }
-        foreach (ShelfSpawner shelf in allShelves)
-    Debug.Log($"Shelf '{shelf.gameObject.name}' has {shelf.GetSpawnedItems().Count} items");
-        // Shuffle items across all shelves if enabled
 
+        foreach (ShelfSpawner shelf in allShelves)
+            Debug.Log($"Shelf '{shelf.gameObject.name}' has {shelf.GetSpawnedItems().Count} items");
 
         // Inject odd item into a random shelf
         ShelfSpawner chosenShelf = allShelves[Random.Range(0, allShelves.Length)];
@@ -147,8 +154,9 @@ public class OddItemManager : MonoBehaviour
             SetupInteractable(item);
 
         yield return new WaitForSeconds(_instructionDelay);
-        BeginTrial();
+        ShowInstructions();
     }
+
     private void Awake()
     {
         if (!shuffleItems) return;
@@ -174,7 +182,6 @@ public class OddItemManager : MonoBehaviour
 
         Debug.Log("[OddItemDetection] Shelf categories shuffled between shelves.");
     }
-   
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     private Transform FindRightController()
@@ -211,7 +218,7 @@ public class OddItemManager : MonoBehaviour
     }
 
     // ── Trial ─────────────────────────────────────────────────────────────────
-    private void BeginTrial()
+    private void ShowInstructions()
     {
         ExperimentConfig cfg = config;
         instructionText.text = cfg != null
@@ -219,6 +226,14 @@ public class OddItemManager : MonoBehaviour
             : "Find the item that doesn't belong.\nPoint at it and pull the trigger.";
 
         instructionPanel.SetActive(true);
+    }
+
+    private void OnStartButtonClicked()
+    {
+        if (instructionPanel != null)
+            instructionPanel.SetActive(false);
+
+        // Officially start timing and allow item selection
         _trialStartTime = Time.time;
         _awaitingSelection = true;
 
@@ -233,7 +248,6 @@ public class OddItemManager : MonoBehaviour
         {
             _awaitingSelection = false;
             _trialComplete = true;
-            instructionPanel.SetActive(false);
 
             resultsSummaryText.text =
                 $"Time's up!\n\n" +
@@ -285,8 +299,6 @@ public class OddItemManager : MonoBehaviour
         _awaitingSelection = false;
         _trialComplete = true;
         _foundTime = Time.time - _trialStartTime;
-
-        instructionPanel.SetActive(false);
 
         _feedbackDisplay?.ShowSuccess("Correct! That's the odd item!");
 
