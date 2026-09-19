@@ -76,6 +76,10 @@ public class ExperimentManager : MonoBehaviour
     public System.Action OnAllRoomsExplored;
     public System.Action OnExperimentFinished;
     public System.Action<float> OnTimerTick;
+    public System.Action<float> OnDistractorStarted;
+    public System.Action OnDistractorEnded;
+    public System.Action OnRecallStarted;
+
 
     // ─────────────────────────────────────────
     // START
@@ -262,10 +266,15 @@ public class ExperimentManager : MonoBehaviour
         ChangeState(ExperimentState.DistractorTask);
         Debug.Log("[ExperimentManager] Distractor task started.");
 
-        // DistractorTaskUI will listen to this state change and show itself
+        // Fire event so DistractorTaskUI knows to show itself
+        OnDistractorStarted?.Invoke(distractorTaskDuration);
+
         yield return new WaitForSeconds(distractorTaskDuration);
 
+        // Fire event so DistractorTaskUI hides itself
+        OnDistractorEnded?.Invoke();
         Debug.Log("[ExperimentManager] Distractor task ended.");
+
         StartRecallPhase();
     }
 
@@ -273,7 +282,7 @@ public class ExperimentManager : MonoBehaviour
     {
         ChangeState(ExperimentState.Recalling);
         Debug.Log("[ExperimentManager] Recall phase started.");
-        // RecallManager will listen to this state and begin showing questions
+        OnRecallStarted?.Invoke();  
     }
 
     public void OnExperimentComplete()

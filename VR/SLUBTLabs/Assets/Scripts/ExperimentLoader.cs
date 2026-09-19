@@ -211,7 +211,7 @@ public class ExperimentLoader : MonoBehaviour
     /// Updates the vrDevices document in Firestore with current headset status.
     /// Called when loading an experiment (In Use) and returning to hub (Available).
     /// </summary>
-    private void UpdateDeviceStatus(string status, string experimentSceneName)
+    private async void UpdateDeviceStatus(string status, string experimentSceneName)
     {
         if (_db == null || string.IsNullOrEmpty(vrDeviceDocumentId))
         {
@@ -223,25 +223,27 @@ public class ExperimentLoader : MonoBehaviour
         string sessionId = config != null ? config.sessionId : "";
 
         Dictionary<string, object> update = new()
-        {
-            { "Status",               status },
-            { "currentExperimentId",  experimentSceneName },
-            { "currentUserId",        participantId },
-            { "currentSessionStart",  FieldValue.ServerTimestamp },
-            { "notes",                sessionId }
-        };
+    {
+        { "Status",               status },
+        { "currentExperimentId",  experimentSceneName },
+        { "currentUserId",        participantId },
+        { "currentSessionStart",  FieldValue.ServerTimestamp },
+        { "notes",                sessionId }
+    };
 
-        _db.Collection("vrDevices")
-           .Document(vrDeviceDocumentId)
-           .UpdateAsync(update)
-           .ContinueWithOnMainThread(task =>
-           {
-               if (task.IsFaulted)
-                   Debug.LogError($"[ExperimentLoader] Failed to update vrDevices: {task.Exception}");
-               else
-                   Debug.Log($"[ExperimentLoader] vrDevices status updated to '{status}'.");
-           });
-         }
+        var docRef = _db.Collection("vrDevices").Document(vrDeviceDocumentId);
+
+        try
+        {
+            await docRef.UpdateAsync(update);
+            Debug.Log($"[ExperimentLoader] vrDevices status updated to '{status}'.");
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogWarning($"[ExperimentLoader] Non-critical Firebase error: {e.Message}");
+            // Don't rethrow — let experiment continue
+        }
+    }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
