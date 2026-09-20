@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: d389cc8f658f44c8aa32597a565d7768
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 391942
+  packageName: Retro Diner - Stylized 3D Restaurant Environment (URP)
+  packageVersion: 1.0
+  assetPath: Assets/RetroDiner/Prefabs/CoffeeRig.prefab
+  uploadId: 949856

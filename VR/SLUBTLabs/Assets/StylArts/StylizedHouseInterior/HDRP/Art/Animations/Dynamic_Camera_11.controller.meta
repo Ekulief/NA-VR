@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 9e728200d5db61d4b834164be515dc50
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 224331
+  packageName: Stylized House Interior
+  packageVersion: 1.0
+  assetPath: Assets/StylArts/StylizedHouseInterior/HDRP/Art/Animations/Dynamic_Camera_11.controller
+  uploadId: 669223
