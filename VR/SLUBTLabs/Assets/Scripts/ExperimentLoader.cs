@@ -15,6 +15,12 @@ public class ExperimentLoader : MonoBehaviour
     [Header("Player")]
     public GameObject xrOrigin;
 
+    [Header("Spawn Position Settings")]
+    [Tooltip("If checked, forces the player's camera height to fixedSpawnHeight. If unchecked, uses Spawn Point's Y position.")]
+    public bool useFixedSpawnHeight = true;
+    [Tooltip("Target eye height relative to floor (in meters). Standard average standing height is ~1.6m to 1.7m.")]
+    public float fixedSpawnHeight = 1.6f;
+
     [Header("Main Scene Visibility")]
     public GameObject[] mainSceneObjects;
 
@@ -57,9 +63,6 @@ public class ExperimentLoader : MonoBehaviour
 
     // ── Scene loading ─────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Dynamically loads any scene name passed to it from an individual teleport anchor pad.
-    /// </summary>
     public void LoadScene(string sceneName)
     {
         if (_isLoading) return;
@@ -90,7 +93,6 @@ public class ExperimentLoader : MonoBehaviour
         _experimentSceneLoaded = true;
 
         SceneManager.SetActiveScene(_loadedScene);
-        //DynamicGI.UpdateEnvironment();
 
         SetMainSceneVisible(false);
 
@@ -105,17 +107,10 @@ public class ExperimentLoader : MonoBehaviour
             yield break;
         }
 
-        // 4. Move XR Origin to the dynamic spawn point
+        // 4. Move XR Origin precisely accounting for room-scale physical offset
         if (xrOrigin != null)
         {
-            Transform cameraOffset = xrOrigin.transform.Find("Camera Offset");
-            float camOffsetY = cameraOffset != null ? cameraOffset.localPosition.y : 0f;
-
-            Vector3 targetPos = spawnPoint.transform.position;
-            targetPos.y -= camOffsetY;
-
-            xrOrigin.transform.position = targetPos;
-            xrOrigin.transform.rotation = spawnPoint.transform.rotation;
+            TeleportPlayerToTransform(spawnPoint.transform);
         }
         else
         {
@@ -134,17 +129,11 @@ public class ExperimentLoader : MonoBehaviour
 
     // ── Return to main scene ──────────────────────────────────────────────────
 
-    /// <summary>
-    /// Legacy fallback method signature wrapper to handle any calling script still passing a Vector3.
-    /// </summary>
     public void ReturnToHub(Vector3 hubSpawnPosition)
     {
         ReturnToHub();
     }
 
-    /// <summary>
-    /// Clean parameterless method that locates the "Respawn" tracking target directly in the Main VR Scene.
-    /// </summary>
     public void ReturnToHub()
     {
         if (!_experimentSceneLoaded) return;
@@ -178,25 +167,14 @@ public class ExperimentLoader : MonoBehaviour
         _experimentSceneLoaded = false;
         _currentSceneName = "";
 
-        // Wait one frame for XR tracking to settle after scene unload
         yield return null;
 
-        // Apply tracking offset compensation so camera lands exactly on Respawn
         if (xrOrigin != null && respawnObject != null)
         {
-            Transform cameraOffset = xrOrigin.transform.Find("Camera Offset");
-            float camOffsetY = cameraOffset != null ? cameraOffset.localPosition.y : 0f;
-
-            Vector3 targetPos = respawnObject.transform.position;
-            targetPos.y -= camOffsetY;
-
-            xrOrigin.transform.position = targetPos;
-            xrOrigin.transform.rotation = respawnObject.transform.rotation;
-
-            Debug.Log($"[SLUBT Labs] Returned to hub at {targetPos}");
+            TeleportPlayerToTransform(respawnObject.transform);
+            Debug.Log($"[SLUBT Labs] Returned to hub at {respawnObject.transform.position}");
         }
 
-        // Update Firebase device status back to Available
         UpdateDeviceStatus("Available", "");
 
         if (fadeCanvas != null)
@@ -205,12 +183,56 @@ public class ExperimentLoader : MonoBehaviour
         _isLoading = false;
     }
 
+    // ── Helper method for precise physical repositioning ─────────────────────
+
+    private void TeleportPlayerToTransform(Transform targetTransform)
+    {
+        Camera mainCam = Camera.main;
+
+        if (mainCam == null && xrOrigin != null)
+            mainCam = xrOrigin.GetComponentInChildren<Camera>();
+
+        if (mainCam != null)
+        {
+            // Rotate origin to match target rotation
+            float currentCamYAngle = mainCam.transform.eulerAngles.y;
+            float targetYAngle = targetTransform.eulerAngles.y;
+            float rotationDelta = targetYAngle - currentCamYAngle;
+            xrOrigin.transform.Rotate(0f, rotationDelta, 0f, Space.World);
+
+            // Calculate room-scale horizontal offset from Camera to Origin
+            Vector3 cameraPosition = mainCam.transform.position;
+            Vector3 originPosition = xrOrigin.transform.position;
+
+            Vector3 cameraOffsetHorizontal = cameraPosition - originPosition;
+            cameraOffsetHorizontal.y = 0f;
+
+            // Apply horizontal offset so the camera aligns with target spot
+            Vector3 finalPosition = targetTransform.position - cameraOffsetHorizontal;
+
+            // Height calculation
+            if (useFixedSpawnHeight)
+            {
+                Transform cameraOffset = xrOrigin.transform.Find("Camera Offset");
+                float localCamY = cameraOffset != null ? cameraOffset.localPosition.y : mainCam.transform.localPosition.y;
+                finalPosition.y = targetTransform.position.y + fixedSpawnHeight - localCamY;
+            }
+            else
+            {
+                finalPosition.y = targetTransform.position.y;
+            }
+
+            xrOrigin.transform.position = finalPosition;
+        }
+        else
+        {
+            xrOrigin.transform.position = targetTransform.position;
+            xrOrigin.transform.rotation = targetTransform.rotation;
+        }
+    }
+
     // ── Firebase ──────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Updates the vrDevices document in Firestore with current headset status.
-    /// Called when loading an experiment (In Use) and returning to hub (Available).
-    /// </summary>
     private async void UpdateDeviceStatus(string status, string experimentSceneName)
     {
         if (_db == null || string.IsNullOrEmpty(vrDeviceDocumentId))
@@ -223,13 +245,13 @@ public class ExperimentLoader : MonoBehaviour
         string sessionId = config != null ? config.sessionId : "";
 
         Dictionary<string, object> update = new()
-    {
-        { "Status",               status },
-        { "currentExperimentId",  experimentSceneName },
-        { "currentUserId",        participantId },
-        { "currentSessionStart",  FieldValue.ServerTimestamp },
-        { "notes",                sessionId }
-    };
+        {
+            { "Status",               status },
+            { "currentExperimentId",  experimentSceneName },
+            { "currentUserId",        participantId },
+            { "currentSessionStart",  FieldValue.ServerTimestamp },
+            { "notes",                sessionId }
+        };
 
         var docRef = _db.Collection("vrDevices").Document(vrDeviceDocumentId);
 
@@ -241,7 +263,6 @@ public class ExperimentLoader : MonoBehaviour
         catch (System.Exception e)
         {
             Debug.LogWarning($"[ExperimentLoader] Non-critical Firebase error: {e.Message}");
-            // Don't rethrow — let experiment continue
         }
     }
 

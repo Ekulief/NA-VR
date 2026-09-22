@@ -7,7 +7,7 @@ public class RespawnTrigger : MonoBehaviour
     [Tooltip("Must match the name of your VR Player root GameObject exactly.")]
     public string xrOriginName = "VR Player";
     public string spawnPointName = "Respawn";
-    public float spawnHeightOffset = 0.1f;
+    public float spawnHeightOffset = 0.0f;
     public float respawnCooldown = 1.5f;
 
     private float _lastRespawnTime = -999f;
@@ -27,13 +27,7 @@ public class RespawnTrigger : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
-        Debug.Log($"[RespawnTrigger] OnTriggerEnter fired by: '{other.gameObject.name}'");
-
-        if (Time.time - _lastRespawnTime < respawnCooldown)
-        {
-            Debug.Log($"[RespawnTrigger] Cooldown active — {Time.time - _lastRespawnTime:F2}s since last respawn.");
-            return;
-        }
+        if (Time.time - _lastRespawnTime < respawnCooldown) return;
 
         _lastRespawnTime = Time.time;
         ExecuteRespawn();
@@ -41,43 +35,43 @@ public class RespawnTrigger : MonoBehaviour
 
     private void ExecuteRespawn()
     {
-        // Find the VR Player automatically — works across scenes since
-        // VR Player persists via DontDestroyOnLoad.
-        // FindAnyObjectByType searches all loaded scenes including DontDestroyOnLoad.
         GameObject camRig = GameObject.Find(xrOriginName);
-
         if (camRig == null)
         {
-            Debug.LogError($"[RespawnTrigger] Could not find '{xrOriginName}' in any loaded scene! " +
-                           $"Make sure the name matches exactly.");
+            Debug.LogError($"[RespawnTrigger] Could not find '{xrOriginName}' in any loaded scene!");
             return;
         }
 
         GameObject spawn = GameObject.Find(spawnPointName);
-
         if (spawn == null)
         {
             Debug.LogError($"[RespawnTrigger] Could not locate '{spawnPointName}' in the scene!");
             return;
         }
 
-        // Compensate for XR head tracking offset on all axes
-        Vector3 cameraWorldPos = Camera.main.transform.position;
+        Camera vrCam = Camera.main ?? camRig.GetComponentInChildren<Camera>();
+        if (vrCam == null)
+        {
+            camRig.transform.position = spawn.transform.position;
+            camRig.transform.rotation = spawn.transform.rotation;
+            return;
+        }
+
+        // 1. Rotate rig first so camera yaw matches spawn rotation     
+        float currentCamYAngle = vrCam.transform.eulerAngles.y;
+        float targetYAngle = spawn.transform.eulerAngles.y;
+        float rotationDelta = targetYAngle - currentCamYAngle;
+        camRig.transform.Rotate(0f, rotationDelta, 0f, Space.World);
+
+        // 2. Calculate offset post-rotation
+        Vector3 cameraWorldPos = vrCam.transform.position;
         Vector3 rigWorldPos = camRig.transform.position;
         Vector3 trackingOffset = cameraWorldPos - rigWorldPos;
 
-        Vector3 spawnTarget = spawn.transform.position + Vector3.up * spawnHeightOffset;
-        Vector3 targetRigPosition = spawnTarget - trackingOffset;
+        // Keep local Y height offset constant
+        Vector3 targetPos = (spawn.transform.position + Vector3.up * spawnHeightOffset) - trackingOffset;
 
-        Debug.Log($"[RespawnTrigger] Found rig: '{camRig.name}' | Tracking offset: {trackingOffset}");
-        Debug.Log($"[RespawnTrigger] Moving rig to: {targetRigPosition} so camera lands at: {spawnTarget}");
-
-        camRig.transform.position = targetRigPosition;
-        camRig.transform.rotation = spawn.transform.rotation;
-
-        if (Vector3.Distance(Camera.main.transform.position, spawnTarget) > 0.05f)
-            Debug.LogWarning($"[RespawnTrigger] Camera not at spawn target — distance: {Vector3.Distance(Camera.main.transform.position, spawnTarget):F3}");
-        else
-            Debug.Log("[RespawnTrigger] Respawn successful!");
+        camRig.transform.position = targetPos;
+        Debug.Log("[RespawnTrigger] Respawn executed cleanly with tracking offset compensation.");
     }
 }

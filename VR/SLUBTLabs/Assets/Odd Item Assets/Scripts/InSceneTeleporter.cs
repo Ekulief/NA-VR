@@ -11,6 +11,12 @@ public class InSceneTeleporter : MonoBehaviour
     [Tooltip("Type the EXACT name of the GameObject to teleport to in this scene.")]
     public string destinationName = "Reference Point";
 
+    [Header("Height Control")]
+    [Tooltip("If enabled, forces camera Y eye level to a fixed height above target floor.")]
+    public bool overrideEyeHeight = false;
+    [Tooltip("Target eye level height in meters relative to destination floor.")]
+    public float targetEyeHeight = 1.6f;
+
     private bool _hasTriggered = false;
 
     private void OnEnable()
@@ -33,8 +39,7 @@ public class InSceneTeleporter : MonoBehaviour
 
     private IEnumerator TeleportAfterFrame()
     {
-        // Wait one frame so XRI finishes its internal logic
-        yield return null;
+        yield return null; // Wait 1 frame for XRI logic
 
         GameObject destination = GameObject.Find(destinationName);
         if (destination == null)
@@ -44,21 +49,7 @@ public class InSceneTeleporter : MonoBehaviour
             yield break;
         }
 
-        // Locate XR Origin
-        GameObject xrOriginObj = null;
-
-        ExperimentLoader loader = FindAnyObjectByType<ExperimentLoader>();
-        if (loader != null && loader.xrOrigin != null)
-        {
-            xrOriginObj = loader.xrOrigin;
-        }
-        else
-        {
-            XROrigin originComponent = FindAnyObjectByType<XROrigin>();
-            if (originComponent != null)
-                xrOriginObj = originComponent.gameObject;
-        }
-
+        GameObject xrOriginObj = GetXROriginObject();
         if (xrOriginObj == null)
         {
             Debug.LogError("[SLUBT Labs] InSceneTeleporter: Could not find XR Origin!");
@@ -66,39 +57,50 @@ public class InSceneTeleporter : MonoBehaviour
             yield break;
         }
 
-        // Get actual VR head/eye camera
-        Camera vrCamera = Camera.main;
-        if (vrCamera == null && xrOriginObj != null)
+        Camera vrCamera = Camera.main ?? xrOriginObj.GetComponentInChildren<Camera>();
+        if (vrCamera == null)
         {
-            vrCamera = xrOriginObj.GetComponentInChildren<Camera>();
+            xrOriginObj.transform.position = destination.transform.position;
+            xrOriginObj.transform.rotation = destination.transform.rotation;
+            yield break;
         }
 
-        // 1. Calculate player's current physical eye height above the floor/origin
-        float currentEyeHeightAboveOrigin = 0f;
-        if (vrCamera != null)
+        // 1. First align rotation matching target
+        float currentCamYAngle = vrCamera.transform.eulerAngles.y;
+        float targetYAngle = destination.transform.eulerAngles.y;
+        float rotationDelta = targetYAngle - currentCamYAngle;
+        xrOriginObj.transform.Rotate(0f, rotationDelta, 0f, Space.World);
+
+        // 2. Calculate horizontal physical offset (X/Z)
+        Vector3 cameraOffset = vrCamera.transform.position - xrOriginObj.transform.position;
+        cameraOffset.y = 0f;
+
+        // 3. Compute final position based on height preferences
+        Vector3 finalPos = destination.transform.position - cameraOffset;
+
+        if (overrideEyeHeight)
         {
-            currentEyeHeightAboveOrigin = vrCamera.transform.position.y - xrOriginObj.transform.position.y;
+            Transform cameraOffsetTransform = xrOriginObj.transform.Find("Camera Offset");
+            float localCamY = cameraOffsetTransform != null ? cameraOffsetTransform.localPosition.y : vrCamera.transform.localPosition.y;
+            finalPos.y = destination.transform.position.y + targetEyeHeight - localCamY;
+        }
+        else
+        {
+            // Retain natural physical head height above the new floor level
+            float localHeadHeight = vrCamera.transform.position.y - xrOriginObj.transform.position.y;
+            finalPos.y = destination.transform.position.y;
         }
 
-        // 2. Determine target position on floor
-        Vector3 targetPos = destination.transform.position;
+        xrOriginObj.transform.position = finalPos;
+        Debug.Log($"[SLUBT Labs] InSceneTeleporter: Teleported to '{destinationName}' cleanly.");
+    }
 
-        // 3. Set origin position taking into account the headset's physical height offset
-        xrOriginObj.transform.position = targetPos;
-        xrOriginObj.transform.rotation = destination.transform.rotation;
+    private GameObject GetXROriginObject()
+    {
+        ExperimentLoader loader = FindAnyObjectByType<ExperimentLoader>();
+        if (loader != null && loader.xrOrigin != null) return loader.xrOrigin;
 
-        // If the eye level was calculated, ensure target eye position stays consistent
-        if (vrCamera != null && currentEyeHeightAboveOrigin > 0.1f)
-        {
-            Vector3 adjustedPos = xrOriginObj.transform.position;
-            float newCameraY = vrCamera.transform.position.y;
-            float intendedEyeY = destination.transform.position.y + currentEyeHeightAboveOrigin;
-
-            // Adjust origin Y so Camera.main Y matches target floor + physical eye height
-            adjustedPos.y += (intendedEyeY - newCameraY);
-            xrOriginObj.transform.position = adjustedPos;
-        }
-
-        Debug.Log($"[SLUBT Labs] InSceneTeleporter: Teleported to '{destinationName}' keeping player eye level intact.");
+        XROrigin originComponent = FindAnyObjectByType<XROrigin>();
+        return originComponent != null ? originComponent.gameObject : null;
     }
 }
