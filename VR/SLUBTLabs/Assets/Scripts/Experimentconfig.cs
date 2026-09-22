@@ -66,6 +66,16 @@ public class ExperimentConfig : ScriptableObject
 
     public float depth_ActualHeightMetres = 50f;
 
+    // ── Depth Perception 2 (Horizontal Distance) ─────────────────────────────
+    [Header("Depth Perception 2 (Horizontal Distance)")]
+    public float depth_MinDistanceMeters = 0f;
+    public float depth_MaxDistanceMeters = 150f;
+
+    [TextArea(2, 4)]
+    public string depth_InstructionText2 = "Observe the target object ahead and estimate its horizontal distance in meters.\n\nUse the +/- buttons or slider to input your estimate.";
+
+    public float depth_ActualDistanceMeters = 63f;
+
     // ── Reaction Time ─────────────────────────────────────────────────────────
     [Header("Reaction Time")]
     [Range(5, 40)] public int rt_TotalTrials = 10;
@@ -134,6 +144,16 @@ public class ExperimentConfig : ScriptableObject
             {
                 ApplyDepthPerceptionValues(depthSnapshot);
                 Debug.Log("[ExperimentConfig] Depth Perception values updated from Firestore.");
+            }
+
+            // 4. Fetch Depth Perception 2 Document
+            DocumentReference depth2Ref = db.Collection("experimentModule").Document("Depth_Perception2");
+            DocumentSnapshot depth2Snapshot = await depth2Ref.GetSnapshotAsync();
+
+            if (depth2Snapshot.Exists)
+            {
+                ApplyDepthPerception2Values(depth2Snapshot);
+                Debug.Log("[ExperimentConfig] Depth Perception 2 values updated from Firestore.");
             }
         }
         catch (Exception ex)
@@ -218,6 +238,33 @@ public class ExperimentConfig : ScriptableObject
 
         if (configMap.TryGetValue("depth_ActualHeightMetres", out object depthActualHeight))
             depth_ActualHeightMetres = Convert.ToSingle(depthActualHeight);
+
+        if (configMap.TryGetValue("depth_StepAmount", out object depthStep))
+            depth_StepAmount = Convert.ToSingle(depthStep);
+    }
+
+    private void ApplyDepthPerception2Values(DocumentSnapshot snap)
+    {
+        if (!snap.TryGetValue("defaultConfig", out Dictionary<string, object> configMap))
+        {
+            Debug.LogWarning("[ExperimentConfig] 'defaultConfig' field missing in Depth_Perception2 document.");
+            return;
+        }
+
+        if (configMap.TryGetValue("depth_InstructionText", out object depthInstruction))
+            depth_InstructionText2 = depthInstruction.ToString();
+
+        if (configMap.TryGetValue("depth_MinDistanceMeters", out object depthMinDist))
+            depth_MinDistanceMeters = Convert.ToSingle(depthMinDist);
+
+        if (configMap.TryGetValue("depth_MaxDistanceMeters", out object depthMaxDist))
+            depth_MaxDistanceMeters = Convert.ToSingle(depthMaxDist);
+
+        if (configMap.TryGetValue("depth_ActualDistanceMeters", out object depthActualDist))
+            depth_ActualDistanceMeters = Convert.ToSingle(depthActualDist);
+
+        if (configMap.TryGetValue("depth_StepAmount", out object depthStep))
+            depth_StepAmount = Convert.ToSingle(depthStep);
     }
 
     public void ApplyFromJson(string json)
