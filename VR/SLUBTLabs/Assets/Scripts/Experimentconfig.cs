@@ -1,9 +1,12 @@
-﻿using System;
+﻿using Firebase.Firestore;
+using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
+using System.Runtime.ConstrainedExecution;
 using System.Threading.Tasks;
+using Unity.VisualScripting;
 using UnityEngine;
-using Firebase.Firestore;
 
 /// <summary>
 /// SLUBT Labs — Experiment Config
@@ -67,15 +70,13 @@ public class ExperimentConfig : ScriptableObject
     public float depth_ActualHeightMetres = 50f;
 
     // ── Depth Perception 2 (Horizontal Distance) ─────────────────────────────
-    [Header("Depth Perception 2 (Horizontal Distance)")]
-    public float depth_MinDistanceMeters = 0f;
-    public float depth_MaxDistanceMeters = 150f;
+    [Header("Depth Perception 2 — Car Subject Distance Bounds")]
+    public float depth_MinDistanceMeters = 0f;    // Min distance (Player at Z = +15)
+    public float depth_MaxDistanceMeters = 115f;  // Max distance (Car at Z = -100)
+    public float depth_ActualDistanceMeters = 50f;
 
     [TextArea(2, 4)]
-    public string depth_InstructionText2 = "Observe the target object ahead and estimate its horizontal distance in meters.\n\nUse the +/- buttons or slider to input your estimate.";
-
-    public float depth_ActualDistanceMeters = 63f;
-
+    public string depth_InstructionText2 = "Observe the car ahead and estimate its horizontal distance in meters.";
     // ── Reaction Time ─────────────────────────────────────────────────────────
     [Header("Reaction Time")]
     [Range(5, 40)] public int rt_TotalTrials = 10;
@@ -255,18 +256,17 @@ public class ExperimentConfig : ScriptableObject
             depth_InstructionText2 = depthInstruction.ToString();
 
         if (configMap.TryGetValue("depth_MinDistanceMeters", out object depthMinDist))
-            depth_MinDistanceMeters = Convert.ToSingle(depthMinDist);
+            depth_MinDistanceMeters = Mathf.Clamp(Convert.ToSingle(depthMinDist), 0f, 115f);
 
         if (configMap.TryGetValue("depth_MaxDistanceMeters", out object depthMaxDist))
-            depth_MaxDistanceMeters = Convert.ToSingle(depthMaxDist);
+            depth_MaxDistanceMeters = Mathf.Clamp(Convert.ToSingle(depthMaxDist), 0f, 115f);
 
         if (configMap.TryGetValue("depth_ActualDistanceMeters", out object depthActualDist))
-            depth_ActualDistanceMeters = Convert.ToSingle(depthActualDist);
+            depth_ActualDistanceMeters = Mathf.Clamp(Convert.ToSingle(depthActualDist), depth_MinDistanceMeters, depth_MaxDistanceMeters);
 
         if (configMap.TryGetValue("depth_StepAmount", out object depthStep))
             depth_StepAmount = Convert.ToSingle(depthStep);
     }
-
     public void ApplyFromJson(string json)
     {
         JsonUtility.FromJsonOverwrite(json, this);
