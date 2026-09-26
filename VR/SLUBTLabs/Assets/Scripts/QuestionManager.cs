@@ -82,7 +82,8 @@ public class QuestionManager : MonoBehaviour
     private void BuildQuestionList()
     {
         allQuestions.Clear();
-
+        if (ExperimentConfigLoader.Current != null)
+            randomizeQuestions = ExperimentConfigLoader.Current.memory_RandomizeQuestions;
         foreach (MemoryTargetDatabase db in databases)
         {
             if (db == null) continue;
