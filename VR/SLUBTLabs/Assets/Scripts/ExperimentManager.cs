@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;               // ← needed for Button
 using UnityEngine.EventSystems;
 
 public class ExperimentManager : MonoBehaviour
@@ -39,9 +40,7 @@ public class ExperimentManager : MonoBehaviour
 
     // ─────────────────────────────────────────
     // INSPECTOR SETTINGS
-    // (Instructor configures these)
     // ─────────────────────────────────────────
-
     public int CurrentRoomIndex => currentRoomIndex;
     public int TotalRooms => rooms.Count;
 
@@ -62,6 +61,15 @@ public class ExperimentManager : MonoBehaviour
     public FadeController fadeController;
     public Transform playerTransform;
 
+    [Header("UI References")]
+    public Button beginExperimentButton;          // ← SLOT for the Begin button
+    public GameObject startingPanel;
+
+    [Header("UI Text References (Optional)")]
+    public TMPro.TextMeshProUGUI briefingTextUI;
+    public TMPro.TextMeshProUGUI roomInstructionTextUI;
+    public TMPro.TextMeshProUGUI distractorInstructionTextUI;
+    public TMPro.TextMeshProUGUI recallInstructionTextUI;
     // ─────────────────────────────────────────
     // INTERNAL TRACKING
     // ─────────────────────────────────────────
@@ -70,7 +78,7 @@ public class ExperimentManager : MonoBehaviour
     private bool isTimerRunning = false;
     private string currentRoomName = "";
 
-    // Events — other scripts listen to these
+    // Events
     public System.Action<string, float> OnRoomStarted;
     public System.Action<string> OnRoomEnded;
     public System.Action OnAllRoomsExplored;
@@ -79,14 +87,16 @@ public class ExperimentManager : MonoBehaviour
     public System.Action<float> OnDistractorStarted;
     public System.Action OnDistractorEnded;
     public System.Action OnRecallStarted;
-
-
+    public string BriefingText { get; private set; }
+    public string RoomInstructionText { get; private set; }
+    public string DistractorInstructionText { get; private set; }
+    public string RecallInstructionText { get; private set; }
     // ─────────────────────────────────────────
     // START
     // ─────────────────────────────────────────
     private void Start()
     {
-        // Find player at runtime instead of Inspector drag
+        // Find player
         if (playerTransform == null)
         {
             GameObject player = GameObject.FindWithTag("Player");
@@ -101,14 +111,25 @@ public class ExperimentManager : MonoBehaviour
             }
         }
 
-        // Find FadeController at runtime
+        // Find FadeController
         if (fadeController == null)
         {
-            EventSystem[] eventSystems = FindObjectsByType<EventSystem>(FindObjectsSortMode.None);
+            fadeController = FindFirstObjectByType<FadeController>();
             if (fadeController != null)
                 Debug.Log("[ExperimentManager] FadeController found at runtime.");
             else
                 Debug.LogWarning("[ExperimentManager] No FadeController found.");
+        }
+
+        // Wire the Begin Experiment button
+        if (beginExperimentButton != null)
+        {
+            beginExperimentButton.onClick.AddListener(StartExperiment);
+            Debug.Log("[ExperimentManager] Begin Experiment button wired.");
+        }
+        else
+        {
+            Debug.LogWarning("[ExperimentManager] No Begin Experiment button assigned.");
         }
 
         Debug.Log("[ExperimentManager] Ready. State: Idle");
@@ -116,7 +137,40 @@ public class ExperimentManager : MonoBehaviour
     }
 
     // ─────────────────────────────────────────
-    // UPDATE — runs every frame
+    // APPLY CONFIG
+    // ─────────────────────────────────────────
+    private void ApplyConfig()
+    {
+        if (ExperimentConfigLoader.Current == null)
+        {
+            Debug.Log("[ExperimentManager] No ExperimentConfig found — using Inspector values.");
+            return;
+        }
+
+        var c = ExperimentConfigLoader.Current;
+
+        // Timing & settings
+        timePerRoom = c.memory_TimePerRoomSeconds;
+        transitionFadeDuration = c.memory_TransitionFadeDuration;
+        distractorTaskDuration = c.memory_DistractorTaskDuration;
+        useDistractorTask = c.memory_UseDistractorTask;
+        randomizeQuestions = c.memory_RandomizeQuestions;
+
+        // Texts
+        BriefingText = c.memory_BriefingText;
+        RoomInstructionText = c.memory_RoomInstructionText;
+        DistractorInstructionText = c.memory_DistractorInstructionText;
+        RecallInstructionText = c.memory_RecallInstructionText;
+
+        Debug.Log("[ExperimentManager] Applied Memory config values + texts from ExperimentConfig.");
+        if (briefingTextUI != null) briefingTextUI.text = BriefingText;
+        if (roomInstructionTextUI != null) roomInstructionTextUI.text = RoomInstructionText;
+        if (distractorInstructionTextUI != null) distractorInstructionTextUI.text = DistractorInstructionText;
+        if (recallInstructionTextUI != null) recallInstructionTextUI.text = RecallInstructionText;
+    }
+
+    // ─────────────────────────────────────────
+    // UPDATE
     // ─────────────────────────────────────────
     private void Update()
     {
@@ -144,12 +198,8 @@ public class ExperimentManager : MonoBehaviour
     }
 
     // ─────────────────────────────────────────
-    // PUBLIC — Called by UI buttons / RoomBoundary
+    // PUBLIC METHODS
     // ─────────────────────────────────────────
-
-    /// <summary>
-    /// Called by the Start Experiment button in the briefing screen
-    /// </summary>
     public void StartExperiment()
     {
         if (CurrentState != ExperimentState.Idle &&
@@ -159,14 +209,24 @@ public class ExperimentManager : MonoBehaviour
             return;
         }
 
+        // Hide the starting panel
+        if (startingPanel != null)
+        {
+            startingPanel.SetActive(false);
+            Debug.Log("[ExperimentManager] Starting panel hidden.");
+        }
+        else
+        {
+            Debug.LogWarning("[ExperimentManager] startingPanel is not assigned!");
+        }
+
+        ApplyConfig();
+
         Debug.Log("[ExperimentManager] Experiment started.");
         currentRoomIndex = 0;
         StartCoroutine(GoToNextRoom());
     }
 
-    /// <summary>
-    /// Called by RoomBoundary when player enters a room
-    /// </summary>
     public void OnPlayerEnterRoom(string roomName)
     {
         if (CurrentState != ExperimentState.Exploring) return;
@@ -175,9 +235,6 @@ public class ExperimentManager : MonoBehaviour
         Debug.Log($"[ExperimentManager] Player confirmed inside: {roomName}");
     }
 
-    /// <summary>
-    /// Called by RoomBoundary when player exits a room
-    /// </summary>
     public void OnPlayerExitRoom(string roomName)
     {
         if (CurrentState != ExperimentState.Exploring) return;
@@ -187,10 +244,8 @@ public class ExperimentManager : MonoBehaviour
     // ─────────────────────────────────────────
     // INTERNAL FLOW
     // ─────────────────────────────────────────
-
     private IEnumerator GoToNextRoom()
     {
-        // Check if all rooms are done
         if (currentRoomIndex >= rooms.Count)
         {
             Debug.Log("[ExperimentManager] All rooms explored.");
@@ -202,21 +257,16 @@ public class ExperimentManager : MonoBehaviour
         RoomConfig room = rooms[currentRoomIndex];
         currentRoomName = room.roomName;
 
-        // Fade out
         ChangeState(ExperimentState.Transitioning);
         yield return StartCoroutine(fadeController.FadeOut(transitionFadeDuration));
 
-        // Teleport player to this room
         TeleportPlayer(room.spawnPoint);
         Debug.Log($"[ExperimentManager] Teleported to room: {room.roomName}");
 
-        // Short pause while screen is black
         yield return new WaitForSeconds(0.5f);
 
-        // Fade in
         yield return StartCoroutine(fadeController.FadeIn(transitionFadeDuration));
 
-        // Start exploration timer
         ChangeState(ExperimentState.Exploring);
         roomTimeRemaining = timePerRoom;
         isTimerRunning = true;
@@ -237,28 +287,20 @@ public class ExperimentManager : MonoBehaviour
 
     private IEnumerator BeginTransitionToLab()
     {
-        // Fade out
         ChangeState(ExperimentState.Transitioning);
         yield return StartCoroutine(fadeController.FadeOut(transitionFadeDuration));
 
-        // Teleport to lab
         TeleportPlayer(labRoomSpawnPoint);
         Debug.Log("[ExperimentManager] Teleported to Lab Room.");
 
         yield return new WaitForSeconds(0.5f);
 
-        // Fade in
         yield return StartCoroutine(fadeController.FadeIn(transitionFadeDuration));
 
-        // Either start distractor or go straight to recall
         if (useDistractorTask)
-        {
             StartCoroutine(RunDistractorTask());
-        }
         else
-        {
             StartRecallPhase();
-        }
     }
 
     private IEnumerator RunDistractorTask()
@@ -266,12 +308,10 @@ public class ExperimentManager : MonoBehaviour
         ChangeState(ExperimentState.DistractorTask);
         Debug.Log("[ExperimentManager] Distractor task started.");
 
-        // Fire event so DistractorTaskUI knows to show itself
         OnDistractorStarted?.Invoke(distractorTaskDuration);
 
         yield return new WaitForSeconds(distractorTaskDuration);
 
-        // Fire event so DistractorTaskUI hides itself
         OnDistractorEnded?.Invoke();
         Debug.Log("[ExperimentManager] Distractor task ended.");
 
@@ -282,7 +322,7 @@ public class ExperimentManager : MonoBehaviour
     {
         ChangeState(ExperimentState.Recalling);
         Debug.Log("[ExperimentManager] Recall phase started.");
-        OnRecallStarted?.Invoke();  
+        OnRecallStarted?.Invoke();
     }
 
     public void OnExperimentComplete()
@@ -308,7 +348,7 @@ public class ExperimentManager : MonoBehaviour
     }
 
     // ─────────────────────────────────────────
-    // EDITOR HELPER — Press G in Play Mode to skip to next room
+    // EDITOR HELPER
     // ─────────────────────────────────────────
     private void OnGUI()
     {
@@ -316,9 +356,7 @@ public class ExperimentManager : MonoBehaviour
         if (GUILayout.Button("DEBUG: Skip Room Timer"))
         {
             if (isTimerRunning)
-            {
                 roomTimeRemaining = 0f;
-            }
         }
         if (GUILayout.Button("DEBUG: Start Experiment"))
         {
@@ -328,13 +366,10 @@ public class ExperimentManager : MonoBehaviour
     }
 }
 
-// ─────────────────────────────────────────
-// ROOM CONFIG — Defined per room in Inspector
-// ─────────────────────────────────────────
 [System.Serializable]
 public class RoomConfig
 {
     public string roomName;
     public Transform spawnPoint;
-    public string displayName;  // shown on the HUD e.g. "Kitchen"
+    public string displayName;
 }
