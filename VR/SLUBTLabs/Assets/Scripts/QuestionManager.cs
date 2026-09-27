@@ -4,9 +4,6 @@ using System.Collections.Generic;
 
 public class QuestionManager : MonoBehaviour
 {
-    // ─────────────────────────────────────────
-    // SINGLETON
-    // ─────────────────────────────────────────
     public static QuestionManager Instance { get; private set; }
 
     private void Awake()
@@ -19,45 +16,29 @@ public class QuestionManager : MonoBehaviour
         Instance = this;
     }
 
-    // ─────────────────────────────────────────
-    // INSPECTOR REFERENCES
-    // ─────────────────────────────────────────
-    [Header("Database")]
+    [Header("Database (Fallback)")]
     public MemoryTargetDatabase[] databases;
 
     [Header("Settings")]
     public bool randomizeQuestions = true;
 
-    // ─────────────────────────────────────────
-    // INTERNAL
-    // ─────────────────────────────────────────
     private List<QuestionEntry> allQuestions = new List<QuestionEntry>();
     private int currentQuestionIndex = 0;
 
-    // Events
     public System.Action<QuestionEntry, int, int> OnQuestionReady;
     public System.Action<QuestionEntry, string, bool, float> OnAnswerSubmitted;
     public System.Action OnAllQuestionsFinished;
 
-    // ─────────────────────────────────────────
-    // UNITY EVENTS
-    // ─────────────────────────────────────────
     private void OnEnable()
     {
-        // Keep trying to find ExperimentManager 
-        // in case it comes from DontDestroyOnLoad
         StartCoroutine(SubscribeWhenReady());
     }
 
     private IEnumerator SubscribeWhenReady()
     {
-        // Wait until ExperimentManager exists
         while (ExperimentManager.Instance == null)
-        {
             yield return new WaitForSeconds(0.1f);
-        }
 
-        // Avoid double-subscription if it's already bound
         ExperimentManager.Instance.OnRecallStarted -= OnRecallStarted;
         ExperimentManager.Instance.OnRecallStarted += OnRecallStarted;
         Debug.Log("[QuestionManager] Subscribed to ExperimentManager.");
@@ -69,11 +50,14 @@ public class QuestionManager : MonoBehaviour
             ExperimentManager.Instance.OnRecallStarted -= OnRecallStarted;
     }
 
-    // ─────────────────────────────────────────
-    // SETUP
-    // ─────────────────────────────────────────
     private void OnRecallStarted()
     {
+        // Prefer remote config if available
+        if (ExperimentConfigLoader.Current != null)
+        {
+            randomizeQuestions = ExperimentConfigLoader.Current.memory_RandomizeQuestions;
+        }
+
         BuildQuestionList();
         currentQuestionIndex = 0;
         ShowNextQuestion();
@@ -82,40 +66,60 @@ public class QuestionManager : MonoBehaviour
     private void BuildQuestionList()
     {
         allQuestions.Clear();
-        if (ExperimentConfigLoader.Current != null)
-            randomizeQuestions = ExperimentConfigLoader.Current.memory_RandomizeQuestions;
-        foreach (MemoryTargetDatabase db in databases)
-        {
-            if (db == null) continue;
 
-            foreach (MemoryTargetEntry entry in db.entries)
+        // 1. Prefer remote targets from Firestore
+        if (ExperimentConfigLoader.Current != null &&
+            ExperimentConfigLoader.Current.memory_Targets != null &&
+            ExperimentConfigLoader.Current.memory_Targets.Count > 0)
+        {
+            Debug.Log("[QuestionManager] Using remote targets from Firestore.");
+
+            foreach (MemoryTargetEntry entry in ExperimentConfigLoader.Current.memory_Targets)
             {
-                foreach (QuestionData q in entry.questions)
+                AddEntryQuestions(entry);
+            }
+        }
+        else
+        {
+            // 2. Fallback to ScriptableObject databases
+            Debug.Log("[QuestionManager] Using local ScriptableObject databases.");
+
+            foreach (MemoryTargetDatabase db in databases)
+            {
+                if (db == null) continue;
+
+                foreach (MemoryTargetEntry entry in db.entries)
                 {
-                    allQuestions.Add(new QuestionEntry
-                    {
-                        objectID = entry.gameID,
-                        objectName = entry.objectName,
-                        room = entry.room,
-                        questionText = q.questionText,
-                        questionType = q.questionType,
-                        correctAnswer = q.correctAnswer,
-                        choices = q.multipleChoiceOptions
-                    });
+                    AddEntryQuestions(entry);
                 }
             }
         }
 
-        // Randomize if enabled
         if (randomizeQuestions)
             Shuffle(allQuestions);
 
         Debug.Log($"[QuestionManager] Built {allQuestions.Count} questions.");
     }
 
-    // ─────────────────────────────────────────
-    // QUESTION FLOW
-    // ─────────────────────────────────────────
+    private void AddEntryQuestions(MemoryTargetEntry entry)
+    {
+        if (entry.questions == null) return;
+
+        foreach (QuestionData q in entry.questions)
+        {
+            allQuestions.Add(new QuestionEntry
+            {
+                objectID = entry.gameID,
+                objectName = entry.objectName,
+                room = entry.room,
+                questionText = q.questionText,
+                questionType = q.questionType,
+                correctAnswer = q.correctAnswer,
+                choices = q.multipleChoiceOptions
+            });
+        }
+    }
+
     public void ShowNextQuestion()
     {
         if (currentQuestionIndex >= allQuestions.Count)
@@ -128,45 +132,25 @@ public class QuestionManager : MonoBehaviour
 
         QuestionEntry current = allQuestions[currentQuestionIndex];
 
-        // Fire event — QuestionPanelUI listens to this
-        OnQuestionReady?.Invoke(
-            current,
-            currentQuestionIndex + 1,
-            allQuestions.Count
-        );
+        OnQuestionReady?.Invoke(current, currentQuestionIndex + 1, allQuestions.Count);
 
-        Debug.Log($"[QuestionManager] Showing Q{currentQuestionIndex + 1}: " +
-                  $"{current.questionText}");
+        Debug.Log($"[QuestionManager] Showing Q{currentQuestionIndex + 1}: {current.questionText}");
     }
 
-    /// <summary>
-    /// Called by QuestionPanelUI when participant selects an answer
-    /// </summary>
     public void SubmitAnswer(string selectedAnswer, float reactionTimeMs)
     {
         if (currentQuestionIndex >= allQuestions.Count) return;
 
         QuestionEntry current = allQuestions[currentQuestionIndex];
-        bool correct = selectedAnswer.ToLower().Trim() ==
-                       current.correctAnswer.ToLower().Trim();
+        bool correct = selectedAnswer.ToLower().Trim() == current.correctAnswer.ToLower().Trim();
 
         Debug.Log($"[QuestionManager] Q{currentQuestionIndex + 1} " +
-                  $"Answer: {selectedAnswer} | " +
-                  $"Correct: {current.correctAnswer} | " +
-                  $"Result: {(correct ? "✓" : "✗")} | " +
-                  $"RT: {reactionTimeMs:F0}ms");
+                  $"Answer: {selectedAnswer} | Correct: {current.correctAnswer} | " +
+                  $"Result: {(correct ? "✓" : "✗")} | RT: {reactionTimeMs:F0}ms");
 
-        // Fire event — FirebaseLogger listens to this
-        OnAnswerSubmitted?.Invoke(
-            current,
-            selectedAnswer,
-            correct,
-            reactionTimeMs
-        );
+        OnAnswerSubmitted?.Invoke(current, selectedAnswer, correct, reactionTimeMs);
 
         currentQuestionIndex++;
-
-        // Small delay before next question
         StartCoroutine(DelayThenNext(0.5f));
     }
 
@@ -176,9 +160,6 @@ public class QuestionManager : MonoBehaviour
         ShowNextQuestion();
     }
 
-    // ─────────────────────────────────────────
-    // HELPERS
-    // ─────────────────────────────────────────
     private void Shuffle(List<QuestionEntry> list)
     {
         for (int i = list.Count - 1; i > 0; i--)
@@ -191,9 +172,6 @@ public class QuestionManager : MonoBehaviour
     }
 }
 
-// ─────────────────────────────────────────
-// DATA CLASS — one question instance
-// ─────────────────────────────────────────
 [System.Serializable]
 public class QuestionEntry
 {

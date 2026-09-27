@@ -99,7 +99,8 @@ public class ExperimentConfig : ScriptableObject
     public float memory_DistractorTaskDuration = 30f;
     public bool memory_UseDistractorTask = true;
     public bool memory_RandomizeQuestions = true;
-
+    [Header("Memory – Remote Targets (from Firestore)")]
+    public List<MemoryTargetEntry> memory_Targets = new List<MemoryTargetEntry>();
     [TextArea(2, 4)]
     public string memory_BriefingText =
         "<b>Memory Experiment</b>\n\n" +
@@ -231,20 +232,79 @@ public class ExperimentConfig : ScriptableObject
             return;
         }
 
+        // Timing & settings
         if (configMap.TryGetValue("memory_TimePerRoomSeconds", out object v)) memory_TimePerRoomSeconds = Convert.ToSingle(v);
         if (configMap.TryGetValue("memory_TransitionFadeDuration", out object v2)) memory_TransitionFadeDuration = Convert.ToSingle(v2);
         if (configMap.TryGetValue("memory_DistractorTaskDuration", out object v3)) memory_DistractorTaskDuration = Convert.ToSingle(v3);
         if (configMap.TryGetValue("memory_UseDistractorTask", out object v4)) memory_UseDistractorTask = Convert.ToBoolean(v4);
         if (configMap.TryGetValue("memory_RandomizeQuestions", out object v5)) memory_RandomizeQuestions = Convert.ToBoolean(v5);
 
+        // Texts
         if (configMap.TryGetValue("memory_BriefingText", out object v6)) memory_BriefingText = v6.ToString();
         if (configMap.TryGetValue("memory_RoomInstructionText", out object v7)) memory_RoomInstructionText = v7.ToString();
         if (configMap.TryGetValue("memory_DistractorInstructionText", out object v8)) memory_DistractorInstructionText = v8.ToString();
         if (configMap.TryGetValue("memory_RecallInstructionText", out object v9)) memory_RecallInstructionText = v9.ToString();
 
         if (configMap.TryGetValue("globalInstructionDelay", out object v10)) globalInstructionDelay = Convert.ToSingle(v10);
-    }
 
+        // ── Targets (objects + questions) ─────────────────────────────────────
+        if (snap.TryGetValue("targets", out object targetsObj) && targetsObj is List<object> targetsList)
+        {
+            memory_Targets.Clear();
+
+            foreach (object targetObj in targetsList)
+            {
+                if (targetObj is not Dictionary<string, object> targetMap) continue;
+
+                MemoryTargetEntry entry = new MemoryTargetEntry();
+
+                if (targetMap.TryGetValue("gameID", out object id)) entry.gameID = id.ToString();
+                if (targetMap.TryGetValue("objectName", out object name)) entry.objectName = name.ToString();
+                if (targetMap.TryGetValue("room", out object room)) entry.room = room.ToString();
+
+                // Questions
+                if (targetMap.TryGetValue("questions", out object questionsObj) && questionsObj is List<object> questionsList)
+                {
+                    List<QuestionData> qList = new List<QuestionData>();
+
+                    foreach (object qObj in questionsList)
+                    {
+                        if (qObj is not Dictionary<string, object> qMap) continue;
+
+                        QuestionData q = new QuestionData();
+
+                        if (qMap.TryGetValue("questionText", out object qt)) q.questionText = qt.ToString();
+                        if (qMap.TryGetValue("correctAnswer", out object ca)) q.correctAnswer = ca.ToString();
+
+                        // questionType
+                        if (qMap.TryGetValue("questionType", out object typeObj))
+                        {
+                            if (System.Enum.TryParse(typeObj.ToString(), true, out QuestionType parsedType))
+                                q.questionType = parsedType;
+                        }
+
+                        // multipleChoiceOptions
+                        if (qMap.TryGetValue("multipleChoiceOptions", out object optsObj) && optsObj is List<object> optsList)
+                        {
+                            q.multipleChoiceOptions = optsList.ConvertAll(o => o.ToString()).ToArray();
+                        }
+                        else
+                        {
+                            q.multipleChoiceOptions = new string[0];
+                        }
+
+                        qList.Add(q);
+                    }
+
+                    entry.questions = qList.ToArray();
+                }
+
+                memory_Targets.Add(entry);
+            }
+
+            Debug.Log($"[ExperimentConfig] Loaded {memory_Targets.Count} remote targets from Firestore.");
+        }
+    }
     public void ApplyFromJson(string json)
     {
         JsonUtility.FromJsonOverwrite(json, this);
