@@ -15,11 +15,10 @@ public class ExperimentManager : MonoBehaviour
     {
         if (Instance != null && Instance != this)
         {
-            Destroy(gameObject);
-            return;
+            Destroy(Instance.gameObject);   // destroy the OLD one instead
         }
         Instance = this;
-        DontDestroyOnLoad(gameObject);
+        // DontDestroyOnLoad(gameObject);  // only enable this when you really need it across scenes
     }
 
     // ─────────────────────────────────────────
@@ -62,14 +61,19 @@ public class ExperimentManager : MonoBehaviour
     public Transform playerTransform;
 
     [Header("UI References")]
-    public Button beginExperimentButton;          // ← SLOT for the Begin button
+    public Button beginExperimentButton;        
     public GameObject startingPanel;
+
+    [Header("Recall Instruction UI")]
+    public GameObject recallInstructionPanel;         
+    public Button beginQuestioningButton;
+    public TMPro.TextMeshProUGUI recallInstructionTextUI;
 
     [Header("UI Text References (Optional)")]
     public TMPro.TextMeshProUGUI briefingTextUI;
     public TMPro.TextMeshProUGUI roomInstructionTextUI;
     public TMPro.TextMeshProUGUI distractorInstructionTextUI;
-    public TMPro.TextMeshProUGUI recallInstructionTextUI;
+   
     // ─────────────────────────────────────────
     // INTERNAL TRACKING
     // ─────────────────────────────────────────
@@ -96,6 +100,7 @@ public class ExperimentManager : MonoBehaviour
     // ─────────────────────────────────────────
     private void Start()
     {
+        StartCoroutine(WaitForConfigAndApplyBriefing());
         // Find player
         if (playerTransform == null)
         {
@@ -109,6 +114,7 @@ public class ExperimentManager : MonoBehaviour
             {
                 Debug.LogWarning("[ExperimentManager] No Player found. Check Player tag.");
             }
+
         }
 
         // Find FadeController
@@ -131,7 +137,12 @@ public class ExperimentManager : MonoBehaviour
         {
             Debug.LogWarning("[ExperimentManager] No Begin Experiment button assigned.");
         }
-
+        // Inside Start(), after the existing beginExperimentButton wiring
+        if (beginQuestioningButton != null)
+        {
+            beginQuestioningButton.onClick.AddListener(BeginQuestioning);
+            Debug.Log("[ExperimentManager] Begin Questioning button wired.");
+        }
         Debug.Log("[ExperimentManager] Ready. State: Idle");
         ChangeState(ExperimentState.Idle);
     }
@@ -226,7 +237,17 @@ public class ExperimentManager : MonoBehaviour
         currentRoomIndex = 0;
         StartCoroutine(GoToNextRoom());
     }
+    private IEnumerator WaitForConfigAndApplyBriefing()
+    {
+        // Wait until the loader has finished
+        while (ExperimentConfigLoader.Current == null || !ExperimentConfigLoader.IsReady)
+        {
+            yield return null;
+        }
 
+        ApplyConfig();   // this now sets the briefing text while the panel is still visible
+        Debug.Log("[ExperimentManager] Briefing text applied from config.");
+    }
     public void OnPlayerEnterRoom(string roomName)
     {
         if (CurrentState != ExperimentState.Exploring) return;
@@ -294,16 +315,54 @@ public class ExperimentManager : MonoBehaviour
         Debug.Log("[ExperimentManager] Teleported to Lab Room.");
 
         yield return new WaitForSeconds(0.5f);
-
         yield return StartCoroutine(fadeController.FadeIn(transitionFadeDuration));
 
-        if (useDistractorTask)
-            StartCoroutine(RunDistractorTask());
-        else
-            StartRecallPhase();
+        // Go to the recall instruction panel first (no distractor yet)
+        StartRecallPhase();
     }
 
-    private IEnumerator RunDistractorTask()
+
+    private void StartRecallPhase()
+    {
+        ChangeState(ExperimentState.Recalling);
+        Debug.Log("[ExperimentManager] Recall phase started — showing instruction panel.");
+
+        // Make sure we have the latest text from config
+        ApplyConfig();
+
+        // Show the recall instruction panel
+        if (recallInstructionPanel != null)
+        {
+            recallInstructionPanel.SetActive(true);
+
+            if (recallInstructionTextUI != null)
+                recallInstructionTextUI.text = RecallInstructionText;
+        }
+        else
+        {
+            // Fallback: if no panel is assigned, start questions immediately
+            Debug.LogWarning("[ExperimentManager] No recallInstructionPanel assigned — starting questions immediately.");
+            BeginQuestioning();
+        }
+    }
+    /// <summary>
+    /// Called by the "Begin Questioning" button
+    /// </summary>
+    public void BeginQuestioning()
+    {
+        // Hide the recall instruction panel
+        if (recallInstructionPanel != null)
+            recallInstructionPanel.SetActive(false);
+
+        Debug.Log("[ExperimentManager] Begin Questioning pressed.");
+
+        if (useDistractorTask)
+            StartCoroutine(RunDistractorThenQuestions());
+        else
+            OnRecallStarted?.Invoke();
+    }
+
+    private IEnumerator RunDistractorThenQuestions()
     {
         ChangeState(ExperimentState.DistractorTask);
         Debug.Log("[ExperimentManager] Distractor task started.");
@@ -313,18 +372,10 @@ public class ExperimentManager : MonoBehaviour
         yield return new WaitForSeconds(distractorTaskDuration);
 
         OnDistractorEnded?.Invoke();
-        Debug.Log("[ExperimentManager] Distractor task ended.");
+        Debug.Log("[ExperimentManager] Distractor ended — starting questions.");
 
-        StartRecallPhase();
-    }
-
-    private void StartRecallPhase()
-    {
-        ChangeState(ExperimentState.Recalling);
-        Debug.Log("[ExperimentManager] Recall phase started.");
         OnRecallStarted?.Invoke();
     }
-
     public void OnExperimentComplete()
     {
         ChangeState(ExperimentState.Finished);
@@ -337,14 +388,65 @@ public class ExperimentManager : MonoBehaviour
     // ─────────────────────────────────────────
     private void TeleportPlayer(Transform destination)
     {
-        if (playerTransform == null || destination == null)
+        if (destination == null) return;
+        // Debug: freeze the player completely for 2 seconds
+        CharacterController cc = playerTransform.GetComponentInChildren<CharacterController>();
+        if (cc != null) cc.enabled = false;
+
+        Rigidbody rb = playerTransform.GetComponentInChildren<Rigidbody>();
+        if (rb != null)
         {
-            Debug.LogWarning("[ExperimentManager] Missing player or destination.");
+            rb.useGravity = false;
+            rb.isKinematic = true;
+        }
+
+        Debug.Log("[Teleport] CharacterController & Rigidbody disabled — if you still fall, something else is moving you.");
+        // Find XR Origin at runtime
+        if (playerTransform == null)
+        {
+            GameObject player = GameObject.FindWithTag("Player")
+                             ?? GameObject.Find("XR Origin");
+            if (player != null) playerTransform = player.transform;
+        }
+
+        if (playerTransform == null)
+        {
+            Debug.LogWarning("[ExperimentManager] No XR Origin found.");
             return;
         }
 
-        playerTransform.position = destination.position;
-        playerTransform.rotation = destination.rotation;
+        Camera mainCam = Camera.main;
+        if (mainCam == null)
+            mainCam = playerTransform.GetComponentInChildren<Camera>();
+
+        if (mainCam != null)
+        {
+            // Match rotation (Y only)
+            float currentCamY = mainCam.transform.eulerAngles.y;
+            float targetY = destination.eulerAngles.y;
+            playerTransform.Rotate(0f, targetY - currentCamY, 0f, Space.World);
+
+            // Horizontal offset (room-scale)
+            Vector3 cameraOffset = mainCam.transform.position - playerTransform.position;
+            cameraOffset.y = 0f;
+
+            Vector3 finalPosition = destination.position - cameraOffset;
+
+            // Height – match the loader’s fixed height style
+            Transform cameraOffsetTf = playerTransform.Find("Camera Offset");
+            float localCamY = cameraOffsetTf != null
+                ? cameraOffsetTf.localPosition.y
+                : mainCam.transform.localPosition.y;
+
+            finalPosition.y = destination.position.y + 1.6f - localCamY; // same as fixedSpawnHeight
+
+            playerTransform.position = finalPosition;
+        }
+        else
+        {
+            playerTransform.position = destination.position;
+            playerTransform.rotation = destination.rotation;
+        }
     }
 
     // ─────────────────────────────────────────
