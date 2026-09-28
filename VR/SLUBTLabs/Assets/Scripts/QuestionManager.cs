@@ -107,6 +107,8 @@ public class QuestionManager : MonoBehaviour
 
         foreach (QuestionData q in entry.questions)
         {
+            if (!q.enabled) continue;
+
             allQuestions.Add(new QuestionEntry
             {
                 objectID = entry.gameID,

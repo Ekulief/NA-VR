@@ -23,6 +23,7 @@ public class QuestionData
     public QuestionType questionType;
     public string correctAnswer;
     public string[] multipleChoiceOptions;
+    public bool enabled = true;
 }
 
 public enum QuestionType

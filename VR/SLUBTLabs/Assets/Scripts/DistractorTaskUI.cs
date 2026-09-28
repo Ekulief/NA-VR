@@ -75,31 +75,37 @@ public class DistractorTaskUI : MonoBehaviour
         if (distractorPanel != null)
             distractorPanel.SetActive(true);
 
-        // Set static text
+        // Header
         if (headerText != null)
             headerText.text = "Before We Begin...";
 
+        // Instruction text from Firestore
         if (instructionText != null)
-            instructionText.text =
-                "Count backwards from 100 by 3s.\n\nSay each number <b>aloud</b>.";
+        {
+            if (ExperimentConfigLoader.Current != null &&
+                !string.IsNullOrEmpty(ExperimentConfigLoader.Current.memory_DistractorInstructionText))
+            {
+                instructionText.text = ExperimentConfigLoader.Current.memory_DistractorInstructionText;
+            }
+            else
+            {
+                // Fallback
+                instructionText.text = "Count backwards from 100 by 3s.\n\nSay each number <b>aloud</b>.";
+            }
+        }
 
-        // Reset slider
+        // Slider setup (unchanged)
         if (progressSlider != null)
         {
             progressSlider.maxValue = duration;
             progressSlider.value = duration;
         }
-
         if (progressFill != null)
             progressFill.color = progressColor;
 
-        // Start the countdown display
         StartCoroutine(RunCountdown(duration));
-
-        // Start the counting sequence display
         sequenceCoroutine = StartCoroutine(ShowCountingSequence());
     }
-
     private void HidePanel()
     {
         if (distractorPanel != null)

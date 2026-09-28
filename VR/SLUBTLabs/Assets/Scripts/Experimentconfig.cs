@@ -292,7 +292,11 @@ public class ExperimentConfig : ScriptableObject
                         {
                             q.multipleChoiceOptions = new string[0];
                         }
-
+                        // enabled flag 
+                        if (qMap.TryGetValue("enabled", out object enObj))
+                            q.enabled = Convert.ToBoolean(enObj);
+                        else
+                            q.enabled = true;
                         qList.Add(q);
                     }
 
