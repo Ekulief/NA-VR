@@ -185,7 +185,7 @@ public class ExperimentLoader : MonoBehaviour
 
     // ── Helper method for precise physical repositioning ─────────────────────
 
-    private void TeleportPlayerToTransform(Transform targetTransform)
+    public void TeleportPlayerToTransform(Transform targetTransform)
     {
         Camera mainCam = Camera.main;
 
