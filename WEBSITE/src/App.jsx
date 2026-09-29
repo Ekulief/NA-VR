@@ -9,6 +9,7 @@ import StudentHome from "./pages/student/StudentHome";
 import StudentCourseExperiments from "./pages/student/StudentCourseExperiments";
 import StudentExperimentDetails from "./pages/student/StudentExperimentDetails";
 import StudentExperimentBuilder from "./pages/student/StudentExperimentBuilder";
+import StudentExperimentRun from "./pages/student/StudentExperimentRun";
 import InstructorHome from "./pages/instructor/InstructorHome";
 import InstructorCourseExperiments from "./pages/instructor/InstructorCourseExperiments";
 import InstructorExperimentBuilder from "./pages/instructor/InstructorExperimentBuilder";
@@ -112,6 +113,17 @@ function App() {
               <Navigate to="/login" replace />
             )
           }
+        />
+
+        <Route 
+          path="/student/course/:blockId/experiment/:experimentId/run" 
+          element={
+            user ? (
+            <StudentExperimentRun />
+           ) : (
+              <Navigate to="/login" replace />
+            )
+          } 
         />
 
         <Route
