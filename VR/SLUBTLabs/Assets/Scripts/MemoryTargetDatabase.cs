@@ -15,3 +15,22 @@ public class MemoryTargetEntry
     public string room;
     public QuestionData[] questions;
 }
+
+[System.Serializable]
+public class QuestionData
+{
+    public string questionText;
+    public QuestionType questionType;
+    public string correctAnswer;
+    public string[] multipleChoiceOptions;
+    public bool enabled = true;
+}
+
+public enum QuestionType
+{
+    YesNo,
+    MultipleChoice,
+    Color,
+    Detail,
+    Count
+}
