@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import {
@@ -15,7 +15,129 @@ import {
 
 import { db } from "../../config/firebase-config";
 
-import { ArrowLeft, Plus, X, Image, Box, Upload } from "lucide-react";
+import { ArrowLeft, Plus } from "lucide-react";
+
+const CONFIGURATION_ORDER = {
+  Attentional_Blindness: [
+    "ab_AwarenessQuestionText",
+    "ab_FadeDelaySeconds",
+    "ab_FadeDurationSeconds",
+    "ab_InstructionText",
+    "ab_NotNoticedText",
+    "ab_NoticedText",
+    "ab_PostFadePauseSeconds",
+    "ab_UseRandomFadeTarget",
+    "globalInstructionDelay",
+  ],
+
+  Depth_Perception: [
+    "depth_ActualHeightMeters",
+    "depth_InstructionText",
+    "depth_MaxHeightMeters",
+    "depth_StepAmount",
+    "globalInstructionDelay",
+  ],
+
+  Depth_Perception2: [
+    "depth_ActualDistanceMeters",
+    "depth_InstructionText",
+    "depth_MaxDistanceMeters",
+    "depth_MinDistanceMeters",
+    "globalInstructionDelay",
+  ],
+
+  Memory2: [
+    "memory_BriefingText",
+    "memory_DistractorInstructionText",
+    "memory_DistractorTaskDuration",
+    "memory_RandomizeQuestions",
+    "memory_RecallInstructionText",
+    "memory_RoomInstructionText",
+    "memory_TimePerRoomSeconds",
+    "memory_TransitionFadeDuration",
+    "memory_UseDistractorTask",
+    "targets",
+  ],
+
+  Odd_Item_Detection: [
+    "globalInstructionDelay",
+    "oddItem_ExcellentThresholdSeconds",
+    "oddItem_GoodThresholdSeconds",
+    "oddItem_InstructionText",
+    "oddItem_RatingExcellent",
+    "oddItem_RatingGood",
+    "oddItem_RatingKeepPracticing",
+    "oddItem_RaycastDistance",
+    "oddItem_SearchTimeLimitSeconds",
+    "oddItem_WrongItemFeedback",
+  ],
+};
+
+const ENVIRONMENT_OPTIONS = [
+  {
+    moduleId: "Depth_Perception",
+    name: "Depth Perception (Height)",
+    description: "High-altitude rooftop",
+  },
+  {
+    moduleId: "Depth_Perception2",
+    name: "Depth Perception (Distance)",
+    description: "Roadside setting",
+  },
+  {
+    moduleId: "Attentional_Blindness",
+    name: "Inattentional Blindness",
+    description: 'Minimalist "minimal" hallway',
+  },
+  {
+    moduleId: "Odd_Item_Detection",
+    name: "Odd-item Detection",
+    description: "Grocery store setting",
+  },
+  {
+    moduleId: "Memory2",
+    name: "Sternberg Memory Scanning",
+    description: "House and a diner setting",
+  },
+];
+
+const cloneConfig = (value) => {
+  if (value === undefined || value === null) {
+    return {};
+  }
+
+  return JSON.parse(JSON.stringify(value));
+};
+
+const formatConfigLabel = (key) => {
+  let label = String(key)
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/_/g, " ")
+    .replace(/-/g, " ");
+
+  label = label
+    .replace(/^ab /i, "")
+    .replace(/^depth /i, "")
+    .replace(/^memory /i, "")
+    .replace(/^oddItem /i, "")
+    .replace(/^odd item /i, "");
+
+  return label.replace(/\b\w/g, (character) => character.toUpperCase()).trim();
+};
+
+const isLongTextKey = (key) => {
+  const lower = String(key).toLowerCase();
+
+  return (
+    lower.includes("instruction") ||
+    lower.includes("question") ||
+    lower.includes("briefing") ||
+    lower.includes("description") ||
+    lower.includes("feedback") ||
+    lower.includes("rating") ||
+    lower.includes("text")
+  );
+};
 
 export default function InstructorExperimentBuilder() {
   const navigate = useNavigate();
@@ -28,53 +150,85 @@ export default function InstructorExperimentBuilder() {
   const [duration, setDuration] = useState("");
 
   const [environment, setEnvironment] = useState("");
+  const [moduleId, setModuleId] = useState("");
+  const [moduleName, setModuleName] = useState("");
+  const [sceneId, setSceneId] = useState("");
+  const [moduleDescription, setModuleDescription] = useState("");
+  const [configuration, setConfiguration] = useState({});
+  const [moduleLoading, setModuleLoading] = useState(true);
 
-  const environments = [
-    {
-      name: "Classroom",
-      description: "Standard classroom with desks and whiteboard",
-    },
-    {
-      name: "Maze",
-      description: "3D maze environment for navigation studies",
-    },
-    {
-      name: "Forest",
-      description: "Natural outdoor environment",
-    },
-    {
-      name: "Laboratory",
-      description: "Clinical lab setting",
-    },
-    {
-      name: "City Street",
-      description: "Urban environment with building and traffic",
-    },
-  ];
-
-  const [stimuli, setStimuli] = useState([
-    {
-      id: Date.now(),
-      type: "text",
-      content: "",
-      duration: "",
-      positionX: "",
-      positionY: "",
-      positionZ: "",
-      color: "#ff0000",
-    },
-  ]);
-
-  const [participantInstructions, setParticipantInstructions] = useState("");
   const [groups, setGroups] = useState([]);
   const [selectedGroups, setSelectedGroups] = useState([]);
+
   const [allowStudentExperiments, setAllowStudentExperiments] = useState(false);
+
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(isEditing);
 
+  const targetRefs = useRef({});
+  const [newTargetIndex, setNewTargetIndex] = useState(null);
+  const [activeTargetIndex, setActiveTargetIndex] = useState(null);
+
+  const loadExperimentModule = async (selectedModuleId) => {
+    if (!selectedModuleId) {
+      return null;
+    }
+
+    try {
+      const moduleSnap = await getDoc(
+        doc(db, "experimentModule", selectedModuleId),
+      );
+
+      if (!moduleSnap.exists()) {
+        console.error(`Experiment module "${selectedModuleId}" was not found.`);
+
+        return null;
+      }
+
+      const data = moduleSnap.data();
+
+      return {
+        id: moduleSnap.id,
+        moduleName: data.moduleName || "",
+        description: data.description || "",
+        sceneId: data.sceneId || "",
+        defaultConfig: cloneConfig(data.defaultConfig || {}),
+      };
+    } catch (error) {
+      console.error("Error loading experiment module:", error);
+      return null;
+    }
+  };
+
+  const selectEnvironment = async (option) => {
+    setModuleLoading(true);
+
+    try {
+      const module = await loadExperimentModule(option.moduleId);
+
+      if (!module) {
+        alert(`Unable to load the default configuration for ${option.name}.`);
+
+        return;
+      }
+
+      setEnvironment(option.name);
+      setModuleId(module.id);
+      setModuleName(module.moduleName || option.name);
+      setSceneId(module.sceneId || "");
+      setModuleDescription(module.description || option.description);
+
+      setConfiguration(cloneConfig(module.defaultConfig || {}));
+    } finally {
+      setModuleLoading(false);
+    }
+  };
+
   useEffect(() => {
     const getGroups = async () => {
-      if (!blockId) return;
+      if (!blockId) {
+        return;
+      }
 
       try {
         const groupsRef = collection(db, "group");
@@ -98,9 +252,31 @@ export default function InstructorExperimentBuilder() {
   }, [blockId]);
 
   useEffect(() => {
+    if (newTargetIndex === null) return;
+
+    const target = targetRefs.current[newTargetIndex];
+
+    if (!target) return;
+
+    target.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
+
+    setActiveTargetIndex(newTargetIndex);
+
+    const timeout = setTimeout(() => {
+      setNewTargetIndex(null);
+    }, 1200);
+
+    return () => clearTimeout(timeout);
+  }, [newTargetIndex, configuration.targets]);
+
+  useEffect(() => {
     const getExperiment = async () => {
       if (!experimentId) {
         setLoading(false);
+        setModuleLoading(false);
         return;
       }
 
@@ -118,40 +294,59 @@ export default function InstructorExperimentBuilder() {
         }
 
         const data = experimentSnap.data();
+
         setExperimentName(data.experimentName || "");
         setInstructions(data.instructions || "");
         setDuration(data.duration || "");
+
         setEnvironment(data.environment || "");
-        setParticipantInstructions(data.participantInstructions || "");
         setSelectedGroups(data.groupIds || []);
+
         setAllowStudentExperiments(data.allowStudentExperiments === true);
 
-        if (Array.isArray(data.stimuli) && data.stimuli.length > 0) {
-          setStimuli(
-            data.stimuli.map((stimulus, index) => ({
-              id: `${Date.now()}-${index}`,
-              type: stimulus.type || "text",
-              content: stimulus.content || "",
-              duration: stimulus.duration || "",
-              positionX: stimulus.positionX || "",
-              positionY: stimulus.positionY || "",
-              positionZ: stimulus.positionZ || "",
-              color: stimulus.color || "#ff0000",
-            })),
+        const savedModuleId = data.moduleId || "";
+        const savedEnvironment = data.environment || "";
+
+        let option = ENVIRONMENT_OPTIONS.find(
+          (item) =>
+            item.moduleId === savedModuleId || item.name === savedEnvironment,
+        );
+
+        if (!option && savedModuleId === "Memory2") {
+          option = ENVIRONMENT_OPTIONS.find(
+            (item) => item.moduleId === "Memory2",
           );
-        } else {
-          setStimuli([
-            {
-              id: Date.now(),
-              type: "text",
-              content: "",
-              duration: "",
-              positionX: "",
-              positionY: "",
-              positionZ: "",
-              color: "#ff0000",
-            },
-          ]);
+        }
+
+        if (option) {
+          const module = await loadExperimentModule(
+            savedModuleId || option.moduleId,
+          );
+
+          if (module) {
+            setModuleId(module.id);
+
+            setModuleName(data.moduleName || module.moduleName || option.name);
+
+            setSceneId(data.sceneId || module.sceneId || "");
+
+            setModuleDescription(
+              data.moduleDescription ||
+                module.description ||
+                option.description,
+            );
+
+            if (data.configuration && typeof data.configuration === "object") {
+              setConfiguration(cloneConfig(data.configuration));
+            } else {
+              setConfiguration(cloneConfig(module.defaultConfig || {}));
+            }
+          }
+        } else if (
+          data.configuration &&
+          typeof data.configuration === "object"
+        ) {
+          setConfiguration(cloneConfig(data.configuration));
         }
       } catch (error) {
         console.error("Error getting experiment:", error);
@@ -160,42 +355,27 @@ export default function InstructorExperimentBuilder() {
         navigate(-1);
       } finally {
         setLoading(false);
+        setModuleLoading(false);
       }
     };
 
     getExperiment();
   }, [experimentId, navigate]);
 
-  const addStimulus = (type) => {
-    const newStimulus = {
-      id: Date.now() + Math.random(),
-      type,
-      content: "",
-      duration: "",
-      positionX: "",
-      positionY: "",
-      positionZ: "",
-      color: "#ff0000",
-    };
+  const updateConfigValue = (path, value) => {
+    setConfiguration((previous) => {
+      const next = cloneConfig(previous);
 
-    setStimuli((previous) => [...previous, newStimulus]);
-  };
+      let current = next;
 
-  const removeStimulus = (id) => {
-    setStimuli((previous) => previous.filter((stimulus) => stimulus.id !== id));
-  };
+      for (let index = 0; index < path.length - 1; index += 1) {
+        current = current[path[index]];
+      }
 
-  const updateStimulus = (id, field, value) => {
-    setStimuli((previous) =>
-      previous.map((stimulus) =>
-        stimulus.id === id
-          ? {
-              ...stimulus,
-              [field]: value,
-            }
-          : stimulus,
-      ),
-    );
+      current[path[path.length - 1]] = value;
+
+      return next;
+    });
   };
 
   const toggleGroup = (groupId) => {
@@ -208,13 +388,1247 @@ export default function InstructorExperimentBuilder() {
     });
   };
 
-  const saveExperiment = async (status) => {
+  const getOrderedConfigurationKeys = () => {
+    const configuredOrder = CONFIGURATION_ORDER[moduleId];
+
+    if (!configuredOrder) {
+      return Object.keys(configuration);
+    }
+    const orderedKeys = configuredOrder.filter((key) =>
+      Object.prototype.hasOwnProperty.call(configuration, key),
+    );
+
+    const remainingKeys = Object.keys(configuration).filter(
+      (key) => !configuredOrder.includes(key),
+    );
+
+    return [...orderedKeys, ...remainingKeys];
+  };
+
+  const getOrderedTargetKeys = (target) => {
+    const preferredOrder = [
+      "questions",
+      "room",
+      "objectName",
+      "gameId",
+      "name",
+      "targetName",
+      "question",
+      "answer",
+      "correctAnswer",
+      "description",
+      "text",
+      "value",
+      "type",
+    ];
+
+    const existingKeys = Object.keys(target);
+
+    const orderedKeys = preferredOrder.filter((key) =>
+      Object.prototype.hasOwnProperty.call(target, key),
+    );
+
+    const remainingKeys = existingKeys.filter(
+      (key) => !preferredOrder.includes(key),
+    );
+
+    return [...orderedKeys, ...remainingKeys];
+  };
+
+  const renderMemoryQuestions = (questions, path) => {
+    return (
+      <div
+        className="
+        md:col-span-2
+        rounded-xl
+        border
+        border-gray-200
+        bg-gray-50
+        p-4
+      "
+      >
+        <div className="mb-4 flex items-start justify-between">
+          <div>
+            <h3 className="text-base font-semibold text-gray-900">Questions</h3>
+
+            <p className="mt-1 text-sm text-gray-500">
+              Configure the questions used during the memory experiment.
+            </p>
+          </div>
+
+          <div className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700">
+            {questions.length}{" "}
+            {questions.length === 1 ? "Question" : "Questions"}
+          </div>
+        </div>
+
+        {questions.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-gray-300 bg-white p-6 text-center">
+            <p className="text-sm text-gray-500">
+              No questions are configured.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {questions.map((question, index) => (
+              <div
+                key={`${path.join(".")}-${index}`}
+                className="
+                overflow-hidden
+                rounded-xl
+                border
+                border-gray-200
+                bg-white
+                shadow-sm
+              "
+              >
+                <div
+                  className="
+                  flex
+                  items-center
+                  gap-3
+                  border-b
+                  border-gray-200
+                  bg-gray-50
+                  px-4
+                  py-3
+                "
+                >
+                  <div
+                    className="
+                    flex
+                    h-8
+                    w-8
+                    items-center
+                    justify-center
+                    rounded-lg
+                    bg-indigo-100
+                    text-sm
+                    font-semibold
+                    text-indigo-700
+                  "
+                  >
+                    {index + 1}
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">
+                      Question {index + 1}
+                    </p>
+
+                    <p className="text-xs text-gray-500">
+                      Memory scanning question
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2">
+                  {question &&
+                  typeof question === "object" &&
+                  !Array.isArray(question) ? (
+                    Object.keys(question).map((questionKey) => {
+                      const value = question[questionKey];
+                      const questionPath = [...path, index, questionKey];
+
+                      if (questionKey === "questionText") {
+                        return (
+                          <div
+                            key={questionPath.join(".")}
+                            className="md:col-span-2"
+                          >
+                            <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                              Question Text
+                            </label>
+
+                            <textarea
+                              value={value ?? ""}
+                              onChange={(e) =>
+                                updateConfigValue(questionPath, e.target.value)
+                              }
+                              rows={3}
+                              placeholder="Enter the question..."
+                              className="
+                              w-full
+                              resize-none
+                              rounded-lg
+                              border
+                              border-gray-300
+                              bg-white
+                              px-3
+                              py-2.5
+                              text-sm
+                              outline-none
+                              transition
+                              focus:border-indigo-500
+                              focus:ring-2
+                              focus:ring-indigo-500/20
+                            "
+                            />
+                          </div>
+                        );
+                      }
+
+                      if (questionKey === "questionType") {
+                        return (
+                          <div key={questionPath.join(".")}>
+                            <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                              Question Type
+                            </label>
+
+                            <input
+                              type="text"
+                              value={value ?? ""}
+                              onChange={(e) =>
+                                updateConfigValue(questionPath, e.target.value)
+                              }
+                              className="
+                              w-full
+                              rounded-lg
+                              border
+                              border-gray-300
+                              bg-white
+                              px-3
+                              py-2.5
+                              text-sm
+                              outline-none
+                              transition
+                              focus:border-indigo-500
+                              focus:ring-2
+                              focus:ring-indigo-500/20
+                            "
+                            />
+                          </div>
+                        );
+                      }
+
+                      if (questionKey === "correctAnswer") {
+                        return (
+                          <div key={questionPath.join(".")}>
+                            <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                              Correct Answer
+                            </label>
+
+                            <input
+                              type="text"
+                              value={value ?? ""}
+                              onChange={(e) =>
+                                updateConfigValue(questionPath, e.target.value)
+                              }
+                              className="
+                              w-full
+                              rounded-lg
+                              border
+                              border-gray-300
+                              bg-white
+                              px-3
+                              py-2.5
+                              text-sm
+                              outline-none
+                              transition
+                              focus:border-indigo-500
+                              focus:ring-2
+                              focus:ring-indigo-500/20
+                            "
+                            />
+                          </div>
+                        );
+                      }
+
+                      if (questionKey === "enabled") {
+                        return (
+                          <div
+                            key={questionPath.join(".")}
+                            className="md:col-span-2"
+                          >
+                            <label className="mb-2 block text-sm font-medium text-gray-700">
+                              Question Enabled
+                            </label>
+
+                            <div className="flex items-center gap-6">
+                              <label className="flex cursor-pointer items-center gap-2 text-sm">
+                                <input
+                                  type="radio"
+                                  name={`question-${path.join("-")}-${index}`}
+                                  checked={value === true}
+                                  onChange={() =>
+                                    updateConfigValue(questionPath, true)
+                                  }
+                                  className="h-4 w-4 accent-indigo-600"
+                                />
+                                Yes
+                              </label>
+
+                              <label className="flex cursor-pointer items-center gap-2 text-sm">
+                                <input
+                                  type="radio"
+                                  name={`question-${path.join("-")}-${index}`}
+                                  checked={value === false}
+                                  onChange={() =>
+                                    updateConfigValue(questionPath, false)
+                                  }
+                                  className="h-4 w-4 accent-indigo-600"
+                                />
+                                No
+                              </label>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      if (questionKey === "multipleChoiceOptions") {
+                        const options = Array.isArray(value) ? value : [];
+
+                        const addOption = () => {
+                          updateConfigValue(questionPath, [...options, ""]);
+                        };
+
+                        const updateOption = (optionIndex, newValue) => {
+                          const nextOptions = [...options];
+
+                          nextOptions[optionIndex] = newValue;
+
+                          updateConfigValue(questionPath, nextOptions);
+                        };
+
+                        const removeOption = (optionIndex) => {
+                          const nextOptions = options.filter(
+                            (_, i) => i !== optionIndex,
+                          );
+
+                          updateConfigValue(questionPath, nextOptions);
+                        };
+
+                        return (
+                          <div
+                            key={questionPath.join(".")}
+                            className="md:col-span-2"
+                          >
+                            <div className="mb-2 flex items-center justify-between">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700">
+                                  Multiple Choice Options
+                                </label>
+
+                                <p className="mt-0.5 text-xs text-gray-500">
+                                  Add answer choices for this question.
+                                </p>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={addOption}
+                                className="
+                                flex
+                                items-center
+                                gap-1.5
+                                rounded-lg
+                                border
+                                border-gray-300
+                                px-3
+                                py-1.5
+                                text-xs
+                                font-medium
+                                text-gray-700
+                                transition
+                                hover:bg-gray-50
+                              "
+                              >
+                                <Plus size={14} />
+                                Add Option
+                              </button>
+                            </div>
+
+                            <div className="space-y-2">
+                              {options.map((option, optionIndex) => (
+                                <div
+                                  key={`${questionPath.join(
+                                    ".",
+                                  )}-${optionIndex}`}
+                                  className="flex items-center gap-2"
+                                >
+                                  <div
+                                    className="
+                                    flex
+                                    h-9
+                                    w-9
+                                    shrink-0
+                                    items-center
+                                    justify-center
+                                    rounded-lg
+                                    bg-indigo-50
+                                    text-sm
+                                    font-medium
+                                    text-indigo-700
+                                  "
+                                  >
+                                    {optionIndex + 1}
+                                  </div>
+
+                                  <input
+                                    type="text"
+                                    value={option ?? ""}
+                                    onChange={(e) =>
+                                      updateOption(optionIndex, e.target.value)
+                                    }
+                                    placeholder={`Option ${optionIndex + 1}`}
+                                    className="
+                                    w-full
+                                    rounded-lg
+                                    border
+                                    border-gray-300
+                                    bg-white
+                                    px-3
+                                    py-2
+                                    text-sm
+                                    outline-none
+                                    transition
+                                    focus:border-indigo-500
+                                    focus:ring-2
+                                    focus:ring-indigo-500/20
+                                  "
+                                  />
+
+                                  <button
+                                    type="button"
+                                    onClick={() => removeOption(optionIndex)}
+                                    className="
+                                    flex
+                                    h-9
+                                    w-9
+                                    shrink-0
+                                    items-center
+                                    justify-center
+                                    rounded-lg
+                                    border
+                                    border-gray-300
+                                    text-gray-500
+                                    transition
+                                    hover:border-red-300
+                                    hover:bg-red-50
+                                    hover:text-red-600
+                                  "
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div key={questionPath.join(".")}>
+                          <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                            {formatConfigLabel(questionKey)}
+                          </label>
+
+                          <input
+                            type="text"
+                            value={
+                              typeof value === "string"
+                                ? value
+                                : String(value ?? "")
+                            }
+                            onChange={(e) =>
+                              updateConfigValue(questionPath, e.target.value)
+                            }
+                            className="
+                            w-full
+                            rounded-lg
+                            border
+                            border-gray-300
+                            bg-white
+                            px-3
+                            py-2.5
+                            text-sm
+                            outline-none
+                            transition
+                            focus:border-indigo-500
+                            focus:ring-2
+                            focus:ring-indigo-500/20
+                          "
+                          />
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="text-sm text-gray-500">
+                      Invalid question configuration.
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderTargetField = (value, path, key) => {
+    if (key === "questions" && Array.isArray(value)) {
+      return renderMemoryQuestions(value, path);
+    }
+
+    if (typeof value === "boolean") {
+      return (
+        <div
+          key={path.join(".")}
+          className="rounded-lg border border-gray-200 bg-gray-50 p-3"
+        >
+          <label className="mb-2 block text-sm font-medium text-gray-700">
+            {formatConfigLabel(key)}
+          </label>
+
+          <div className="flex items-center gap-5">
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name={`target-${path.join("-")}`}
+                checked={value === true}
+                onChange={() => updateConfigValue(path, true)}
+                className="h-4 w-4 accent-indigo-600"
+              />
+              Yes
+            </label>
+
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name={`target-${path.join("-")}`}
+                checked={value === false}
+                onChange={() => updateConfigValue(path, false)}
+                className="h-4 w-4 accent-indigo-600"
+              />
+              No
+            </label>
+          </div>
+        </div>
+      );
+    }
+
+    if (typeof value === "number") {
+      return (
+        <div key={path.join(".")}>
+          <label className="mb-1.5 block text-sm font-medium text-gray-700">
+            {formatConfigLabel(key)}
+          </label>
+
+          <input
+            type="number"
+            step="any"
+            value={value}
+            onChange={(e) => {
+              const nextValue = e.target.value;
+
+              updateConfigValue(
+                path,
+                nextValue === "" ? "" : Number(nextValue),
+              );
+            }}
+            className="
+            w-full
+            rounded-lg
+            border
+            border-gray-300
+            bg-white
+            px-3
+            py-2.5
+            text-sm
+            outline-none
+            transition
+            focus:border-indigo-500
+            focus:ring-2
+            focus:ring-indigo-500/20
+          "
+          />
+        </div>
+      );
+    }
+
+    if (typeof value === "string") {
+      const longText = isLongTextKey(key);
+
+      return (
+        <div key={path.join(".")} className={longText ? "md:col-span-2" : ""}>
+          <label className="mb-1.5 block text-sm font-medium text-gray-700">
+            {formatConfigLabel(key)}
+          </label>
+
+          {longText ? (
+            <textarea
+              value={value}
+              onChange={(e) => updateConfigValue(path, e.target.value)}
+              rows={3}
+              className="
+              w-full
+              resize-none
+              rounded-lg
+              border
+              border-gray-300
+              bg-white
+              px-3
+              py-2.5
+              text-sm
+              outline-none
+              transition
+              focus:border-indigo-500
+              focus:ring-2
+              focus:ring-indigo-500/20
+            "
+            />
+          ) : (
+            <input
+              type="text"
+              value={value}
+              onChange={(e) => updateConfigValue(path, e.target.value)}
+              className="
+              w-full
+              rounded-lg
+              border
+              border-gray-300
+              bg-white
+              px-3
+              py-2.5
+              text-sm
+              outline-none
+              transition
+              focus:border-indigo-500
+              focus:ring-2
+              focus:ring-indigo-500/20
+            "
+            />
+          )}
+        </div>
+      );
+    }
+
+    if (Array.isArray(value) || (typeof value === "object" && value !== null)) {
+      return (
+        <div
+          key={path.join(".")}
+          className="md:col-span-2 rounded-lg border border-gray-200 bg-gray-50 p-3"
+        >
+          <label className="mb-2 block text-sm font-medium text-gray-700">
+            {formatConfigLabel(key)}
+          </label>
+
+          {Array.isArray(value) ? (
+            <div className="space-y-2">
+              {value.map((item, index) => (
+                <div
+                  key={`${path.join(".")}-${index}`}
+                  className="rounded-md bg-white p-2 text-sm text-gray-600"
+                >
+                  {typeof item === "object"
+                    ? JSON.stringify(item, null, 2)
+                    : String(item)}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <pre className="overflow-x-auto whitespace-pre-wrap text-xs text-gray-600">
+              {JSON.stringify(value, null, 2)}
+            </pre>
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <div key={path.join(".")}>
+        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+          {formatConfigLabel(key)}
+        </label>
+
+        <input
+          type="text"
+          value={value ?? ""}
+          onChange={(e) => updateConfigValue(path, e.target.value)}
+          className="
+          w-full
+          rounded-lg
+          border
+          border-gray-300
+          bg-white
+          px-3
+          py-2.5
+          text-sm
+          outline-none
+          transition
+          focus:border-indigo-500
+          focus:ring-2
+          focus:ring-indigo-500/20
+        "
+        />
+      </div>
+    );
+  };
+
+  const createBlankValue = (value) => {
+    if (Array.isArray(value)) {
+      return value.map((item) => createBlankValue(item));
+    }
+
+    if (value !== null && typeof value === "object") {
+      return Object.fromEntries(
+        Object.entries(value).map(([key, childValue]) => [
+          key,
+          createBlankValue(childValue),
+        ]),
+      );
+    }
+
+    if (typeof value === "boolean") {
+      return false;
+    }
+
+    if (typeof value === "number") {
+      return 0;
+    }
+
+    return "";
+  };
+
+  const scrollToTarget = (index) => {
+    const target = targetRefs.current[index];
+
+    if (!target) return;
+
+    setActiveTargetIndex(index);
+
+    target.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
+  };
+
+  const addMemoryTarget = () => {
+    const targets = Array.isArray(configuration.targets)
+      ? configuration.targets
+      : [];
+
+    const newIndex = targets.length;
+
+    let newTarget;
+
+    if (targets.length > 0) {
+      newTarget = createBlankValue(targets[0]);
+    } else {
+      newTarget = {
+        name: "",
+      };
+    }
+
+    setConfiguration((previous) => ({
+      ...previous,
+      targets: [...targets, newTarget],
+    }));
+
+    setNewTargetIndex(newIndex);
+  };
+
+  const removeMemoryTarget = (index) => {
+    setConfiguration((previous) => {
+      const targets = Array.isArray(previous.targets) ? previous.targets : [];
+
+      return {
+        ...previous,
+        targets: targets.filter((_, targetIndex) => targetIndex !== index),
+      };
+    });
+  };
+
+  const renderMemoryTargets = (targets, path) => {
+    return (
+      <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h3 className="text-base font-semibold text-gray-900">
+              Memory Targets
+            </h3>
+
+            <p className="mt-1 text-sm text-gray-500">
+              Configure the targets used during the memory experiment.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700">
+              {targets.length} {targets.length === 1 ? "Target" : "Targets"}
+            </div>
+
+            <button
+              type="button"
+              onClick={addMemoryTarget}
+              disabled={saving}
+              className="
+              flex
+              items-center
+              gap-1.5
+              rounded-lg
+              bg-indigo-700
+              px-3
+              py-2
+              text-xs
+              font-medium
+              text-white
+              transition
+              hover:bg-indigo-800
+              disabled:cursor-not-allowed
+              disabled:bg-gray-400
+            "
+            >
+              <Plus size={15} />
+              Add Target
+            </button>
+          </div>
+        </div>
+
+        <div
+          className="
+            sticky
+            top-24
+            z-10
+            mb-4
+            rounded-xl
+            border
+            border-gray-200
+            bg-white/95
+            p-3
+            shadow-sm
+            backdrop-blur
+          "
+        >
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Jump to Target
+            </p>
+
+            <span className="text-xs text-gray-400">
+              {targets.length} total
+            </span>
+          </div>
+
+          {targets.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {targets.map((_, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  onClick={() => scrollToTarget(index)}
+                  className={`
+            flex
+            h-9
+            min-w-9
+            items-center
+            justify-center
+            rounded-lg
+            border
+            px-2.5
+            text-sm
+            font-medium
+            transition
+            ${
+              activeTargetIndex === index
+                ? "border-indigo-700 bg-indigo-700 text-white shadow-sm"
+                : newTargetIndex === index
+                  ? "border-indigo-400 bg-indigo-50 text-indigo-700 ring-2 ring-indigo-100"
+                  : "border-gray-200 bg-gray-50 text-gray-600 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700"
+            }
+          `}
+                >
+                  {index + 1}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400">
+              Add a target to use the navigator.
+            </p>
+          )}
+        </div>
+
+        {targets.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-gray-300 bg-white p-8 text-center">
+            <p className="text-sm font-medium text-gray-700">
+              No memory targets are configured.
+            </p>
+
+            <p className="mt-1 text-xs text-gray-500">
+              Add a target to configure the memory experiment.
+            </p>
+
+            <button
+              type="button"
+              onClick={addMemoryTarget}
+              disabled={saving}
+              className="
+              mt-4
+              inline-flex
+              items-center
+              gap-1.5
+              rounded-lg
+              bg-indigo-700
+              px-4
+              py-2
+              text-sm
+              font-medium
+              text-white
+              transition
+              hover:bg-indigo-800
+              disabled:bg-gray-400
+            "
+            >
+              <Plus size={16} />
+              Add First Target
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {targets.map((target, index) => {
+              const targetKeys = getOrderedTargetKeys(target);
+
+              return (
+                <div
+                  key={`${path.join(".")}-${index}`}
+                  ref={(element) => {
+                    targetRefs.current[index] = element;
+                  }}
+                  className={`
+                    overflow-hidden
+                    rounded-xl
+                    border
+                    bg-white
+                    shadow-sm
+                    transition-all
+                    duration-300
+                    ${
+                      newTargetIndex === index
+                        ? "border-indigo-400 ring-2 ring-indigo-100"
+                        : activeTargetIndex === index
+                          ? "border-indigo-300"
+                          : "border-gray-200"
+                    }
+                  `}
+                >
+                  <div
+                    className="
+                    flex
+                    items-center
+                    justify-between
+                    border-b
+                    border-gray-200
+                    bg-gray-50
+                    px-4
+                    py-3
+                  "
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="
+                        flex
+                        h-8
+                        w-8
+                        items-center
+                        justify-center
+                        rounded-lg
+                        bg-indigo-100
+                        text-sm
+                        font-semibold
+                        text-indigo-700
+                      "
+                      >
+                        {index + 1}
+                      </div>
+
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">
+                          Target {index + 1}
+                        </p>
+
+                        <p className="text-xs text-gray-500">
+                          Memory scanning target
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => removeMemoryTarget(index)}
+                      disabled={saving}
+                      className="
+                      rounded-lg
+                      px-2.5
+                      py-1.5
+                      text-xs
+                      font-medium
+                      text-red-600
+                      transition
+                      hover:bg-red-50
+                      disabled:cursor-not-allowed
+                      disabled:opacity-50
+                    "
+                    >
+                      Remove
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2">
+                    {targetKeys.map((targetKey) =>
+                      renderTargetField(
+                        target[targetKey],
+                        [...path, index, targetKey],
+                        targetKey,
+                      ),
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderConfigValue = (value, path, key, ancestors = []) => {
+    if (
+      value !== null &&
+      typeof value === "object" &&
+      ancestors.includes(value)
+    ) {
+      return (
+        <div
+          key={path.join(".")}
+          className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600"
+        >
+          Unable to display this configuration value because it contains a
+          circular reference.
+        </div>
+      );
+    }
+
+    const nextAncestors =
+      value !== null && typeof value === "object"
+        ? [...ancestors, value]
+        : ancestors;
+
+    if (Array.isArray(value)) {
+      if (moduleId === "Memory2" && key === "targets") {
+        return renderMemoryTargets(value, path);
+      }
+
+      return (
+        <div
+          key={path.join(".")}
+          className="rounded-lg border border-gray-200 bg-gray-50 p-3"
+        >
+          <div className="mb-3 text-sm font-medium text-gray-700">
+            {formatConfigLabel(key)}
+          </div>
+
+          {value.length === 0 ? (
+            <p className="text-sm text-gray-500">No items configured.</p>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {value.map((item, index) => (
+                <div
+                  key={`${path.join(".")}-${index}`}
+                  className="rounded-lg border border-gray-200 bg-white p-3"
+                >
+                  {renderConfigValue(
+                    item,
+                    [...path, index],
+                    `${key} ${index + 1}`,
+                    nextAncestors,
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (typeof value === "object" && value !== null) {
+      return (
+        <div
+          key={path.join(".")}
+          className="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-3"
+        >
+          <div className="mb-3 text-sm font-medium text-gray-700">
+            {formatConfigLabel(key)}
+          </div>
+
+          <div className="flex flex-col gap-3">
+            {Object.entries(value).map(([childKey, childValue]) => (
+              <div key={[...path, childKey].join(".")}>
+                {renderConfigValue(
+                  childValue,
+                  [...path, childKey],
+                  childKey,
+                  nextAncestors,
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    if (typeof value === "boolean") {
+      return (
+        <div key={path.join(".")} className="flex flex-wrap items-center gap-4">
+          <span className="text-sm font-medium">{formatConfigLabel(key)}</span>
+
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="radio"
+              name={`config-${path.join("-")}`}
+              checked={value === true}
+              onChange={() => updateConfigValue(path, true)}
+              className="accent-indigo-700"
+            />
+            Yes
+          </label>
+
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="radio"
+              name={`config-${path.join("-")}`}
+              checked={value === false}
+              onChange={() => updateConfigValue(path, false)}
+              className="accent-indigo-700"
+            />
+            No
+          </label>
+        </div>
+      );
+    }
+
+    if (typeof value === "number") {
+      return (
+        <div key={path.join(".")}>
+          <label className="mb-1 block text-sm font-medium">
+            {formatConfigLabel(key)}
+          </label>
+
+          <input
+            type="number"
+            step="any"
+            value={value}
+            onChange={(e) => {
+              const nextValue = e.target.value;
+
+              updateConfigValue(
+                path,
+                nextValue === "" ? "" : Number(nextValue),
+              );
+            }}
+            className="
+              w-full
+              rounded-lg
+              border
+              border-gray-300
+              bg-gray-200
+              px-3
+              py-2
+              outline-none
+              focus:ring-2
+              focus:ring-indigo-500
+            "
+          />
+        </div>
+      );
+    }
+
+    if (typeof value === "string") {
+      const longText = isLongTextKey(key);
+
+      return (
+        <div key={path.join(".")}>
+          <label className="mb-1 block text-sm font-medium">
+            {formatConfigLabel(key)}
+          </label>
+
+          {longText ? (
+            <textarea
+              value={value}
+              onChange={(e) => updateConfigValue(path, e.target.value)}
+              rows={3}
+              className="
+                w-full
+                resize-none
+                rounded-lg
+                border
+                border-gray-300
+                bg-gray-200
+                px-3
+                py-2
+                outline-none
+                focus:ring-2
+                focus:ring-indigo-500
+              "
+            />
+          ) : (
+            <input
+              type="text"
+              value={value}
+              onChange={(e) => updateConfigValue(path, e.target.value)}
+              className="
+                w-full
+                rounded-lg
+                border
+                border-gray-300
+                bg-gray-200
+                px-3
+                py-2
+                outline-none
+                focus:ring-2
+                focus:ring-indigo-500
+              "
+            />
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <div key={path.join(".")}>
+        <label className="mb-1 block text-sm font-medium">
+          {formatConfigLabel(key)}
+        </label>
+
+        <input
+          type="text"
+          value={value ?? ""}
+          onChange={(e) => updateConfigValue(path, e.target.value)}
+          className="
+            w-full
+            rounded-lg
+            border
+            border-gray-300
+            bg-gray-200
+            px-3
+            py-2
+            outline-none
+            focus:ring-2
+            focus:ring-indigo-500
+          "
+        />
+      </div>
+    );
+  };
+
+  const saveExperiment = async () => {
     if (!experimentName.trim()) {
       alert("Please enter an experiment name.");
       return;
     }
 
-    if (!environment) {
+    if (!environment || !moduleId) {
       alert("Please select a VR environment.");
       return;
     }
@@ -224,30 +1638,21 @@ export default function InstructorExperimentBuilder() {
 
       const experimentData = {
         experimentName: experimentName.trim(),
+
         instructions: instructions.trim(),
-        duration: duration,
-        blockId: blockId,
 
-        environment: environment,
+        duration,
 
-        stimuli: stimuli.map((stimulus) => ({
-          type: stimulus.type,
-          content: stimulus.content,
-          duration: stimulus.duration,
-          positionX: stimulus.positionX,
-          positionY: stimulus.positionY,
-          positionZ: stimulus.positionZ,
-          color: stimulus.type === "text" ? stimulus.color : null,
-        })),
+        blockId,
 
-        participantInstructions: participantInstructions.trim(),
-
+        environment,
+        moduleId,
+        moduleName,
+        sceneId,
+        moduleDescription,
+        configuration: cloneConfig(configuration),
         groupIds: selectedGroups,
-
-        allowStudentExperiments: allowStudentExperiments,
-
-        status: status,
-
+        allowStudentExperiments,
         updatedAt: serverTimestamp(),
       };
 
@@ -256,22 +1661,14 @@ export default function InstructorExperimentBuilder() {
 
         await updateDoc(experimentRef, experimentData);
 
-        alert(
-          status === "Published"
-            ? "Experiment updated and published successfully!"
-            : "Experiment updated and saved as draft.",
-        );
+        alert("Experiment updated and published successfully!");
       } else {
         await addDoc(collection(db, "experiment"), {
           ...experimentData,
           createdAt: serverTimestamp(),
         });
 
-        alert(
-          status === "Published"
-            ? "Experiment published successfully!"
-            : "Experiment saved as draft.",
-        );
+        alert("Experiment published successfully!");
       }
 
       navigate(-1);
@@ -286,7 +1683,7 @@ export default function InstructorExperimentBuilder() {
 
   if (loading) {
     return (
-      <div className="font-google min-h-screen flex items-center justify-center">
+      <div className="font-google flex min-h-screen items-center justify-center">
         <p>Loading experiment...</p>
       </div>
     );
@@ -304,8 +1701,8 @@ export default function InstructorExperimentBuilder() {
             px-8
             pt-5
             text-gray-600
-            hover:text-black
             transition
+            hover:text-black
           "
         >
           <ArrowLeft size={20} />
@@ -313,47 +1710,104 @@ export default function InstructorExperimentBuilder() {
           <span>Back to Experiments</span>
         </button>
 
-        <div className="max-w-5xl mx-auto px-6 pb-12">
-          {/* TITLE */}
-
-          <h1 className="text-3xl font-medium mt-5 mb-6">
+        <div className="mx-auto max-w-5xl px-6 pb-12">
+          <h1 className="mt-5 mb-6 text-3xl font-medium">
             {isEditing ? "Edit Experiment" : "New Experiment"}
           </h1>
 
           <section
             className="
+              mb-5
+              rounded-lg
               border
               border-gray-300
-              rounded-lg
               p-4
-              mb-5
             "
           >
-            <h2 className="text-lg font-medium mb-3">Basic Information</h2>
+            <h2 className="mb-3 text-lg font-medium">VR Environment</h2>
 
-            <label className="block text-sm mb-1">Experiment Name</label>
+            {moduleLoading ? (
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <p className="text-sm text-gray-500">
+                  Loading experiment environments...
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                {ENVIRONMENT_OPTIONS.map((option) => {
+                  const selected =
+                    environment === option.name || moduleId === option.moduleId;
+
+                  return (
+                    <button
+                      key={option.moduleId}
+                      type="button"
+                      disabled={saving}
+                      onClick={() => selectEnvironment(option)}
+                      className={`
+                          rounded-lg
+                          border
+                          px-3
+                          py-2
+                          text-left
+                          transition
+                          disabled:cursor-not-allowed
+                          disabled:opacity-60
+                          ${
+                            selected
+                              ? "border-indigo-700 bg-gray-200 ring-1 ring-indigo-700"
+                              : "border-gray-300 hover:bg-gray-50"
+                          }
+                        `}
+                    >
+                      <p className="font-medium">{option.name}</p>
+
+                      <p className="text-sm text-gray-500">
+                        {option.description}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          <section
+            className="
+              mb-5
+              rounded-lg
+              border
+              border-gray-300
+              p-4
+            "
+          >
+            <h2 className="mb-3 text-lg font-medium">Basic Information</h2>
+
+            <label className="mb-1 block text-sm">Experiment Name</label>
 
             <input
               type="text"
               value={experimentName}
               onChange={(e) => setExperimentName(e.target.value)}
-              placeholder="e.g., Stroop Color-Word Test"
+              placeholder="e.g., Inattentional Blindness"
               className="
+                mb-3
                 w-full
-                bg-gray-200
+                rounded-lg
                 border
                 border-gray-300
-                rounded-lg
+                bg-gray-200
                 px-3
                 py-2
-                mb-2
                 outline-none
                 focus:ring-2
                 focus:ring-indigo-500
               "
             />
 
-            <label className="block text-sm mb-1">Instructions</label>
+            <label className="mb-1 block text-sm">
+              Description / Instructions
+            </label>
 
             <textarea
               value={instructions}
@@ -361,22 +1815,22 @@ export default function InstructorExperimentBuilder() {
               placeholder="Describe the tasks needed to perform this experiment"
               rows={4}
               className="
+                mb-3
                 w-full
-                bg-gray-200
+                resize-none
+                rounded-lg
                 border
                 border-gray-300
-                rounded-lg
+                bg-gray-200
                 px-3
                 py-2
-                resize-none
-                mb-2
                 outline-none
                 focus:ring-2
                 focus:ring-indigo-500
               "
             />
 
-            <label className="block text-sm mb-1">Duration</label>
+            <label className="mb-1 block text-sm">Duration</label>
 
             <input
               type="text"
@@ -385,10 +1839,10 @@ export default function InstructorExperimentBuilder() {
               placeholder="e.g., 5 mins"
               className="
                 w-full
-                bg-gray-200
+                rounded-lg
                 border
                 border-gray-300
-                rounded-lg
+                bg-gray-200
                 px-3
                 py-2
                 outline-none
@@ -400,683 +1854,50 @@ export default function InstructorExperimentBuilder() {
 
           <section
             className="
+              mb-5
+              rounded-lg
               border
               border-gray-300
-              rounded-lg
               p-4
-              mb-5
             "
           >
-            <h2 className="text-lg font-medium mb-3">VR Environment</h2>
+            <div className="mb-3">
+              <h2 className="text-lg font-medium">Configuration</h2>
 
-            <div className="grid grid-cols-2 gap-2">
-              {environments.map((env) => (
-                <button
-                  key={env.name}
-                  type="button"
-                  onClick={() => setEnvironment(env.name)}
-                  className={`
-                    text-left
-                    border
-                    rounded-lg
-                    px-3
-                    py-2
-                    transition
-                    ${
-                      environment === env.name
-                        ? "border-indigo-700 bg-indigo-50"
-                        : "border-gray-300 hover:bg-gray-50"
-                    }
-                  `}
-                >
-                  <p className="font-medium">{env.name}</p>
-
-                  <p className="text-sm text-gray-500">{env.description}</p>
-                </button>
-              ))}
+              {moduleDescription && (
+                <p className="mt-1 text-sm text-gray-500">
+                  {moduleDescription}
+                </p>
+              )}
             </div>
-          </section>
 
-          <section
-            className="
-              border
-              border-gray-300
-              rounded-lg
-              p-4
-              mb-5
-            "
-          >
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-lg font-medium">
-                Stimuli ({stimuli.length})
-              </h2>
-
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => addStimulus("text")}
-                  className="
-                    border
-                    border-gray-300
-                    rounded-lg
-                    px-3
-                    py-1.5
-                    flex
-                    items-center
-                    gap-1
-                    hover:bg-gray-50
-                  "
-                >
-                  <Plus size={15} />
-                  Text
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => addStimulus("image")}
-                  className="
-                    border
-                    border-gray-300
-                    rounded-lg
-                    px-3
-                    py-1.5
-                    flex
-                    items-center
-                    gap-1
-                    hover:bg-gray-50
-                  "
-                >
-                  <Image size={15} />
-                  Image
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => addStimulus("3d")}
-                  className="
-                    border
-                    border-gray-300
-                    rounded-lg
-                    px-3
-                    py-1.5
-                    flex
-                    items-center
-                    gap-1
-                    hover:bg-gray-50
-                  "
-                >
-                  <Box size={15} />
-                  3D Object
-                </button>
+            {!moduleId ? (
+              <div className="rounded-lg bg-gray-50 p-4 text-sm text-gray-500">
+                Select a VR environment to load its default configuration.
               </div>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              {stimuli.map((stimulus) => (
-                <div
-                  key={stimulus.id}
-                  className="
-                    border
-                    border-gray-300
-                    rounded-lg
-                    p-3
-                  "
-                >
-                  <div className="flex justify-between mb-2">
-                    <h3 className="text-base font-medium">
-                      {stimulus.type === "text"
-                        ? "Text"
-                        : stimulus.type === "image"
-                          ? "Image"
-                          : "3D Object"}
-                    </h3>
-
-                    <button
-                      type="button"
-                      onClick={() => removeStimulus(stimulus.id)}
-                      className="
-                        text-red-600
-                        hover:text-red-800
-                      "
-                    >
-                      <X size={18} />
-                    </button>
-                  </div>
-
-                  {stimulus.type === "text" && (
-                    <>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-sm mb-1">Content</label>
-
-                          <div className="relative">
-                            <input
-                              type="text"
-                              value={stimulus.content}
-                              onChange={(e) =>
-                                updateStimulus(
-                                  stimulus.id,
-                                  "content",
-                                  e.target.value,
-                                )
-                              }
-                              className="
-                                w-full
-                                bg-gray-200
-                                border
-                                border-gray-300
-                                rounded-lg
-                                px-3
-                                py-2
-                              "
-                            />
-
-                            <input
-                              type="color"
-                              value={stimulus.color || "#ff0000"}
-                              onChange={(e) =>
-                                updateStimulus(
-                                  stimulus.id,
-                                  "color",
-                                  e.target.value,
-                                )
-                              }
-                              className="
-                                absolute
-                                right-2
-                                top-1/2
-                                -translate-y-1/2
-                                w-7
-                                h-7
-                                border-0
-                                bg-transparent
-                                cursor-pointer
-                              "
-                            />
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="block text-sm mb-1">
-                            Duration (seconds)
-                          </label>
-
-                          <input
-                            type="number"
-                            value={stimulus.duration}
-                            onChange={(e) =>
-                              updateStimulus(
-                                stimulus.id,
-                                "duration",
-                                e.target.value,
-                              )
-                            }
-                            className="
-                              w-full
-                              bg-gray-200
-                              border
-                              border-gray-300
-                              rounded-lg
-                              px-3
-                              py-2
-                            "
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 mt-2">
-                        <div>
-                          <label className="block text-sm mb-1">
-                            Position (X)
-                          </label>
-
-                          <input
-                            type="number"
-                            value={stimulus.positionX}
-                            onChange={(e) =>
-                              updateStimulus(
-                                stimulus.id,
-                                "positionX",
-                                e.target.value,
-                              )
-                            }
-                            className="
-                              w-full
-                              bg-gray-200
-                              border
-                              border-gray-300
-                              rounded-lg
-                              px-3
-                              py-2
-                            "
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-sm mb-1">
-                            Position (Y)
-                          </label>
-
-                          <input
-                            type="number"
-                            value={stimulus.positionY}
-                            onChange={(e) =>
-                              updateStimulus(
-                                stimulus.id,
-                                "positionY",
-                                e.target.value,
-                              )
-                            }
-                            className="
-                              w-full
-                              bg-gray-200
-                              border
-                              border-gray-300
-                              rounded-lg
-                              px-3
-                              py-2
-                            "
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-sm mb-1">
-                            Position (Z)
-                          </label>
-
-                          <input
-                            type="number"
-                            value={stimulus.positionZ}
-                            onChange={(e) =>
-                              updateStimulus(
-                                stimulus.id,
-                                "positionZ",
-                                e.target.value,
-                              )
-                            }
-                            className="
-                              w-full
-                              bg-gray-200
-                              border
-                              border-gray-300
-                              rounded-lg
-                              px-3
-                              py-2
-                            "
-                          />
-                        </div>
-                      </div>
-                    </>
-                  )}
-
-                  {stimulus.type === "image" && (
-                    <>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-sm mb-1">Content</label>
-
-                          <label
-                            className="
-                              w-full
-                              bg-gray-200
-                              border
-                              border-gray-300
-                              rounded-lg
-                              px-3
-                              py-2
-                              flex
-                              items-center
-                              justify-between
-                              cursor-pointer
-                            "
-                          >
-                            <span className="truncate">
-                              {stimulus.content || "Choose image"}
-                            </span>
-
-                            <Upload size={18} />
-
-                            <input
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-
-                                if (file) {
-                                  updateStimulus(
-                                    stimulus.id,
-                                    "content",
-                                    file.name,
-                                  );
-                                }
-                              }}
-                            />
-                          </label>
-                        </div>
-
-                        <div>
-                          <label className="block text-sm mb-1">
-                            Duration (seconds)
-                          </label>
-
-                          <input
-                            type="number"
-                            value={stimulus.duration}
-                            onChange={(e) =>
-                              updateStimulus(
-                                stimulus.id,
-                                "duration",
-                                e.target.value,
-                              )
-                            }
-                            className="
-                              w-full
-                              bg-gray-200
-                              border
-                              border-gray-300
-                              rounded-lg
-                              px-3
-                              py-2
-                            "
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 mt-2">
-                        <div>
-                          <label className="block text-sm mb-1">
-                            Position (X)
-                          </label>
-
-                          <input
-                            type="number"
-                            value={stimulus.positionX}
-                            onChange={(e) =>
-                              updateStimulus(
-                                stimulus.id,
-                                "positionX",
-                                e.target.value,
-                              )
-                            }
-                            className="
-                              w-full
-                              bg-gray-200
-                              border
-                              border-gray-300
-                              rounded-lg
-                              px-3
-                              py-2
-                            "
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-sm mb-1">
-                            Position (Y)
-                          </label>
-
-                          <input
-                            type="number"
-                            value={stimulus.positionY}
-                            onChange={(e) =>
-                              updateStimulus(
-                                stimulus.id,
-                                "positionY",
-                                e.target.value,
-                              )
-                            }
-                            className="
-                              w-full
-                              bg-gray-200
-                              border
-                              border-gray-300
-                              rounded-lg
-                              px-3
-                              py-2
-                            "
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-sm mb-1">
-                            Position (Z)
-                          </label>
-
-                          <input
-                            type="number"
-                            value={stimulus.positionZ}
-                            onChange={(e) =>
-                              updateStimulus(
-                                stimulus.id,
-                                "positionZ",
-                                e.target.value,
-                              )
-                            }
-                            className="
-                              w-full
-                              bg-gray-200
-                              border
-                              border-gray-300
-                              rounded-lg
-                              px-3
-                              py-2
-                            "
-                          />
-                        </div>
-                      </div>
-                    </>
-                  )}
-
-                  {stimulus.type === "3d" && (
-                    <>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-sm mb-1">
-                            3D Object
-                          </label>
-
-                          <label
-                            className="
-                              w-full
-                              bg-gray-200
-                              border
-                              border-gray-300
-                              rounded-lg
-                              px-3
-                              py-2
-                              flex
-                              items-center
-                              justify-between
-                              cursor-pointer
-                            "
-                          >
-                            <span className="truncate">
-                              {stimulus.content || "Choose 3D object"}
-                            </span>
-
-                            <Upload size={18} />
-
-                            <input
-                              type="file"
-                              accept=".glb,.gltf,.obj,.fbx"
-                              className="hidden"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-
-                                if (file) {
-                                  updateStimulus(
-                                    stimulus.id,
-                                    "content",
-                                    file.name,
-                                  );
-                                }
-                              }}
-                            />
-                          </label>
-                        </div>
-
-                        <div>
-                          <label className="block text-sm mb-1">
-                            Duration (seconds)
-                          </label>
-
-                          <input
-                            type="number"
-                            value={stimulus.duration}
-                            onChange={(e) =>
-                              updateStimulus(
-                                stimulus.id,
-                                "duration",
-                                e.target.value,
-                              )
-                            }
-                            className="
-                              w-full
-                              bg-gray-200
-                              border
-                              border-gray-300
-                              rounded-lg
-                              px-3
-                              py-2
-                            "
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 mt-2">
-                        <div>
-                          <label className="block text-sm mb-1">
-                            Position (X)
-                          </label>
-
-                          <input
-                            type="number"
-                            value={stimulus.positionX}
-                            onChange={(e) =>
-                              updateStimulus(
-                                stimulus.id,
-                                "positionX",
-                                e.target.value,
-                              )
-                            }
-                            className="
-                              w-full
-                              bg-gray-200
-                              border
-                              border-gray-300
-                              rounded-lg
-                              px-3
-                              py-2
-                            "
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-sm mb-1">
-                            Position (Y)
-                          </label>
-
-                          <input
-                            type="number"
-                            value={stimulus.positionY}
-                            onChange={(e) =>
-                              updateStimulus(
-                                stimulus.id,
-                                "positionY",
-                                e.target.value,
-                              )
-                            }
-                            className="
-                              w-full
-                              bg-gray-200
-                              border
-                              border-gray-300
-                              rounded-lg
-                              px-3
-                              py-2
-                            "
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-sm mb-1">
-                            Position (Z)
-                          </label>
-
-                          <input
-                            type="number"
-                            value={stimulus.positionZ}
-                            onChange={(e) =>
-                              updateStimulus(
-                                stimulus.id,
-                                "positionZ",
-                                e.target.value,
-                              )
-                            }
-                            className="
-                              w-full
-                              bg-gray-200
-                              border
-                              border-gray-300
-                              rounded-lg
-                              px-3
-                              py-2
-                            "
-                          />
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
+            ) : Object.keys(configuration).length === 0 ? (
+              <div className="rounded-lg bg-gray-50 p-4 text-sm text-gray-500">
+                This experiment module does not have a default configuration.
+              </div>
+            ) : (
+              <div className="flex flex-col gap-4">
+                {getOrderedConfigurationKeys().map((key) =>
+                  renderConfigValue(configuration[key], [key], key),
+                )}
+              </div>
+            )}
           </section>
 
           <section
             className="
+              mb-5
+              rounded-lg
               border
               border-gray-300
-              rounded-lg
               p-4
-              mb-5
             "
           >
-            <h2 className="text-lg font-medium mb-3">
-              Participant Instructions
-            </h2>
-
-            <textarea
-              value={participantInstructions}
-              onChange={(e) => setParticipantInstructions(e.target.value)}
-              placeholder="Instructions shown to participants before the experiment begins"
-              rows={5}
-              className="
-                w-full
-                bg-gray-200
-                border
-                border-gray-300
-                rounded-lg
-                px-3
-                py-2
-                resize-none
-                outline-none
-                focus:ring-2
-                focus:ring-indigo-500
-              "
-            />
-          </section>
-
-          <section
-            className="
-              border
-              border-gray-300
-              rounded-lg
-              p-4
-              mb-5
-            "
-          >
-            <h2 className="text-lg font-medium mb-3">Groups</h2>
+            <h2 className="mb-3 text-lg font-medium">Groups</h2>
 
             {groups.length === 0 ? (
               <p className="text-gray-500">
@@ -1089,20 +1910,16 @@ export default function InstructorExperimentBuilder() {
                     key={group.id}
                     className="
                       flex
+                      cursor-pointer
                       items-center
                       gap-3
-                      cursor-pointer
                     "
                   >
                     <input
                       type="checkbox"
                       checked={selectedGroups.includes(group.id)}
                       onChange={() => toggleGroup(group.id)}
-                      className="
-                        w-4
-                        h-4
-                        accent-indigo-600
-                      "
+                      className="h-4 w-4 accent-indigo-600"
                     />
 
                     <span>
@@ -1114,7 +1931,7 @@ export default function InstructorExperimentBuilder() {
             )}
           </section>
 
-          <div className="flex items-center gap-3 mb-6">
+          <div className="mb-6 flex flex-wrap items-center gap-3">
             <span>
               Allow Students to create an experiment for this activity?
             </span>
@@ -1145,20 +1962,20 @@ export default function InstructorExperimentBuilder() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              disabled={saving}
+              disabled={saving || moduleLoading}
               onClick={() => saveExperiment("Published")}
               className="
-                bg-indigo-800
-                hover:bg-indigo-700
-                disabled:bg-gray-400
-                text-white
-                rounded-lg
-                px-4
-                py-2
                 flex
                 items-center
                 gap-2
+                rounded-lg
+                bg-indigo-800
+                px-4
+                py-2
+                text-white
                 transition
+                hover:bg-indigo-700
+                disabled:bg-gray-400
               "
             >
               <Plus size={18} />
@@ -1168,24 +1985,6 @@ export default function InstructorExperimentBuilder() {
                 : isEditing
                   ? "Update Experiment"
                   : "Publish Experiment"}
-            </button>
-
-            <button
-              type="button"
-              disabled={saving}
-              onClick={() => saveExperiment("Draft")}
-              className="
-                border
-                border-gray-300
-                hover:bg-gray-50
-                disabled:bg-gray-100
-                rounded-lg
-                px-4
-                py-2
-                transition
-              "
-            >
-              {isEditing ? "Save as draft" : "Save as draft"}
             </button>
           </div>
         </div>
