@@ -67,38 +67,42 @@ public class QuestionManager : MonoBehaviour
     {
         allQuestions.Clear();
 
-        // 1. Prefer remote targets from Firestore
-        if (ExperimentConfigLoader.Current != null &&
-            ExperimentConfigLoader.Current.memory_Targets != null &&
-            ExperimentConfigLoader.Current.memory_Targets.Count > 0)
+        bool usedRemote = false;
+
+        // Check individual conditions to see exactly what fails
+        bool isCurrentNotNull = ExperimentConfigLoader.Current != null;
+        bool isTargetsNotNull = isCurrentNotNull && ExperimentConfigLoader.Current.memory_Targets != null;
+        int targetCount = isTargetsNotNull ? ExperimentConfigLoader.Current.memory_Targets.Count : 0;
+        bool hasTargets = targetCount > 0;
+
+        Debug.Log($"[QuestionManager Check] ExperimentConfigLoader.Current != null: {isCurrentNotNull}");
+        Debug.Log($"[QuestionManager Check] memory_Targets != null: {isTargetsNotNull}");
+        Debug.Log($"[QuestionManager Check] memory_Targets.Count > 0: {hasTargets} (Count: {targetCount})");
+
+        if (isCurrentNotNull && isTargetsNotNull && hasTargets)
         {
+            usedRemote = true;
             Debug.Log("[QuestionManager] Using remote targets from Firestore.");
 
             foreach (MemoryTargetEntry entry in ExperimentConfigLoader.Current.memory_Targets)
-            {
                 AddEntryQuestions(entry);
-            }
         }
         else
         {
-            // 2. Fallback to ScriptableObject databases
             Debug.Log("[QuestionManager] Using local ScriptableObject databases.");
 
             foreach (MemoryTargetDatabase db in databases)
             {
                 if (db == null) continue;
-
                 foreach (MemoryTargetEntry entry in db.entries)
-                {
                     AddEntryQuestions(entry);
-                }
             }
         }
 
         if (randomizeQuestions)
             Shuffle(allQuestions);
 
-        Debug.Log($"[QuestionManager] Built {allQuestions.Count} questions.");
+        Debug.Log($"[QuestionManager] Source: {(usedRemote ? "FIRESTORE" : "LOCAL")} | Built {allQuestions.Count} questions.");
     }
 
     private void AddEntryQuestions(MemoryTargetEntry entry)
@@ -107,7 +111,27 @@ public class QuestionManager : MonoBehaviour
 
         foreach (QuestionData q in entry.questions)
         {
-            if (!q.enabled) continue;
+
+
+            string[] choices = q.multipleChoiceOptions;
+
+            // Default choices when Firestore left the array empty
+            if (choices == null || choices.Length == 0)
+            {
+                switch (q.questionType)
+                {
+
+
+                    case QuestionType.YesNo:
+                        choices = new string[] { }; // Yes/No uses its own buttons
+                        break;
+
+                    default:
+                        choices = new string[] { };
+                        Debug.LogWarning($"[QuestionManager] No choices for [{q.questionType}] — {q.questionText}");
+                        break;
+                }
+            }
 
             allQuestions.Add(new QuestionEntry
             {
@@ -117,7 +141,7 @@ public class QuestionManager : MonoBehaviour
                 questionText = q.questionText,
                 questionType = q.questionType,
                 correctAnswer = q.correctAnswer,
-                choices = q.multipleChoiceOptions
+                choices = choices
             });
         }
     }

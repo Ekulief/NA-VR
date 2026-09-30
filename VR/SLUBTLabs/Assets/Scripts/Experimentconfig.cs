@@ -247,66 +247,72 @@ public class ExperimentConfig : ScriptableObject
 
         if (configMap.TryGetValue("globalInstructionDelay", out object v10)) globalInstructionDelay = Convert.ToSingle(v10);
 
-        // ── Targets (objects + questions) ─────────────────────────────────────
-        if (snap.TryGetValue("targets", out object targetsObj) && targetsObj is List<object> targetsList)
+        
         {
             memory_Targets.Clear();
 
-            foreach (object targetObj in targetsList)
+            if (configMap.TryGetValue("targets", out object targetsObj) &&
+                targetsObj is List<object> targetsList)
             {
-                if (targetObj is not Dictionary<string, object> targetMap) continue;
+                Debug.Log($"[ExperimentConfig] Found targets inside defaultConfig, count = {targetsList.Count}");
 
-                MemoryTargetEntry entry = new MemoryTargetEntry();
-
-                if (targetMap.TryGetValue("gameID", out object id)) entry.gameID = id.ToString();
-                if (targetMap.TryGetValue("objectName", out object name)) entry.objectName = name.ToString();
-                if (targetMap.TryGetValue("room", out object room)) entry.room = room.ToString();
-
-                // Questions
-                if (targetMap.TryGetValue("questions", out object questionsObj) && questionsObj is List<object> questionsList)
+                foreach (object targetObj in targetsList)
                 {
-                    List<QuestionData> qList = new List<QuestionData>();
+                    if (targetObj is not Dictionary<string, object> targetMap) continue;
 
-                    foreach (object qObj in questionsList)
+                    MemoryTargetEntry entry = new MemoryTargetEntry();
+
+                    if (targetMap.TryGetValue("gameID", out object id)) entry.gameID = id.ToString();
+                    if (targetMap.TryGetValue("objectName", out object name)) entry.objectName = name.ToString();
+                    if (targetMap.TryGetValue("room", out object room)) entry.room = room.ToString();
+
+                    if (targetMap.TryGetValue("questions", out object questionsObj) &&
+                        questionsObj is List<object> questionsList)
                     {
-                        if (qObj is not Dictionary<string, object> qMap) continue;
+                        List<QuestionData> qList = new List<QuestionData>();
 
-                        QuestionData q = new QuestionData();
-
-                        if (qMap.TryGetValue("questionText", out object qt)) q.questionText = qt.ToString();
-                        if (qMap.TryGetValue("correctAnswer", out object ca)) q.correctAnswer = ca.ToString();
-
-                        // questionType
-                        if (qMap.TryGetValue("questionType", out object typeObj))
+                        foreach (object qObj in questionsList)
                         {
-                            if (System.Enum.TryParse(typeObj.ToString(), true, out QuestionType parsedType))
+                            if (qObj is not Dictionary<string, object> qMap) continue;
+
+                            QuestionData q = new QuestionData();
+
+                            if (qMap.TryGetValue("questionText", out object qt))
+                                q.questionText = qt.ToString();
+                            if (qMap.TryGetValue("correctAnswer", out object ca))
+                                q.correctAnswer = ca.ToString();
+
+                            if (qMap.TryGetValue("questionType", out object typeObj) &&
+                                System.Enum.TryParse(typeObj.ToString(), true, out QuestionType parsedType))
+                            {
                                 q.questionType = parsedType;
+                            }
+
+                            if (qMap.TryGetValue("multipleChoiceOptions", out object optsObj) &&
+                                optsObj is List<object> optsList)
+                            {
+                                q.multipleChoiceOptions = optsList.ConvertAll(o => o.ToString()).ToArray();
+                            }
+                            else
+                            {
+                                q.multipleChoiceOptions = new string[0];
+                            }
+
+                            qList.Add(q);
                         }
 
-                        // multipleChoiceOptions
-                        if (qMap.TryGetValue("multipleChoiceOptions", out object optsObj) && optsObj is List<object> optsList)
-                        {
-                            q.multipleChoiceOptions = optsList.ConvertAll(o => o.ToString()).ToArray();
-                        }
-                        else
-                        {
-                            q.multipleChoiceOptions = new string[0];
-                        }
-                        // enabled flag 
-                        if (qMap.TryGetValue("enabled", out object enObj))
-                            q.enabled = Convert.ToBoolean(enObj);
-                        else
-                            q.enabled = true;
-                        qList.Add(q);
+                        entry.questions = qList.ToArray();
                     }
 
-                    entry.questions = qList.ToArray();
+                    memory_Targets.Add(entry);
                 }
 
-                memory_Targets.Add(entry);
+                Debug.Log($"[ExperimentConfig] Loaded {memory_Targets.Count} remote targets from defaultConfig.targets.");
             }
-
-            Debug.Log($"[ExperimentConfig] Loaded {memory_Targets.Count} remote targets from Firestore.");
+            else
+            {
+                Debug.LogWarning("[ExperimentConfig] defaultConfig.targets missing or not a list.");
+            }
         }
     }
     public void ApplyFromJson(string json)

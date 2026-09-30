@@ -1,8 +1,9 @@
-﻿using UnityEngine;
-using UnityEngine.UI;
-using TMPro;
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
+using TMPro;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
 
 public class QuestionPanelUI : MonoBehaviour
 {
@@ -37,6 +38,12 @@ public class QuestionPanelUI : MonoBehaviour
     public TextMeshProUGUI feedbackText;
     public Color correctColor = new Color(0.2f, 0.8f, 0.2f);
     public Color incorrectColor = new Color(0.9f, 0.2f, 0.2f);
+
+    [Header("Selection Highlight")]
+    public Color normalBgColor = new Color(0.15f, 0.15f, 0.15f, 1f);
+    public Color highlightBgColor = Color.white;
+    public Color normalTextColor = Color.white;
+    public Color highlightTextColor = Color.black;
 
     [Header("Settings")]
     public bool showFeedback = true;
@@ -89,11 +96,19 @@ public class QuestionPanelUI : MonoBehaviour
         if (feedbackPanel != null)
             feedbackPanel.SetActive(false);
 
-        // Hook up YES/NO buttons
         if (yesButton != null)
+        {
             yesButton.onClick.AddListener(() => OnAnswerSelected("true"));
+            TextMeshProUGUI yesLabel = yesButton.GetComponentInChildren<TextMeshProUGUI>();
+            WireHighlight(yesButton, yesLabel);
+        }
+
         if (noButton != null)
+        {
             noButton.onClick.AddListener(() => OnAnswerSelected("false"));
+            TextMeshProUGUI noLabel = noButton.GetComponentInChildren<TextMeshProUGUI>();
+            WireHighlight(noButton, noLabel);
+        }
     }
 
     // ─────────────────────────────────────────
@@ -133,7 +148,48 @@ public class QuestionPanelUI : MonoBehaviour
         questionStartTime = Time.realtimeSinceStartup;
         waitingForAnswer = true;
     }
+    private void ApplyButtonColors(Button btn, TextMeshProUGUI label, bool highlighted)
+    {
+        if (btn == null) return;
 
+        Image img = btn.GetComponent<Image>();
+        if (img != null)
+            img.color = highlighted ? highlightBgColor : normalBgColor;
+
+        if (label != null)
+            label.color = highlighted ? highlightTextColor : normalTextColor;
+    }
+
+    private void WireHighlight(Button btn, TextMeshProUGUI label)
+    {
+        if (btn == null) return;
+
+        // Reset to normal
+        ApplyButtonColors(btn, label, false);
+
+        // EventTrigger for pointer enter/exit (works with XR UI ray if raycaster is set up)
+        EventTrigger trigger = btn.gameObject.GetComponent<EventTrigger>();
+        if (trigger == null)
+            trigger = btn.gameObject.AddComponent<EventTrigger>();
+
+        trigger.triggers.Clear();
+
+        var enter = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
+        enter.callback.AddListener(_ => ApplyButtonColors(btn, label, true));
+        trigger.triggers.Add(enter);
+
+        var exit = new EventTrigger.Entry { eventID = EventTriggerType.PointerExit };
+        exit.callback.AddListener(_ => ApplyButtonColors(btn, label, false));
+        trigger.triggers.Add(exit);
+
+        var down = new EventTrigger.Entry { eventID = EventTriggerType.PointerDown };
+        down.callback.AddListener(_ => ApplyButtonColors(btn, label, true));
+        trigger.triggers.Add(down);
+
+        var up = new EventTrigger.Entry { eventID = EventTriggerType.PointerUp };
+        up.callback.AddListener(_ => ApplyButtonColors(btn, label, false));
+        trigger.triggers.Add(up);
+    }
     private void SetupAnswerLayout(QuestionEntry entry)
     {
         // Hide both groups first
@@ -146,10 +202,7 @@ public class QuestionPanelUI : MonoBehaviour
                 SetupYesNo();
                 break;
 
-            case QuestionType.Count:
             case QuestionType.MultipleChoice:
-            case QuestionType.Color:
-            case QuestionType.Detail:
                 SetupMultipleChoice(entry.choices);
                 break;
         }
@@ -180,6 +233,8 @@ public class QuestionPanelUI : MonoBehaviour
         // Set up only the buttons we need
         for (int i = 0; i < choices.Length && i < choiceButtons.Count; i++)
         {
+            WireHighlight(choiceButtons[i], choiceTexts[i]);
+            ApplyButtonColors(choiceButtons[i], choiceTexts[i], false);
             int index = i; // capture for lambda
 
             choiceButtons[i].gameObject.SetActive(true);
