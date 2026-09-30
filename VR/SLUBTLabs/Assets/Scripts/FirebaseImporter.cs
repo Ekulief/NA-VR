@@ -7,27 +7,18 @@ public class FirestoreImporter : MonoBehaviour
 {
     async void Start()
     {
-        Debug.Log("Authenticating...");
-
-        try
-        {
-            Debug.Log("Signed in successfully! Processing existing targets...");
-            await AddEnabledFieldToAllTargets();
-        }
-        catch (System.Exception ex)
-        {
-            Debug.LogError($"Authentication failed: {ex.Message}");
-        }
+        Debug.Log("Starting Firestore cleanup...");
+        await ProcessQuestionsAndTargets();
     }
 
-    private async Task AddEnabledFieldToAllTargets()
+    private async Task ProcessQuestionsAndTargets()
     {
         FirebaseFirestore db = FirebaseFirestore.DefaultInstance;
         DocumentReference docRef = db.Collection("experimentModule").Document("Memory2");
 
         try
         {
-            // 1. Fetch document from Firestore
+            // 1. Fetch current document from Firestore
             DocumentSnapshot snapshot = await docRef.GetSnapshotAsync();
             if (!snapshot.Exists)
             {
@@ -53,7 +44,7 @@ public class FirestoreImporter : MonoBehaviour
                 return;
             }
 
-            // 3. Loop through all existing targets and set enabled = true on every question
+            // 3. Loop through all targets and process questions
             foreach (var targetObj in targets)
             {
                 if (targetObj is Dictionary<string, object> target)
@@ -64,21 +55,39 @@ public class FirestoreImporter : MonoBehaviour
                         {
                             if (questionObj is Dictionary<string, object> question)
                             {
-                                question["enabled"] = true;
+                                // Remove enabled fields
+                                question.Remove("enabled");
+                                question.Remove("enabledQuestion");
+
+                                // Check and update questionType
+                                if (question.TryGetValue("questionType", out object typeObj) && typeObj is string currentType)
+                                {
+                                    string typeLower = currentType.ToLower().Trim();
+
+                                    // Convert Color, Detail, Symbol, Count, and Identification to MultipleChoice; keep YesNo
+                                    if (typeLower == "color" ||
+                                        typeLower == "detail" ||
+                                        typeLower == "symbol" ||
+                                        typeLower == "count" ||
+                                        typeLower == "identification")
+                                    {
+                                        question["questionType"] = "MultipleChoice";
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
 
-            // 4. Overwrite defaultConfig.targets with updated data
+            // 4. Overwrite defaultConfig.targets with the updated targets array
             Dictionary<string, object> updates = new Dictionary<string, object>
             {
                 { "defaultConfig.targets", targets }
             };
 
             await docRef.UpdateAsync(updates);
-            Debug.Log("<color=green>Successfully added 'enabled: true' to all questions in Firestore!</color>");
+            Debug.Log("<color=green>Successfully updated question types (including Identification) to MultipleChoice in Firestore!</color>");
         }
         catch (System.Exception ex)
         {
