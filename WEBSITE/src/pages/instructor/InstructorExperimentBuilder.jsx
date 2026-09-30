@@ -73,6 +73,14 @@ const CONFIGURATION_ORDER = {
   ],
 };
 
+const QUESTION_FIELD_ORDER = [
+  "questionText",
+  "questionType",
+  "multipleChoiceOptions",
+  "correctAnswer",
+  "enabled",
+];
+
 const ENVIRONMENT_OPTIONS = [
   {
     moduleId: "Depth_Perception",
@@ -394,6 +402,7 @@ export default function InstructorExperimentBuilder() {
     if (!configuredOrder) {
       return Object.keys(configuration);
     }
+
     const orderedKeys = configuredOrder.filter((key) =>
       Object.prototype.hasOwnProperty.call(configuration, key),
     );
@@ -406,11 +415,11 @@ export default function InstructorExperimentBuilder() {
   };
 
   const getOrderedTargetKeys = (target) => {
+    const hiddenKeys = ["room", "gameId"];
+
     const preferredOrder = [
       "questions",
-      "room",
       "objectName",
-      "gameId",
       "name",
       "targetName",
       "question",
@@ -422,10 +431,12 @@ export default function InstructorExperimentBuilder() {
       "type",
     ];
 
-    const existingKeys = Object.keys(target);
+    const existingKeys = Object.keys(target).filter(
+      (key) => !hiddenKeys.includes(key),
+    );
 
     const orderedKeys = preferredOrder.filter((key) =>
-      Object.prototype.hasOwnProperty.call(target, key),
+      existingKeys.includes(key),
     );
 
     const remainingKeys = existingKeys.filter(
@@ -435,98 +446,182 @@ export default function InstructorExperimentBuilder() {
     return [...orderedKeys, ...remainingKeys];
   };
 
+  const addMemoryQuestion = (questionsPath) => {
+    setConfiguration((previous) => {
+      const next = cloneConfig(previous);
+
+      let questions = next;
+
+      for (let index = 0; index < questionsPath.length; index += 1) {
+        const pathKey = questionsPath[index];
+
+        if (questions[pathKey] === undefined) {
+          questions[pathKey] = [];
+        }
+
+        questions = questions[pathKey];
+      }
+
+      if (!Array.isArray(questions)) {
+        return previous;
+      }
+
+      questions.push({
+        questionText: "",
+        questionType: "MultipleChoice",
+        multipleChoiceOptions: ["", ""],
+        correctAnswer: "",
+        enabled: true,
+      });
+
+      return next;
+    });
+  };
+
+  const removeMemoryQuestion = (questionsPath, questionIndex) => {
+    setConfiguration((previous) => {
+      const next = cloneConfig(previous);
+
+      let questions = next;
+
+      for (let index = 0; index < questionsPath.length; index += 1) {
+        questions = questions[questionsPath[index]];
+      }
+
+      if (!Array.isArray(questions)) {
+        return previous;
+      }
+
+      questions.splice(questionIndex, 1);
+
+      return next;
+    });
+  };
+
   const renderMemoryQuestions = (questions, path) => {
     return (
-      <div
-        className="
-        md:col-span-2
-        rounded-xl
-        border
-        border-gray-200
-        bg-gray-50
-        p-4
-      "
-      >
-        <div className="mb-4 flex items-start justify-between">
-          <div>
-            <h3 className="text-base font-semibold text-gray-900">Questions</h3>
-
-            <p className="mt-1 text-sm text-gray-500">
-              Configure the questions used during the memory experiment.
-            </p>
-          </div>
-
-          <div className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700">
-            {questions.length}{" "}
-            {questions.length === 1 ? "Question" : "Questions"}
-          </div>
+      <>
+        <div className="md:col-span-2 flex justify-end">
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => addMemoryQuestion(path)}
+            className="
+              flex
+              items-center
+              gap-1.5
+              rounded-lg
+              border
+              border-gray-300
+              px-3
+              py-1.5
+              text-xs
+              font-medium
+              text-gray-700
+              transition
+              hover:bg-gray-50
+              disabled:cursor-not-allowed
+              disabled:opacity-50
+            "
+          >
+            <Plus size={14} />
+            Add Question
+          </button>
         </div>
 
         {questions.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-gray-300 bg-white p-6 text-center">
-            <p className="text-sm text-gray-500">
-              No questions are configured.
-            </p>
+          <div className="md:col-span-2">
+            <div className="rounded-lg border border-dashed border-gray-300 bg-white p-6 text-center">
+              <p className="text-sm text-gray-500">
+                No questions are configured.
+              </p>
+            </div>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="md:col-span-2 space-y-4">
             {questions.map((question, index) => (
               <div
                 key={`${path.join(".")}-${index}`}
                 className="
-                overflow-hidden
-                rounded-xl
-                border
-                border-gray-200
-                bg-white
-                shadow-sm
-              "
+                  overflow-hidden
+                  rounded-xl
+                  border
+                  border-gray-200
+                  bg-white
+                  shadow-sm
+                "
               >
                 <div
                   className="
-                  flex
-                  items-center
-                  gap-3
-                  border-b
-                  border-gray-200
-                  bg-gray-50
-                  px-4
-                  py-3
-                "
-                >
-                  <div
-                    className="
                     flex
-                    h-8
-                    w-8
                     items-center
-                    justify-center
-                    rounded-lg
-                    bg-indigo-100
-                    text-sm
-                    font-semibold
-                    text-indigo-700
+                    justify-between
+                    gap-3
+                    border-b
+                    border-gray-200
+                    bg-gray-50
+                    px-4
+                    py-3
                   "
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="
+                        flex
+                        h-8
+                        w-8
+                        items-center
+                        justify-center
+                        rounded-lg
+                        bg-indigo-100
+                        text-sm
+                        font-semibold
+                        text-indigo-700
+                      "
+                    >
+                      {index + 1}
+                    </div>
+
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">
+                        Question {index + 1}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => removeMemoryQuestion(path, index)}
+                    className="
+                      rounded-lg
+                      px-2.5
+                      py-1.5
+                      text-xs
+                      font-medium
+                      text-red-600
+                      transition
+                      hover:bg-red-50
+                      disabled:cursor-not-allowed
+                      disabled:opacity-50
+                    "
                   >
-                    {index + 1}
-                  </div>
-
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">
-                      Question {index + 1}
-                    </p>
-
-                    <p className="text-xs text-gray-500">
-                      Memory scanning question
-                    </p>
-                  </div>
+                    Remove
+                  </button>
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2">
                   {question &&
                   typeof question === "object" &&
                   !Array.isArray(question) ? (
-                    Object.keys(question).map((questionKey) => {
+                    [
+                      ...QUESTION_FIELD_ORDER.filter((key) =>
+                        Object.prototype.hasOwnProperty.call(question, key),
+                      ),
+                      ...Object.keys(question).filter(
+                        (key) => !QUESTION_FIELD_ORDER.includes(key),
+                      ),
+                    ].map((questionKey) => {
                       const value = question[questionKey];
                       const questionPath = [...path, index, questionKey];
 
@@ -548,21 +643,21 @@ export default function InstructorExperimentBuilder() {
                               rows={3}
                               placeholder="Enter the question..."
                               className="
-                              w-full
-                              resize-none
-                              rounded-lg
-                              border
-                              border-gray-300
-                              bg-white
-                              px-3
-                              py-2.5
-                              text-sm
-                              outline-none
-                              transition
-                              focus:border-indigo-500
-                              focus:ring-2
-                              focus:ring-indigo-500/20
-                            "
+                                w-full
+                                resize-none
+                                rounded-lg
+                                border
+                                border-gray-300
+                                bg-white
+                                px-3
+                                py-2.5
+                                text-sm
+                                outline-none
+                                transition
+                                focus:border-indigo-500
+                                focus:ring-2
+                                focus:ring-indigo-500/20
+                              "
                             />
                           </div>
                         );
@@ -575,28 +670,55 @@ export default function InstructorExperimentBuilder() {
                               Question Type
                             </label>
 
-                            <input
-                              type="text"
-                              value={value ?? ""}
-                              onChange={(e) =>
-                                updateConfigValue(questionPath, e.target.value)
+                            <select
+                              value={
+                                value === "YesNo" ? "YesNo" : "MultipleChoice"
                               }
+                              onChange={(e) => {
+                                const newType = e.target.value;
+
+                                updateConfigValue(questionPath, newType);
+
+                                const optionsPath = [
+                                  ...path,
+                                  index,
+                                  "multipleChoiceOptions",
+                                ];
+
+                                if (newType === "MultipleChoice") {
+                                  if (
+                                    !Array.isArray(
+                                      question.multipleChoiceOptions,
+                                    )
+                                  ) {
+                                    updateConfigValue(optionsPath, ["", ""]);
+                                  }
+                                } else {
+                                  updateConfigValue(optionsPath, []);
+                                }
+                              }}
                               className="
-                              w-full
-                              rounded-lg
-                              border
-                              border-gray-300
-                              bg-white
-                              px-3
-                              py-2.5
-                              text-sm
-                              outline-none
-                              transition
-                              focus:border-indigo-500
-                              focus:ring-2
-                              focus:ring-indigo-500/20
-                            "
-                            />
+                                w-full
+                                rounded-lg
+                                border
+                                border-gray-300
+                                bg-white
+                                px-3
+                                py-2.5
+                                text-sm
+                                outline-none
+                                transition
+                                focus:border-indigo-500
+                                focus:ring-2
+                                focus:ring-indigo-500/20
+                              "
+                            >
+                              <option value="MultipleChoice">
+                                Multiple Choice
+                              </option>
+
+                              <option value="YesNo">Yes / No</option>
+                            </select>
                           </div>
                         );
                       }
@@ -615,20 +737,20 @@ export default function InstructorExperimentBuilder() {
                                 updateConfigValue(questionPath, e.target.value)
                               }
                               className="
-                              w-full
-                              rounded-lg
-                              border
-                              border-gray-300
-                              bg-white
-                              px-3
-                              py-2.5
-                              text-sm
-                              outline-none
-                              transition
-                              focus:border-indigo-500
-                              focus:ring-2
-                              focus:ring-indigo-500/20
-                            "
+                                w-full
+                                rounded-lg
+                                border
+                                border-gray-300
+                                bg-white
+                                px-3
+                                py-2.5
+                                text-sm
+                                outline-none
+                                transition
+                                focus:border-indigo-500
+                                focus:ring-2
+                                focus:ring-indigo-500/20
+                              "
                             />
                           </div>
                         );
@@ -675,7 +797,10 @@ export default function InstructorExperimentBuilder() {
                         );
                       }
 
-                      if (questionKey === "multipleChoiceOptions") {
+                      if (
+                        questionKey === "multipleChoiceOptions" &&
+                        question?.questionType === "MultipleChoice"
+                      ) {
                         const options = Array.isArray(value) ? value : [];
 
                         const addOption = () => {
@@ -708,30 +833,26 @@ export default function InstructorExperimentBuilder() {
                                 <label className="block text-sm font-medium text-gray-700">
                                   Multiple Choice Options
                                 </label>
-
-                                <p className="mt-0.5 text-xs text-gray-500">
-                                  Add answer choices for this question.
-                                </p>
                               </div>
 
                               <button
                                 type="button"
                                 onClick={addOption}
                                 className="
-                                flex
-                                items-center
-                                gap-1.5
-                                rounded-lg
-                                border
-                                border-gray-300
-                                px-3
-                                py-1.5
-                                text-xs
-                                font-medium
-                                text-gray-700
-                                transition
-                                hover:bg-gray-50
-                              "
+                                  flex
+                                  items-center
+                                  gap-1.5
+                                  rounded-lg
+                                  border
+                                  border-gray-300
+                                  px-3
+                                  py-1.5
+                                  text-xs
+                                  font-medium
+                                  text-gray-700
+                                  transition
+                                  hover:bg-gray-50
+                                "
                               >
                                 <Plus size={14} />
                                 Add Option
@@ -748,18 +869,18 @@ export default function InstructorExperimentBuilder() {
                                 >
                                   <div
                                     className="
-                                    flex
-                                    h-9
-                                    w-9
-                                    shrink-0
-                                    items-center
-                                    justify-center
-                                    rounded-lg
-                                    bg-indigo-50
-                                    text-sm
-                                    font-medium
-                                    text-indigo-700
-                                  "
+                                      flex
+                                      h-9
+                                      w-9
+                                      shrink-0
+                                      items-center
+                                      justify-center
+                                      rounded-lg
+                                      bg-indigo-50
+                                      text-sm
+                                      font-medium
+                                      text-indigo-700
+                                    "
                                   >
                                     {optionIndex + 1}
                                   </div>
@@ -772,41 +893,41 @@ export default function InstructorExperimentBuilder() {
                                     }
                                     placeholder={`Option ${optionIndex + 1}`}
                                     className="
-                                    w-full
-                                    rounded-lg
-                                    border
-                                    border-gray-300
-                                    bg-white
-                                    px-3
-                                    py-2
-                                    text-sm
-                                    outline-none
-                                    transition
-                                    focus:border-indigo-500
-                                    focus:ring-2
-                                    focus:ring-indigo-500/20
-                                  "
+                                      w-full
+                                      rounded-lg
+                                      border
+                                      border-gray-300
+                                      bg-white
+                                      px-3
+                                      py-2
+                                      text-sm
+                                      outline-none
+                                      transition
+                                      focus:border-indigo-500
+                                      focus:ring-2
+                                      focus:ring-indigo-500/20
+                                    "
                                   />
 
                                   <button
                                     type="button"
                                     onClick={() => removeOption(optionIndex)}
                                     className="
-                                    flex
-                                    h-9
-                                    w-9
-                                    shrink-0
-                                    items-center
-                                    justify-center
-                                    rounded-lg
-                                    border
-                                    border-gray-300
-                                    text-gray-500
-                                    transition
-                                    hover:border-red-300
-                                    hover:bg-red-50
-                                    hover:text-red-600
-                                  "
+                                      flex
+                                      h-9
+                                      w-9
+                                      shrink-0
+                                      items-center
+                                      justify-center
+                                      rounded-lg
+                                      border
+                                      border-gray-300
+                                      text-gray-500
+                                      transition
+                                      hover:border-red-300
+                                      hover:bg-red-50
+                                      hover:text-red-600
+                                    "
                                   >
                                     ×
                                   </button>
@@ -834,20 +955,20 @@ export default function InstructorExperimentBuilder() {
                               updateConfigValue(questionPath, e.target.value)
                             }
                             className="
-                            w-full
-                            rounded-lg
-                            border
-                            border-gray-300
-                            bg-white
-                            px-3
-                            py-2.5
-                            text-sm
-                            outline-none
-                            transition
-                            focus:border-indigo-500
-                            focus:ring-2
-                            focus:ring-indigo-500/20
-                          "
+                              w-full
+                              rounded-lg
+                              border
+                              border-gray-300
+                              bg-white
+                              px-3
+                              py-2.5
+                              text-sm
+                              outline-none
+                              transition
+                              focus:border-indigo-500
+                              focus:ring-2
+                              focus:ring-indigo-500/20
+                            "
                           />
                         </div>
                       );
@@ -862,13 +983,42 @@ export default function InstructorExperimentBuilder() {
             ))}
           </div>
         )}
-      </div>
+      </>
     );
   };
 
   const renderTargetField = (value, path, key) => {
     if (key === "questions" && Array.isArray(value)) {
       return renderMemoryQuestions(value, path);
+    }
+
+    if (key === "objectName") {
+      return (
+        <div key={path.join(".")}>
+          <label className="mb-1.5 block text-sm font-medium text-gray-700">
+            Object Name
+          </label>
+
+          <input
+            type="text"
+            value={value ?? ""}
+            readOnly
+            className="
+              w-full
+              cursor-not-allowed
+              rounded-lg
+              border
+              border-gray-200
+              bg-gray-100
+              px-3
+              py-2.5
+              text-sm
+              text-gray-500
+              outline-none
+            "
+          />
+        </div>
+      );
     }
 
     if (typeof value === "boolean") {
@@ -1066,31 +1216,6 @@ export default function InstructorExperimentBuilder() {
     );
   };
 
-  const createBlankValue = (value) => {
-    if (Array.isArray(value)) {
-      return value.map((item) => createBlankValue(item));
-    }
-
-    if (value !== null && typeof value === "object") {
-      return Object.fromEntries(
-        Object.entries(value).map(([key, childValue]) => [
-          key,
-          createBlankValue(childValue),
-        ]),
-      );
-    }
-
-    if (typeof value === "boolean") {
-      return false;
-    }
-
-    if (typeof value === "number") {
-      return 0;
-    }
-
-    return "";
-  };
-
   const scrollToTarget = (index) => {
     const target = targetRefs.current[index];
 
@@ -1102,31 +1227,6 @@ export default function InstructorExperimentBuilder() {
       behavior: "smooth",
       block: "center",
     });
-  };
-
-  const addMemoryTarget = () => {
-    const targets = Array.isArray(configuration.targets)
-      ? configuration.targets
-      : [];
-
-    const newIndex = targets.length;
-
-    let newTarget;
-
-    if (targets.length > 0) {
-      newTarget = createBlankValue(targets[0]);
-    } else {
-      newTarget = {
-        name: "",
-      };
-    }
-
-    setConfiguration((previous) => ({
-      ...previous,
-      targets: [...targets, newTarget],
-    }));
-
-    setNewTargetIndex(newIndex);
   };
 
   const removeMemoryTarget = (index) => {
@@ -1154,35 +1254,8 @@ export default function InstructorExperimentBuilder() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <div className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700">
-              {targets.length} {targets.length === 1 ? "Target" : "Targets"}
-            </div>
-
-            <button
-              type="button"
-              onClick={addMemoryTarget}
-              disabled={saving}
-              className="
-              flex
-              items-center
-              gap-1.5
-              rounded-lg
-              bg-indigo-700
-              px-3
-              py-2
-              text-xs
-              font-medium
-              text-white
-              transition
-              hover:bg-indigo-800
-              disabled:cursor-not-allowed
-              disabled:bg-gray-400
-            "
-            >
-              <Plus size={15} />
-              Add Target
-            </button>
+          <div className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700">
+            {targets.length} {targets.length === 1 ? "Target" : "Targets"}
           </div>
         </div>
 
@@ -1219,25 +1292,23 @@ export default function InstructorExperimentBuilder() {
                   type="button"
                   onClick={() => scrollToTarget(index)}
                   className={`
-            flex
-            h-9
-            min-w-9
-            items-center
-            justify-center
-            rounded-lg
-            border
-            px-2.5
-            text-sm
-            font-medium
-            transition
-            ${
-              activeTargetIndex === index
-                ? "border-indigo-700 bg-indigo-700 text-white shadow-sm"
-                : newTargetIndex === index
-                  ? "border-indigo-400 bg-indigo-50 text-indigo-700 ring-2 ring-indigo-100"
-                  : "border-gray-200 bg-gray-50 text-gray-600 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700"
-            }
-          `}
+                    flex
+                    h-9
+                    min-w-9
+                    items-center
+                    justify-center
+                    rounded-lg
+                    border
+                    px-2.5
+                    text-sm
+                    font-medium
+                    transition
+                    ${
+                      activeTargetIndex === index
+                        ? "border-indigo-700 bg-indigo-700 text-white shadow-sm"
+                        : "border-gray-200 bg-gray-50 text-gray-600 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700"
+                    }
+                  `}
                 >
                   {index + 1}
                 </button>
@@ -1245,7 +1316,7 @@ export default function InstructorExperimentBuilder() {
             </div>
           ) : (
             <p className="text-sm text-gray-400">
-              Add a target to use the navigator.
+              No targets are currently configured.
             </p>
           )}
         </div>
@@ -1257,33 +1328,8 @@ export default function InstructorExperimentBuilder() {
             </p>
 
             <p className="mt-1 text-xs text-gray-500">
-              Add a target to configure the memory experiment.
+              Targets are defined by the experiment module configuration.
             </p>
-
-            <button
-              type="button"
-              onClick={addMemoryTarget}
-              disabled={saving}
-              className="
-              mt-4
-              inline-flex
-              items-center
-              gap-1.5
-              rounded-lg
-              bg-indigo-700
-              px-4
-              py-2
-              text-sm
-              font-medium
-              text-white
-              transition
-              hover:bg-indigo-800
-              disabled:bg-gray-400
-            "
-            >
-              <Plus size={16} />
-              Add First Target
-            </button>
           </div>
         ) : (
           <div className="space-y-4">
@@ -1305,11 +1351,9 @@ export default function InstructorExperimentBuilder() {
                     transition-all
                     duration-300
                     ${
-                      newTargetIndex === index
-                        ? "border-indigo-400 ring-2 ring-indigo-100"
-                        : activeTargetIndex === index
-                          ? "border-indigo-300"
-                          : "border-gray-200"
+                      activeTargetIndex === index
+                        ? "border-indigo-300"
+                        : "border-gray-200"
                     }
                   `}
                 >
@@ -1346,10 +1390,6 @@ export default function InstructorExperimentBuilder() {
                       <div>
                         <p className="text-sm font-semibold text-gray-900">
                           Target {index + 1}
-                        </p>
-
-                        <p className="text-xs text-gray-500">
-                          Memory scanning target
                         </p>
                       </div>
                     </div>
