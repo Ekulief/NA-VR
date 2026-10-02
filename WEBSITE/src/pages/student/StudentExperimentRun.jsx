@@ -5,7 +5,13 @@ import { doc, getDoc } from "firebase/firestore";
 
 import { db } from "../../config/firebase-config";
 
-import { ArrowLeft, Box } from "lucide-react";
+import { ArrowLeft, Box, Square, Download } from "lucide-react";
+
+const EMPTY_METRICS = {
+  headRotation: { x: null, y: null, z: null },
+  position: { x: null, y: null, z: null },
+  heartRate: null,
+};
 
 export default function StudentExperimentRun() {
   const navigate = useNavigate();
@@ -17,14 +23,13 @@ export default function StudentExperimentRun() {
 
   const [vrIdentifier, setVrIdentifier] = useState("");
   const [connecting, setConnecting] = useState(false);
-  const [connected, setConnected] = useState(false);
+  const [vrConnected, setVrConnected] = useState(false);
+
+  // "idle" | "running" | "completed"
+  const [sessionState, setSessionState] = useState("idle");
 
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [metrics, setMetrics] = useState({
-    headRotation: { x: 0, y: 0, z: 0 },
-    position: { x: 0, y: 0, z: 0 },
-    heartRate: 0,
-  });
+  const [metrics, setMetrics] = useState(EMPTY_METRICS);
 
   const timerRef = useRef(null);
   const connectTimeoutRef = useRef(null);
@@ -84,27 +89,13 @@ export default function StudentExperimentRun() {
     return `${minutes}:${seconds}`;
   };
 
-  const resetSession = () => {
-    setConnected(false);
-    setConnecting(false);
+  const formatMetric = (value, suffix = "") =>
+    value === null || value === undefined ? "--" : `${value}${suffix}`;
 
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-
-    setElapsedSeconds(0);
-
-    setMetrics({
-      headRotation: { x: 0, y: 0, z: 0 },
-      position: { x: 0, y: 0, z: 0 },
-      heartRate: 0,
-    });
-  };
-
-  const handleConnect = () => {
-    if (connected) {
-      resetSession();
+  // Step 1: connect the VR headset.
+  // we will need an actual vr for this
+  const handleConnectHeadset = () => {
+    if (vrConnected || connecting) {
       return;
     }
 
@@ -117,28 +108,62 @@ export default function StudentExperimentRun() {
 
     connectTimeoutRef.current = setTimeout(() => {
       setConnecting(false);
-      setConnected(true);
-
-      timerRef.current = setInterval(() => {
-        setElapsedSeconds((previous) => previous + 1);
-
-        const now = Date.now();
-
-        setMetrics({
-          headRotation: {
-            x: Math.round(Math.sin(now / 900) * 20),
-            y: Math.round(Math.cos(now / 1300) * 30),
-            z: Math.round(Math.sin(now / 1600) * 10),
-          },
-          position: {
-            x: Number((Math.sin(now / 1200) * 1.5).toFixed(2)),
-            y: Number((1.6 + Math.sin(now / 2000) * 0.05).toFixed(2)),
-            z: Number((Math.cos(now / 1400) * 1.2).toFixed(2)),
-          },
-          heartRate: 68 + Math.round(Math.sin(now / 2500) * 8),
-        });
-      }, 1000);
+      setVrConnected(true);
     }, 900);
+  };
+
+  // Step 2: start the session.
+  // backend pls help
+  const handleStartSession = () => {
+    if (!vrConnected || sessionState === "running") {
+      return;
+    }
+
+    setSessionState("running");
+    setElapsedSeconds(0);
+    setMetrics(EMPTY_METRICS);
+
+    timerRef.current = setInterval(() => {
+      setElapsedSeconds((previous) => previous + 1);
+    }, 1000);
+  };
+
+  // Step 3: stop the session.
+  const handleStopSession = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+
+    setSessionState("completed");
+  };
+
+  // for export. pls help
+  const handleDownloadResults = () => {
+    const payload = {
+      experimentName: experiment?.experimentName || "Untitled Experiment",
+      vrIdentifier,
+      durationSeconds: elapsedSeconds,
+      duration: formatTime(elapsedSeconds),
+      metrics,
+      completedAt: new Date().toISOString(),
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
+
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${payload.experimentName.replace(/\s+/g, "_")}_results.json`;
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    URL.revokeObjectURL(url);
   };
 
   if (loading) {
@@ -157,17 +182,14 @@ export default function StudentExperimentRun() {
     );
   }
 
-  const statusLabel = connected
-    ? "In Session"
-    : connecting
-      ? "Connecting"
-      : "Ready";
+  const isRunning = sessionState === "running";
+  const isCompleted = sessionState === "completed";
 
-  const statusStyle = connected
+  const statusLabel = isRunning ? "Running" : isCompleted ? "Completed" : "Ready";
+
+  const statusStyle = isCompleted
     ? "bg-indigo-100 text-indigo-700"
-    : connecting
-      ? "bg-yellow-100 text-yellow-700"
-      : "bg-green-100 text-green-700";
+    : "bg-green-100 text-green-700";
 
   return (
     <div className="font-google min-h-screen bg-white text-black">
@@ -211,7 +233,8 @@ export default function StudentExperimentRun() {
         </div>
 
         <p className="text-gray-500 mb-8">
-          {experiment.participantInstructions ||
+          {experiment.description ||
+            experiment.participantInstructions ||
             experiment.instructions ||
             "Run this experiment in VR."}
         </p>
@@ -229,7 +252,7 @@ export default function StudentExperimentRun() {
                 type="text"
                 value={vrIdentifier}
                 onChange={(e) => setVrIdentifier(e.target.value)}
-                disabled={connected || connecting}
+                disabled={vrConnected || connecting}
                 placeholder="Enter VR identifier"
                 className="
                   w-full
@@ -243,38 +266,85 @@ export default function StudentExperimentRun() {
                   outline-none
                   focus:ring-2
                   focus:ring-indigo-500
-                  disabled:text-gray-400
+                  disabled:text-gray-500
                 "
               />
 
-              <button
-                onClick={handleConnect}
-                disabled={connecting}
-                className={`
-                  w-full
-                  rounded-full
-                  py-3
-                  text-center
-                  transition
-                  ${
-                    connected
-                      ? "bg-indigo-800 hover:bg-indigo-700 text-white"
-                      : "border border-gray-300 hover:bg-gray-50"
+              {!vrConnected ? (
+                <button
+                  onClick={handleConnectHeadset}
+                  disabled={connecting}
+                  className="
+                    w-full
+                    rounded-lg
+                    py-3
+                    text-center
+                    border
+                    border-gray-300
+                    hover:bg-gray-50
+                    transition
+                    disabled:opacity-60
+                    disabled:cursor-wait
+                  "
+                >
+                  {connecting ? "Connecting..." : "Connect VR Headset"}
+                </button>
+              ) : (
+                <button
+                  onClick={handleStartSession}
+                  disabled={isRunning}
+                  title={
+                    isRunning
+                      ? "Session is running"
+                      : "Start a new session with this headset"
                   }
-                  ${connecting ? "opacity-60 cursor-wait" : ""}
-                `}
-              >
-                {connecting
-                  ? "Connecting..."
-                  : connected
-                    ? "Disconnect VR Headset"
-                    : "Connect VR Headset"}
-              </button>
+                  className={`
+                    w-full
+                    rounded-lg
+                    py-3
+                    text-center
+                    border
+                    border-green-600
+                    text-green-700
+                    transition
+                    ${isRunning ? "bg-green-50 cursor-default" : "bg-white hover:bg-green-50"}
+                  `}
+                >
+                  VR Headset Connected
+                </button>
+              )}
+
+              {isRunning && (
+                <button
+                  onClick={handleStopSession}
+                  className="
+                    w-full
+                    mt-3
+                    rounded-lg
+                    py-3
+                    flex
+                    items-center
+                    justify-center
+                    gap-2
+                    bg-red-700
+                    hover:bg-red-600
+                    text-white
+                    transition
+                  "
+                >
+                  <Square size={14} fill="currentColor" />
+
+                  <span>Stop Session</span>
+                </button>
+              )}
             </section>
 
             <section className="border border-gray-300 rounded-xl p-5">
               <h2 className="text-lg font-medium mb-4">VR Preview</h2>
 
+              {/*
+                feed is rendered here
+              */}
               <div
                 className="
                   bg-gray-200
@@ -292,7 +362,7 @@ export default function StudentExperimentRun() {
                 <p>VR environment preview</p>
 
                 <p className="text-sm">
-                  {connected ? "Session in progress" : "Awaiting session start"}
+                  {isRunning ? "Waiting for VR feed..." : "Awaiting session start"}
                 </p>
               </div>
             </section>
@@ -310,13 +380,16 @@ export default function StudentExperimentRun() {
             <section className="border border-gray-300 rounded-xl p-5">
               <h2 className="text-lg font-medium mb-4">Live Metrics</h2>
 
+              {/*
+                also placeholder for actual thing
+              */}
               <div className="mb-4">
                 <p className="text-sm text-gray-500 mb-1">Head Rotation</p>
 
                 <div className="flex flex-col gap-1 text-gray-700">
-                  <p>X: {metrics.headRotation.x}°</p>
-                  <p>Y: {metrics.headRotation.y}°</p>
-                  <p>Z: {metrics.headRotation.z}°</p>
+                  <p>X: {formatMetric(metrics.headRotation.x, "°")}</p>
+                  <p>Y: {formatMetric(metrics.headRotation.y, "°")}</p>
+                  <p>Z: {formatMetric(metrics.headRotation.z, "°")}</p>
                 </div>
               </div>
 
@@ -324,18 +397,47 @@ export default function StudentExperimentRun() {
                 <p className="text-sm text-gray-500 mb-1">Position</p>
 
                 <div className="flex flex-col gap-1 text-gray-700">
-                  <p>X: {metrics.position.x.toFixed(2)}m</p>
-                  <p>Y: {metrics.position.y.toFixed(2)}m</p>
-                  <p>Z: {metrics.position.z.toFixed(2)}m</p>
+                  <p>X: {formatMetric(metrics.position.x, "m")}</p>
+                  <p>Y: {formatMetric(metrics.position.y, "m")}</p>
+                  <p>Z: {formatMetric(metrics.position.z, "m")}</p>
                 </div>
               </div>
 
               <div className="border-t border-gray-200 pt-4">
                 <p className="text-sm text-gray-500 mb-1">Heart Rate</p>
 
-                <p className="text-gray-700">{metrics.heartRate} bpm</p>
+                <p className="text-gray-700">
+                  {formatMetric(metrics.heartRate, " bpm")}
+                </p>
               </div>
             </section>
+
+            {isCompleted && (
+              <section className="border border-gray-300 rounded-xl p-5">
+                <h2 className="text-lg font-medium mb-4">Export Data</h2>
+
+                <button
+                  onClick={handleDownloadResults}
+                  className="
+                    w-full
+                    flex
+                    items-center
+                    justify-center
+                    gap-2
+                    border
+                    border-gray-300
+                    hover:bg-gray-50
+                    rounded-lg
+                    py-2.5
+                    transition
+                  "
+                >
+                  <Download size={18} />
+
+                  <span>Download Results</span>
+                </button>
+              </section>
+            )}
           </div>
         </div>
       </main>
