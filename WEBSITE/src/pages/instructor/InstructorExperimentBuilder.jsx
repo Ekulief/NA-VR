@@ -73,14 +73,6 @@ const CONFIGURATION_ORDER = {
   ],
 };
 
-const QUESTION_FIELD_ORDER = [
-  "questionText",
-  "questionType",
-  "multipleChoiceOptions",
-  "correctAnswer",
-  "enabled",
-];
-
 const ENVIRONMENT_OPTIONS = [
   {
     moduleId: "Depth_Perception",
@@ -107,6 +99,14 @@ const ENVIRONMENT_OPTIONS = [
     name: "Sternberg Memory Scanning",
     description: "House and a diner setting",
   },
+];
+
+const QUESTION_FIELD_ORDER = [
+  "questionText",
+  "questionType",
+  "multipleChoiceOptions",
+  "correctAnswer",
+  "enabled",
 ];
 
 const cloneConfig = (value) => {
@@ -155,7 +155,6 @@ export default function InstructorExperimentBuilder() {
 
   const [experimentName, setExperimentName] = useState("");
   const [instructions, setInstructions] = useState("");
-  const [duration, setDuration] = useState("");
 
   const [environment, setEnvironment] = useState("");
   const [moduleId, setModuleId] = useState("");
@@ -223,8 +222,10 @@ export default function InstructorExperimentBuilder() {
       setEnvironment(option.name);
       setModuleId(module.id);
       setModuleName(module.moduleName || option.name);
+      setExperimentName(module.moduleName || option.name);
       setSceneId(module.sceneId || "");
       setModuleDescription(module.description || option.description);
+      setInstructions(module.description || option.description);
 
       setConfiguration(cloneConfig(module.defaultConfig || {}));
     } finally {
@@ -305,7 +306,6 @@ export default function InstructorExperimentBuilder() {
 
         setExperimentName(data.experimentName || "");
         setInstructions(data.instructions || "");
-        setDuration(data.duration || "");
 
         setEnvironment(data.environment || "");
         setSelectedGroups(data.groupIds || []);
@@ -332,17 +332,26 @@ export default function InstructorExperimentBuilder() {
           );
 
           if (module) {
-            setModuleId(module.id);
+            if (module) {
+              setModuleId(module.id);
 
-            setModuleName(data.moduleName || module.moduleName || option.name);
+              setModuleName(module.moduleName || option.name);
+              setExperimentName(module.moduleName || option.name);
 
-            setSceneId(data.sceneId || module.sceneId || "");
+              setSceneId(module.sceneId || "");
 
-            setModuleDescription(
-              data.moduleDescription ||
-                module.description ||
-                option.description,
-            );
+              setModuleDescription(module.description || option.description);
+              setInstructions(module.description || option.description);
+
+              if (
+                data.configuration &&
+                typeof data.configuration === "object"
+              ) {
+                setConfiguration(cloneConfig(data.configuration));
+              } else {
+                setConfiguration(cloneConfig(module.defaultConfig || {}));
+              }
+            }
 
             if (data.configuration && typeof data.configuration === "object") {
               setConfiguration(cloneConfig(data.configuration));
@@ -415,11 +424,10 @@ export default function InstructorExperimentBuilder() {
   };
 
   const getOrderedTargetKeys = (target) => {
-    const hiddenKeys = ["room", "gameId"];
+    const hiddenKeys = ["room", "gameId", "objectName"];
 
     const preferredOrder = [
       "questions",
-      "objectName",
       "name",
       "targetName",
       "question",
@@ -496,6 +504,175 @@ export default function InstructorExperimentBuilder() {
 
       return next;
     });
+  };
+
+  const validateMemoryQuestions = () => {
+    if (moduleId !== "Memory2") {
+      return true;
+    }
+
+    const targets = Array.isArray(configuration.targets)
+      ? configuration.targets
+      : [];
+
+    for (let targetIndex = 0; targetIndex < targets.length; targetIndex += 1) {
+      const target = targets[targetIndex];
+
+      const questions =
+        target && Array.isArray(target.questions) ? target.questions : [];
+
+      for (
+        let questionIndex = 0;
+        questionIndex < questions.length;
+        questionIndex += 1
+      ) {
+        const question = questions[questionIndex];
+
+        if (!question || typeof question !== "object") {
+          alert(
+            `Target ${targetIndex + 1}, Question ${
+              questionIndex + 1
+            } is invalid.`,
+          );
+
+          return false;
+        }
+
+        if (
+          typeof question.questionText !== "string" ||
+          !question.questionText.trim()
+        ) {
+          alert(
+            `Please enter the question text for Target ${
+              targetIndex + 1
+            }, Question ${questionIndex + 1}.`,
+          );
+
+          return false;
+        }
+
+        if (
+          typeof question.questionType !== "string" ||
+          !question.questionType.trim()
+        ) {
+          alert(
+            `Please select a question type for Target ${
+              targetIndex + 1
+            }, Question ${questionIndex + 1}.`,
+          );
+
+          return false;
+        }
+
+        if (
+          typeof question.correctAnswer !== "string" ||
+          !question.correctAnswer.trim()
+        ) {
+          alert(
+            `Please enter the correct answer for Target ${
+              targetIndex + 1
+            }, Question ${questionIndex + 1}.`,
+          );
+
+          return false;
+        }
+
+        if (question.questionType === "MultipleChoice") {
+          const options = Array.isArray(question.multipleChoiceOptions)
+            ? question.multipleChoiceOptions
+            : [];
+
+          if (options.length === 0) {
+            alert(
+              `Please add at least one multiple choice option for Target ${
+                targetIndex + 1
+              }, Question ${questionIndex + 1}.`,
+            );
+
+            return false;
+          }
+
+          const hasEmptyOption = options.some(
+            (option) => typeof option !== "string" || !option.trim(),
+          );
+
+          if (hasEmptyOption) {
+            alert(
+              `Please fill in all multiple choice options for Target ${
+                targetIndex + 1
+              }, Question ${questionIndex + 1}.`,
+            );
+
+            return false;
+          }
+        }
+      }
+    }
+
+    return true;
+  };
+
+  const addMemoryTarget = () => {
+    setConfiguration((previous) => {
+      const next = cloneConfig(previous);
+
+      const targets = Array.isArray(next.targets) ? next.targets : [];
+
+      let newTarget;
+
+      if (targets.length > 0) {
+        newTarget = cloneConfig(targets[targets.length - 1]);
+
+        if (Object.prototype.hasOwnProperty.call(newTarget, "objectName")) {
+          newTarget.objectName = "";
+        }
+
+        if (Array.isArray(newTarget.questions)) {
+          newTarget.questions = newTarget.questions.map(() => ({
+            questionText: "",
+            questionType: "MultipleChoice",
+            multipleChoiceOptions: ["", ""],
+            correctAnswer: "",
+            enabled: true,
+          }));
+
+          if (newTarget.questions.length === 0) {
+            newTarget.questions = [
+              {
+                questionText: "",
+                questionType: "MultipleChoice",
+                multipleChoiceOptions: ["", ""],
+                correctAnswer: "",
+                enabled: true,
+              },
+            ];
+          }
+        }
+      } else {
+        newTarget = {
+          objectName: "",
+          questions: [
+            {
+              questionText: "",
+              questionType: "MultipleChoice",
+              multipleChoiceOptions: ["", ""],
+              correctAnswer: "",
+              enabled: true,
+            },
+          ],
+        };
+      }
+
+      targets.push(newTarget);
+
+      next.targets = targets;
+
+      return next;
+    });
+
+    setNewTargetIndex(
+      Array.isArray(configuration.targets) ? configuration.targets.length : 0,
+    );
   };
 
   const renderMemoryQuestions = (questions, path) => {
@@ -615,11 +792,15 @@ export default function InstructorExperimentBuilder() {
                   typeof question === "object" &&
                   !Array.isArray(question) ? (
                     [
-                      ...QUESTION_FIELD_ORDER.filter((key) =>
-                        Object.prototype.hasOwnProperty.call(question, key),
+                      ...QUESTION_FIELD_ORDER.filter((questionKey) =>
+                        Object.prototype.hasOwnProperty.call(
+                          question,
+                          questionKey,
+                        ),
                       ),
                       ...Object.keys(question).filter(
-                        (key) => !QUESTION_FIELD_ORDER.includes(key),
+                        (questionKey) =>
+                          !QUESTION_FIELD_ORDER.includes(questionKey),
                       ),
                     ].map((questionKey) => {
                       const value = question[questionKey];
@@ -723,84 +904,10 @@ export default function InstructorExperimentBuilder() {
                         );
                       }
 
-                      if (questionKey === "correctAnswer") {
-                        return (
-                          <div key={questionPath.join(".")}>
-                            <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                              Correct Answer
-                            </label>
-
-                            <input
-                              type="text"
-                              value={value ?? ""}
-                              onChange={(e) =>
-                                updateConfigValue(questionPath, e.target.value)
-                              }
-                              className="
-                                w-full
-                                rounded-lg
-                                border
-                                border-gray-300
-                                bg-white
-                                px-3
-                                py-2.5
-                                text-sm
-                                outline-none
-                                transition
-                                focus:border-indigo-500
-                                focus:ring-2
-                                focus:ring-indigo-500/20
-                              "
-                            />
-                          </div>
-                        );
-                      }
-
-                      if (questionKey === "enabled") {
-                        return (
-                          <div
-                            key={questionPath.join(".")}
-                            className="md:col-span-2"
-                          >
-                            <label className="mb-2 block text-sm font-medium text-gray-700">
-                              Question Enabled
-                            </label>
-
-                            <div className="flex items-center gap-6">
-                              <label className="flex cursor-pointer items-center gap-2 text-sm">
-                                <input
-                                  type="radio"
-                                  name={`question-${path.join("-")}-${index}`}
-                                  checked={value === true}
-                                  onChange={() =>
-                                    updateConfigValue(questionPath, true)
-                                  }
-                                  className="h-4 w-4 accent-indigo-600"
-                                />
-                                Yes
-                              </label>
-
-                              <label className="flex cursor-pointer items-center gap-2 text-sm">
-                                <input
-                                  type="radio"
-                                  name={`question-${path.join("-")}-${index}`}
-                                  checked={value === false}
-                                  onChange={() =>
-                                    updateConfigValue(questionPath, false)
-                                  }
-                                  className="h-4 w-4 accent-indigo-600"
-                                />
-                                No
-                              </label>
-                            </div>
-                          </div>
-                        );
-                      }
-
-                      if (
-                        questionKey === "multipleChoiceOptions" &&
-                        question?.questionType === "MultipleChoice"
-                      ) {
+                      if (questionKey === "multipleChoiceOptions") {
+                        if (question?.questionType !== "MultipleChoice") {
+                          return null;
+                        }
                         const options = Array.isArray(value) ? value : [];
 
                         const addOption = () => {
@@ -938,6 +1045,80 @@ export default function InstructorExperimentBuilder() {
                         );
                       }
 
+                      if (questionKey === "correctAnswer") {
+                        return (
+                          <div key={questionPath.join(".")}>
+                            <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                              Correct Answer
+                            </label>
+
+                            <input
+                              type="text"
+                              value={value ?? ""}
+                              onChange={(e) =>
+                                updateConfigValue(questionPath, e.target.value)
+                              }
+                              className="
+                                w-full
+                                rounded-lg
+                                border
+                                border-gray-300
+                                bg-white
+                                px-3
+                                py-2.5
+                                text-sm
+                                outline-none
+                                transition
+                                focus:border-indigo-500
+                                focus:ring-2
+                                focus:ring-indigo-500/20
+                              "
+                            />
+                          </div>
+                        );
+                      }
+
+                      if (questionKey === "enabled") {
+                        return (
+                          <div
+                            key={questionPath.join(".")}
+                            className="md:col-span-2"
+                          >
+                            <label className="mb-2 block text-sm font-medium text-gray-700">
+                              Question Enabled
+                            </label>
+
+                            <div className="flex items-center gap-6">
+                              <label className="flex cursor-pointer items-center gap-2 text-sm">
+                                <input
+                                  type="radio"
+                                  name={`question-${path.join("-")}-${index}`}
+                                  checked={value === true}
+                                  onChange={() =>
+                                    updateConfigValue(questionPath, true)
+                                  }
+                                  className="h-4 w-4 accent-indigo-600"
+                                />
+                                Yes
+                              </label>
+
+                              <label className="flex cursor-pointer items-center gap-2 text-sm">
+                                <input
+                                  type="radio"
+                                  name={`question-${path.join("-")}-${index}`}
+                                  checked={value === false}
+                                  onChange={() =>
+                                    updateConfigValue(questionPath, false)
+                                  }
+                                  className="h-4 w-4 accent-indigo-600"
+                                />
+                                No
+                              </label>
+                            </div>
+                          </div>
+                        );
+                      }
+
                       return (
                         <div key={questionPath.join(".")}>
                           <label className="mb-1.5 block text-sm font-medium text-gray-700">
@@ -993,32 +1174,7 @@ export default function InstructorExperimentBuilder() {
     }
 
     if (key === "objectName") {
-      return (
-        <div key={path.join(".")}>
-          <label className="mb-1.5 block text-sm font-medium text-gray-700">
-            Object Name
-          </label>
-
-          <input
-            type="text"
-            value={value ?? ""}
-            readOnly
-            className="
-              w-full
-              cursor-not-allowed
-              rounded-lg
-              border
-              border-gray-200
-              bg-gray-100
-              px-3
-              py-2.5
-              text-sm
-              text-gray-500
-              outline-none
-            "
-          />
-        </div>
-      );
+      return null;
     }
 
     if (typeof value === "boolean") {
@@ -1238,6 +1394,20 @@ export default function InstructorExperimentBuilder() {
         targets: targets.filter((_, targetIndex) => targetIndex !== index),
       };
     });
+
+    setActiveTargetIndex((previous) => {
+      if (previous === null) return null;
+
+      if (previous === index) {
+        return null;
+      }
+
+      if (previous > index) {
+        return previous - 1;
+      }
+
+      return previous;
+    });
   };
 
   const renderMemoryTargets = (targets, path) => {
@@ -1248,14 +1418,40 @@ export default function InstructorExperimentBuilder() {
             <h3 className="text-base font-semibold text-gray-900">
               Memory Targets
             </h3>
-
-            <p className="mt-1 text-sm text-gray-500">
-              Configure the targets used during the memory experiment.
-            </p>
           </div>
 
-          <div className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700">
-            {targets.length} {targets.length === 1 ? "Target" : "Targets"}
+          <div className="flex items-center gap-2">
+            <div className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700">
+              {targets.length} {targets.length === 1 ? "Target" : "Targets"}
+            </div>
+            {/** 
+            <button
+              type="button"
+              disabled={saving}
+              onClick={addMemoryTarget}
+              className="
+                flex
+                items-center
+                gap-1.5
+                rounded-lg
+                border
+                border-gray-300
+                bg-white
+                px-3
+                py-1.5
+                text-xs
+                font-medium
+                text-gray-700
+                transition
+                hover:bg-gray-50
+                disabled:cursor-not-allowed
+                disabled:opacity-50
+              "
+            >
+              <Plus size={14} />
+              Add Target
+            </button>
+            */}
           </div>
         </div>
 
@@ -1286,7 +1482,7 @@ export default function InstructorExperimentBuilder() {
 
           {targets.length > 0 ? (
             <div className="flex flex-wrap gap-2">
-              {targets.map((_, index) => (
+              {targets.map((target, index) => (
                 <button
                   key={index}
                   type="button"
@@ -1390,6 +1586,7 @@ export default function InstructorExperimentBuilder() {
                       <div>
                         <p className="text-sm font-semibold text-gray-900">
                           Target {index + 1}
+                          {target.objectName ? ` (${target.objectName})` : ""}
                         </p>
                       </div>
                     </div>
@@ -1673,18 +1870,17 @@ export default function InstructorExperimentBuilder() {
       return;
     }
 
+    if (!validateMemoryQuestions()) {
+      return;
+    }
+
     try {
       setSaving(true);
 
       const experimentData = {
         experimentName: experimentName.trim(),
-
         instructions: instructions.trim(),
-
-        duration,
-
         blockId,
-
         environment,
         moduleId,
         moduleName,
@@ -1869,27 +2065,6 @@ export default function InstructorExperimentBuilder() {
                 focus:ring-indigo-500
               "
             />
-
-            <label className="mb-1 block text-sm">Duration</label>
-
-            <input
-              type="text"
-              value={duration}
-              onChange={(e) => setDuration(e.target.value)}
-              placeholder="e.g., 5 mins"
-              className="
-                w-full
-                rounded-lg
-                border
-                border-gray-300
-                bg-gray-200
-                px-3
-                py-2
-                outline-none
-                focus:ring-2
-                focus:ring-indigo-500
-              "
-            />
           </section>
 
           <section
@@ -1903,12 +2078,6 @@ export default function InstructorExperimentBuilder() {
           >
             <div className="mb-3">
               <h2 className="text-lg font-medium">Configuration</h2>
-
-              {moduleDescription && (
-                <p className="mt-1 text-sm text-gray-500">
-                  {moduleDescription}
-                </p>
-              )}
             </div>
 
             {!moduleId ? (
@@ -2003,7 +2172,7 @@ export default function InstructorExperimentBuilder() {
             <button
               type="button"
               disabled={saving || moduleLoading}
-              onClick={() => saveExperiment("Published")}
+              onClick={saveExperiment}
               className="
                 flex
                 items-center
