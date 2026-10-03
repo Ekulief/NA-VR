@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using Firebase.Firestore;
+using System;
 
 /// <summary>
 /// SLUBT Labs — Attentional Blindness Manager
@@ -124,7 +126,7 @@ public class AttentionalBlindnessManager : MonoBehaviour
                 Debug.LogError("[AttentionalBlindness] furnitureItems list is empty!");
                 yield break;
             }
-            _fadeTarget = furnitureItems[Random.Range(0, furnitureItems.Count)];
+            _fadeTarget = furnitureItems[UnityEngine.Random.Range(0, furnitureItems.Count)];
         }
         else
         {
@@ -248,6 +250,7 @@ public class AttentionalBlindnessManager : MonoBehaviour
         }
 
         if (resultsPanel != null) resultsPanel.SetActive(true);
+        SaveResultsToFirestore();
     }
 
     // ── Fade logic ────────────────────────────────────────────────────────────
@@ -323,4 +326,48 @@ public class AttentionalBlindnessManager : MonoBehaviour
         if (countDisplayText != null) countDisplayText.text = _participantCount.ToString();
         if (decrementCountButton != null) decrementCountButton.interactable = _participantCount > 0;
     }
+
+
+    private async void SaveResultsToFirestore()
+    {
+        try
+        {
+            FirebaseFirestore db = FirebaseFirestore.DefaultInstance;
+
+            string studentId = "Anonymous";
+            string groupId = "";
+
+            if (config != null)
+            {
+                if (!string.IsNullOrEmpty(config.studentId))
+                    studentId = config.studentId;
+                if (!string.IsNullOrEmpty(config.groupId))
+                    groupId = config.groupId;
+            }
+
+            var trialData = new Dictionary<string, object>
+        {
+            { "studentId", studentId },
+            { "groupId", groupId },
+            { "experimentName", "Attentional_Blindness" },
+            { "participantCount", _participantCount },
+            { "actualCount", _actualCount },
+            { "countDifference", Mathf.Abs(_participantCount - _actualCount) },
+            { "noticedAnomaly", _noticedAnomaly },
+            { "fadedItemName", _fadeTarget != null ? _fadeTarget.name : "" },
+            { "countSubmitTimeSeconds", _countSubmitTime },
+            { "timestamp", DateTime.UtcNow.ToString("o") },
+            { "sessionControl", "completed" }
+        };
+
+            await db.Collection("experimentResult").AddAsync(trialData);
+            Debug.Log($"[AttentionalBlindness] Results saved (studentId={studentId}, groupId={groupId})");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"[AttentionalBlindness] Failed to save results: {ex.Message}");
+        }
+    }
+
+
 }

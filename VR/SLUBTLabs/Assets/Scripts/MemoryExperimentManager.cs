@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
-using UnityEngine.XR.Interaction.Toolkit;
+using Firebase.Firestore;
 
 public class MemoryExperimentManager : MonoBehaviour
 {
@@ -20,20 +20,23 @@ public class MemoryExperimentManager : MonoBehaviour
     public GameObject endPanel;
 
     [Header("Timing (Psychology Module 7 style)")]
-    public float studyDuration = 90f;        // free exploration
+    public float studyDuration = 90f;
     public float distractorDuration = 30f;
     public int numberOfTestTrials = 12;
 
     [Header("References")]
     public Transform spawnPoint;
     public MemoryObjectTracker objectTracker;
-    public FirebaseLogger firebaseLogger;   // shared service
 
     Phase currentPhase = Phase.Idle;
     float phaseTimer;
     int currentTrial;
     List<MemoryTrial> trials = new();
     string sessionId;
+
+    // Track results for final summary
+    int correctCount = 0;
+    List<Dictionary<string, object>> trialResults = new();
 
     void Start()
     {
@@ -44,10 +47,11 @@ public class MemoryExperimentManager : MonoBehaviour
 
     public void StartExperiment()
     {
-        // Called from the Main VR Scene experiment launcher
         objectTracker.CaptureOriginalLayout();
         GenerateTrials();
         currentTrial = 0;
+        correctCount = 0;
+        trialResults.Clear();
         EnterPhase(Phase.Study);
     }
 
@@ -77,14 +81,12 @@ public class MemoryExperimentManager : MonoBehaviour
                 questionText.text = "Memorize the room. Walk around freely.";
                 questionText.gameObject.SetActive(true);
                 progressSlider.gameObject.SetActive(true);
-                // XR locomotion enabled
                 break;
 
             case Phase.Distractor:
                 distractorPanel.SetActive(true);
                 questionText.text = "Count backwards from 100 by 3s.";
                 questionText.gameObject.SetActive(true);
-                // Optional simple secondary task UI
                 break;
 
             case Phase.Test:
@@ -95,7 +97,7 @@ public class MemoryExperimentManager : MonoBehaviour
             case Phase.Complete:
                 endPanel.SetActive(true);
                 questionText.text = "Experiment complete. Data uploaded.";
-                firebaseLogger.FinalizeSession(sessionId);
+                SaveFinalResults();
                 break;
         }
     }
@@ -116,8 +118,10 @@ public class MemoryExperimentManager : MonoBehaviour
 
     void ShowQuestion(MemoryTrial t)
     {
+        t.onsetTime = Time.time;
         questionText.gameObject.SetActive(true);
         questionText.text = t.question;
+
         for (int i = 0; i < choiceButtons.Length; i++)
         {
             choiceButtons[i].gameObject.SetActive(true);
@@ -126,6 +130,7 @@ public class MemoryExperimentManager : MonoBehaviour
             choiceButtons[i].onClick.RemoveAllListeners();
             choiceButtons[i].onClick.AddListener(() => OnChoiceSelected(idx, t));
         }
+
         progressSlider.gameObject.SetActive(true);
         progressSlider.value = (float)currentTrial / trials.Count;
         progressText.text = $"Trial {currentTrial + 1}/{trials.Count}";
@@ -136,19 +141,18 @@ public class MemoryExperimentManager : MonoBehaviour
         bool correct = choiceIndex == t.correctIndex;
         float rt = Time.time - t.onsetTime;
 
-        // Log exactly like the other modules (Jamovi-ready)
-        firebaseLogger.LogTrial(sessionId, new Dictionary<string, object>
+        if (correct) correctCount++;
+
+        // Store for final summary
+        trialResults.Add(new Dictionary<string, object>
         {
-            { "module", "Memory" },
             { "trial", currentTrial },
             { "questionType", t.type.ToString() },
             { "correct", correct },
             { "reactionTimeMs", (int)(rt * 1000) },
-            { "choice", choiceIndex },
-            { "timestamp", DateTime.UtcNow.ToString("o") }
+            { "choice", choiceIndex }
         });
 
-        // Brief feedback then next
         questionText.text = correct ? "Correct" : "Incorrect";
         StartCoroutine(DelayThenNext(1.2f));
     }
@@ -168,20 +172,61 @@ public class MemoryExperimentManager : MonoBehaviour
 
     void HideAllUI()
     {
-        questionText.gameObject.SetActive(false);
-        progressSlider.gameObject.SetActive(false);
-        distractorPanel.SetActive(false);
-        endPanel?.SetActive(false);
-        foreach (var b in choiceButtons) b.gameObject.SetActive(false);
+        if (questionText) questionText.gameObject.SetActive(false);
+        if (progressSlider) progressSlider.gameObject.SetActive(false);
+        if (distractorPanel) distractorPanel.SetActive(false);
+        if (endPanel) endPanel.SetActive(false);
+        if (choiceButtons != null)
+            foreach (var b in choiceButtons) b.gameObject.SetActive(false);
     }
 
     void GenerateTrials()
     {
         trials.Clear();
-        // Example: change-detection + location questions (matches dense prop scene)
         for (int i = 0; i < numberOfTestTrials; i++)
         {
             trials.Add(objectTracker.CreateRandomTrial());
+        }
+    }
+
+    private async void SaveFinalResults()
+    {
+        try
+        {
+            FirebaseFirestore db = FirebaseFirestore.DefaultInstance;
+
+            var config = ExperimentConfigLoader.Current;
+
+            string studentId = "Anonymous";
+            string groupId = "";
+
+            if (config != null)
+            {
+                if (!string.IsNullOrEmpty(config.studentId))
+                    studentId = config.studentId;
+                if (!string.IsNullOrEmpty(config.groupId))
+                    groupId = config.groupId;
+            }
+
+            var trialData = new Dictionary<string, object>
+            {
+                { "studentId", studentId },
+                { "groupId", groupId },
+                { "experimentName", "Memory" },
+                { "totalTrials", trials.Count },
+                { "correctCount", correctCount },
+                { "accuracy", trials.Count > 0 ? (float)correctCount / trials.Count : 0f },
+                { "trials", trialResults },
+                { "timestamp", DateTime.UtcNow.ToString("o") },
+                { "sessionControl", "completed" }
+            };
+
+            await db.Collection("experimentResult").AddAsync(trialData);
+            Debug.Log($"[MemoryExperimentManager] Results saved (studentId={studentId}, correct={correctCount}/{trials.Count})");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"[MemoryExperimentManager] Failed to save results: {ex.Message}");
         }
     }
 }

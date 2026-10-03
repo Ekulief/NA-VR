@@ -1,11 +1,12 @@
-﻿using System.Collections;
+﻿using Firebase.Firestore;
+using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
-using UnityEngine.UI;
 using UnityEngine.InputSystem;
+using UnityEngine.UI;
 using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.Interactables;
-using TMPro;
 
 /// <summary>
 /// SLUBT Labs — Odd Item Detection Manager
@@ -256,6 +257,7 @@ public class OddItemManager : MonoBehaviour
             resultsPanel.SetActive(true);
 
             LayoutManager.Instance?.SaveSession(_searchTimeLimit, foundItem: false);
+            SaveResultsToFirestore(_searchTimeLimit, false);
         }
     }
 
@@ -328,9 +330,11 @@ public class OddItemManager : MonoBehaviour
         StartCoroutine(ShowResultsAfterDelay(2f));
 
         Debug.Log($"[OddItemDetection] Found '{_chosenOddItemPrefab.name}' in {_foundTime:F2}s — " +
-                  $"Participant: {config?.participantId}");
+                  $"studentId: {config?.studentId}");
 
         LayoutManager.Instance?.SaveSession(_foundTime, foundItem: true);
+        SaveResultsToFirestore(_foundTime, true);
+
     }
 
     private IEnumerator ShowResultsAfterDelay(float delay)
@@ -345,5 +349,44 @@ public class OddItemManager : MonoBehaviour
         string feedback = cfg != null ? cfg.oddItem_WrongItemFeedback : "That item belongs here. Keep looking!";
         _feedbackDisplay?.ShowError(feedback);
         Debug.Log("[OddItemDetection] Wrong item selected.");
+    }
+
+
+    private async void SaveResultsToFirestore(float searchTime, bool foundItem)
+    {
+        try
+        {
+            FirebaseFirestore db = FirebaseFirestore.DefaultInstance;
+
+            string studentId = "Anonymous";
+            string groupId = "";
+
+            if (config != null)
+            {
+                if (!string.IsNullOrEmpty(config.studentId))
+                    studentId = config.studentId;
+                if (!string.IsNullOrEmpty(config.groupId))
+                    groupId = config.groupId;
+            }
+
+            var trialData = new Dictionary<string, object>
+        {
+            { "studentId", studentId },
+            { "groupId", groupId },
+            { "experimentName", "Odd_Item_Detection" },
+            { "searchTimeSeconds", searchTime },
+            { "itemFound", foundItem },
+            { "oddItemName", _chosenOddItemPrefab != null ? _chosenOddItemPrefab.name : "" },
+            { "timestamp", System.DateTime.UtcNow.ToString("o") },
+            { "sessionControl", "completed" }
+        };
+
+            await db.Collection("experimentResult").AddAsync(trialData);
+            Debug.Log($"[OddItemDetection] Results saved to experimentResult (studentId={studentId})");
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"[OddItemDetection] Failed to save results: {ex.Message}");
+        }
     }
 }
