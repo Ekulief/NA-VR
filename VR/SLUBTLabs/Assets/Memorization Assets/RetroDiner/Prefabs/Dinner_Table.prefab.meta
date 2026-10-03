@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 508e82b22ba0dcc4d83a5be21f16f038
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 391942
+  packageName: Retro Diner - Stylized 3D Restaurant Environment (URP)
+  packageVersion: 1.0
+  assetPath: Assets/RetroDiner/Prefabs/Dinner_Table.prefab
+  uploadId: 949856

@@ -1,0 +1,79 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1001 &1758999767131382766
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: -8679921383154817045, guid: 77773f391449618429c0db1e7382ebc4, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 77773f391449618429c0db1e7382ebc4, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 77773f391449618429c0db1e7382ebc4, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 77773f391449618429c0db1e7382ebc4, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 77773f391449618429c0db1e7382ebc4, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 77773f391449618429c0db1e7382ebc4, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 77773f391449618429c0db1e7382ebc4, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 77773f391449618429c0db1e7382ebc4, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 77773f391449618429c0db1e7382ebc4, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 77773f391449618429c0db1e7382ebc4, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -4589689002329924118, guid: 77773f391449618429c0db1e7382ebc4, type: 3}
+      propertyPath: m_Materials.Array.data[0]
+      value: 
+      objectReference: {fileID: 2100000, guid: 10880f805878dae408a7afaba20d9af3, type: 2}
+    - target: {fileID: -4589689002329924118, guid: 77773f391449618429c0db1e7382ebc4, type: 3}
+      propertyPath: m_Materials.Array.data[1]
+      value: 
+      objectReference: {fileID: 2100000, guid: be59727105b57c84395024d945a7ad41, type: 2}
+    - target: {fileID: 919132149155446097, guid: 77773f391449618429c0db1e7382ebc4, type: 3}
+      propertyPath: m_Name
+      value: Hair Curler
+      objectReference: {fileID: 0}
+    - target: {fileID: 9123376821122431657, guid: 77773f391449618429c0db1e7382ebc4, type: 3}
+      propertyPath: m_Materials.Array.data[0]
+      value: 
+      objectReference: {fileID: 2100000, guid: be59727105b57c84395024d945a7ad41, type: 2}
+    - target: {fileID: 9123376821122431657, guid: 77773f391449618429c0db1e7382ebc4, type: 3}
+      propertyPath: m_Materials.Array.data[1]
+      value: 
+      objectReference: {fileID: 2100000, guid: 8e0e69a509c2fe245927d5c4a5ac019b, type: 2}
+    - target: {fileID: 9123376821122431657, guid: 77773f391449618429c0db1e7382ebc4, type: 3}
+      propertyPath: m_Materials.Array.data[2]
+      value: 
+      objectReference: {fileID: 2100000, guid: 10880f805878dae408a7afaba20d9af3, type: 2}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 77773f391449618429c0db1e7382ebc4, type: 3}
