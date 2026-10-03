@@ -15,7 +15,9 @@ public class ExperimentConfig : ScriptableObject
     // ── General ───────────────────────────────────────────────────────────────
     [Header("General")]
     public string sessionId = "session-001";
-    public string participantId = "participant-001";
+
+    public string studentId;
+    public string groupId;
     public float globalInstructionDelay = 1.5f;
 
     // ── Attentional Blindness (Furniture Counting) ───────────────────────────

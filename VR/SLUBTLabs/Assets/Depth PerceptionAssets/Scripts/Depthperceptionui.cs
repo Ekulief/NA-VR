@@ -42,6 +42,7 @@ public class DepthPerceptionUI : MonoBehaviour
     [Tooltip("World position the player returns to in the hub.")]
     public Vector3 hubReturnPosition = Vector3.zero;
 
+
     // ── State ─────────────────────────────────────────────────────────────────
     private float _currentHeight = 0f;
     private float _actualHeight;
@@ -51,6 +52,7 @@ public class DepthPerceptionUI : MonoBehaviour
     private float _completionTime;
     private bool _submitted = false;
     private ExperimentLoader _experimentLoader;
+
 
     // ── Unity lifecycle ───────────────────────────────────────────────────────
     private void Start()
@@ -186,23 +188,37 @@ public class DepthPerceptionUI : MonoBehaviour
         {
             FirebaseFirestore db = FirebaseFirestore.DefaultInstance;
 
-            var trialData = new System.Collections.Generic.Dictionary<string, object>
+            string studentId = "Anonymous";
+            string groupId = "";
+
+            if (config != null)
             {
-                { "participantId", config != null ? config.participantId : "Anonymous" },
-                { "experimentName", "DepthPerception" },
-                { "estimatedHeight", _currentHeight },
-                { "actualHeight", _actualHeight },
-                { "errorMargin", error },
-                { "completionTimeSeconds", _completionTime },
-                { "timestamp", System.DateTime.UtcNow.ToString("o") }
-            };
+                if (!string.IsNullOrEmpty(config.studentId))
+                    studentId = config.studentId;
+
+                if (!string.IsNullOrEmpty(config.groupId))
+                    groupId = config.groupId;
+            }
+
+            var trialData = new System.Collections.Generic.Dictionary<string, object>
+        {
+            { "studentId", studentId },
+            { "groupId", groupId },
+            { "experimentName", "DepthPerception" },
+            { "estimatedHeight", _currentHeight },
+            { "actualHeight", _actualHeight },
+            { "errorMargin", error },
+            { "completionTimeSeconds", _completionTime },
+            { "timestamp", System.DateTime.UtcNow.ToString("o") },
+            { "sessionControl", "completed" }
+        };
 
             await db.Collection("experimentResult").AddAsync(trialData);
-            Debug.Log("[DepthPerception] Results saved successfully to Firestore.");
+            Debug.Log($"[DepthPerception] Results saved (studentId={studentId}, groupId={groupId})");
         }
         catch (System.Exception ex)
         {
-            Debug.LogError($"[DepthPerception] Failed to save results to Firestore: {ex.Message}");
+            Debug.LogError($"[DepthPerception] Failed to save results: {ex.Message}");
         }
     }
 
