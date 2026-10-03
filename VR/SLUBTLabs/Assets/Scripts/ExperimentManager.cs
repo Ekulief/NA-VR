@@ -1,9 +1,9 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.UI;               // ← needed for Button
-using UnityEngine.EventSystems;
-
+using UnityEngine.UI;
+using Firebase.Firestore;
+using System;
 public class ExperimentManager : MonoBehaviour
 {
     // ─────────────────────────────────────────
@@ -381,6 +381,8 @@ public class ExperimentManager : MonoBehaviour
         ChangeState(ExperimentState.Finished);
         OnExperimentFinished?.Invoke();
         Debug.Log("[ExperimentManager] Experiment complete.");
+
+        SaveResultsToFirestore(); 
     }
 
     // ─────────────────────────────────────────
@@ -448,6 +450,43 @@ public class ExperimentManager : MonoBehaviour
             playerTransform.rotation = destination.rotation;
         }
     }
+    private async void SaveResultsToFirestore()
+    {
+        try
+        {
+            FirebaseFirestore db = FirebaseFirestore.DefaultInstance;
+
+            var config = ExperimentConfigLoader.Current;
+
+            string studentId = "Anonymous";
+            string groupId = "";
+
+            if (config != null)
+            {
+                if (!string.IsNullOrEmpty(config.studentId))
+                    studentId = config.studentId;
+                if (!string.IsNullOrEmpty(config.groupId))
+                    groupId = config.groupId;
+            }
+
+            var trialData = new Dictionary<string, object>
+        {
+            { "studentId", studentId },
+            { "groupId", groupId },
+            { "experimentName", "Memory" },
+            { "timestamp", DateTime.UtcNow.ToString("o") },
+            { "sessionControl", "completed" }
+        };
+
+            await db.Collection("experimentResult").AddAsync(trialData);
+            Debug.Log($"[ExperimentManager] Results saved (studentId={studentId}, groupId={groupId})");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"[ExperimentManager] Failed to save results: {ex.Message}");
+        }
+    }
+
 
     // ─────────────────────────────────────────
     // EDITOR HELPER
