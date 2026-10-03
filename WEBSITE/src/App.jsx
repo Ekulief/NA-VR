@@ -14,7 +14,6 @@ import InstructorHome from "./pages/instructor/InstructorHome";
 import InstructorCourseExperiments from "./pages/instructor/InstructorCourseExperiments";
 import InstructorExperimentBuilder from "./pages/instructor/InstructorExperimentBuilder";
 import AdminDashboard from "./pages/admin/AdminDashboard";
-import InstructorLiveExperiments from "./pages/instructor/InstructorLiveExperiments";
 
 function App() {
   const [user, setUser] = useState(null);
