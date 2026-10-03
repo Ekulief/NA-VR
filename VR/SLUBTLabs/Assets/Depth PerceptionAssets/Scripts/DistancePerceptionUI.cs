@@ -189,26 +189,39 @@ public class DistancePerceptionUI : MonoBehaviour
         {
             FirebaseFirestore db = FirebaseFirestore.DefaultInstance;
 
-            var trialData = new System.Collections.Generic.Dictionary<string, object>
+            string studentId = "Anonymous";
+            string groupId = "";
+
+            if (config != null)
             {
-                { "participantId", config != null ? config.participantId : "Anonymous" },
-                { "experimentName", "Depth_Perception2" },
-                { "estimatedDistance", _currentDistance },
-                { "actualDistance", _actualDistance },
-                { "errorMargin", error },
-                { "completionTimeSeconds", _completionTime },
-                { "timestamp", System.DateTime.UtcNow.ToString("o") }
-            };
+                if (!string.IsNullOrEmpty(config.studentId))
+                    studentId = config.studentId;
+
+                if (!string.IsNullOrEmpty(config.groupId))
+                    groupId = config.groupId;
+            }
+
+            var trialData = new System.Collections.Generic.Dictionary<string, object>
+        {
+            { "studentId", studentId },
+            { "groupId", groupId },
+            { "experimentName", "Depth_Perception2" },
+            { "estimatedDistance", _currentDistance },
+            { "actualDistance", _actualDistance },
+            { "errorMargin", error },
+            { "completionTimeSeconds", _completionTime },
+            { "timestamp", System.DateTime.UtcNow.ToString("o") },
+            { "sessionControl", "completed" }
+        };
 
             await db.Collection("experimentResult").AddAsync(trialData);
-            Debug.Log("[DistancePerception] Results saved successfully to Firestore.");
+            Debug.Log($"[DistancePerception] Results saved (studentId={studentId}, groupId={groupId})");
         }
         catch (System.Exception ex)
         {
-            Debug.LogError($"[DistancePerception] Failed to save results to Firestore: {ex.Message}");
+            Debug.LogError($"[DistancePerception] Failed to save results: {ex.Message}");
         }
     }
-
     private void OnReturnHome()
     {
         if (_experimentLoader != null)

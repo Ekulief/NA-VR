@@ -115,7 +115,7 @@ public class LayoutManager : MonoBehaviour
             capturedAtUtc = DateTime.UtcNow.ToString("o"),
             chosenOddItem = chosenOddItemPrefab.name,
             targetPosition = Vec3(targetInstance.transform.position),
-            participantId = config != null ? config.participantId : "unknown",
+            studentId = config != null ? config.studentId : "unknown",
             sessionId = $"layout_{DateTime.UtcNow:yyyyMMdd_HHmmss}",
             shelves = new List<ShelfSnapshot>()
         };
@@ -165,12 +165,12 @@ public class LayoutManager : MonoBehaviour
             return null;
         }
 
-        _currentLayout.participantId = config != null ? config.participantId : "unknown";
+        _currentLayout.studentId = config != null ? config.studentId : "unknown";
         _currentLayout.searchTimeSeconds = searchTimeSeconds;
         _currentLayout.itemFound = foundItem;
         _currentLayout.completedAtUtc = DateTime.UtcNow.ToString("o");
 
-        string fileName = $"session_{_currentLayout.participantId}_{DateTime.UtcNow:yyyyMMdd_HHmmss}.json";
+        string fileName = $"session_{_currentLayout.studentId}_{DateTime.UtcNow:yyyyMMdd_HHmmss}.json";
         string path = Path.Combine(_saveDir, fileName);
         string json = JsonUtility.ToJson(_currentLayout, prettyPrint: true);
 
@@ -265,7 +265,7 @@ public class LayoutManager : MonoBehaviour
     public class LayoutSnapshot
     {
         public string sessionId;
-        public string participantId;
+        public string studentId;
         public string capturedAtUtc;
         public string completedAtUtc;
         public string chosenOddItem;

@@ -241,17 +241,19 @@ public class ExperimentLoader : MonoBehaviour
             return;
         }
 
-        string participantId = config != null ? config.participantId : "";
+        string studentId = config != null ? config.studentId : "";
+        string groupId = config != null ? config.groupId : "";
         string sessionId = config != null ? config.sessionId : "";
 
         Dictionary<string, object> update = new()
-        {
-            { "Status",               status },
-            { "currentExperimentId",  experimentSceneName },
-            { "currentUserId",        participantId },
-            { "currentSessionStart",  FieldValue.ServerTimestamp },
-            { "notes",                sessionId }
-        };
+{
+    { "Status",               status },
+    { "currentExperimentId",  experimentSceneName },
+    { "currentUserId",        studentId },
+    { "currentGroupId",       groupId },
+    { "currentSessionStart",  FieldValue.ServerTimestamp },
+    { "notes",                sessionId }
+};
 
         var docRef = _db.Collection("vrDevices").Document(vrDeviceDocumentId);
 
