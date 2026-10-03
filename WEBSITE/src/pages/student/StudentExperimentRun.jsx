@@ -92,9 +92,11 @@ export default function StudentExperimentRun() {
   const formatMetric = (value, suffix = "") =>
     value === null || value === undefined ? "--" : `${value}${suffix}`;
 
-  // Step 1: connect the VR headset.
-  // we will need an actual vr for this
-  const handleConnectHeadset = () => {
+  // Step 1: connect the VR device.
+  // TODO (backend): replace this timeout with the real connect call
+  // (e.g. POST /sessions/connect or a WebSocket handshake with vrIdentifier),
+  // and only call setVrConnected(true) once the backend confirms the link.
+  const handleConnectDevice = () => {
     if (vrConnected || connecting) {
       return;
     }
@@ -113,7 +115,9 @@ export default function StudentExperimentRun() {
   };
 
   // Step 2: start the session.
-  // backend pls help
+  // TODO (backend): tell the backend to start the session here, and
+  // subscribe to its live feed (WebSocket/polling) to push real values
+  // into setMetrics as they arrive, instead of leaving them blank.
   const handleStartSession = () => {
     if (!vrConnected || sessionState === "running") {
       return;
@@ -129,6 +133,8 @@ export default function StudentExperimentRun() {
   };
 
   // Step 3: stop the session.
+  // TODO (backend): tell the backend to end the session and unsubscribe
+  // from the live feed here.
   const handleStopSession = () => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -138,7 +144,8 @@ export default function StudentExperimentRun() {
     setSessionState("completed");
   };
 
-  // for export. pls help
+  // TODO (backend): once results are stored server-side, this should
+  // fetch/export the real session record instead of the local snapshot.
   const handleDownloadResults = () => {
     const payload = {
       experimentName: experiment?.experimentName || "Untitled Experiment",
@@ -232,15 +239,15 @@ export default function StudentExperimentRun() {
           </span>
         </div>
 
-        <p className="text-gray-500 mb-8">
+        <p className="text-gray-500 mb-6">
           {experiment.description ||
             experiment.participantInstructions ||
             experiment.instructions ||
             "Run this experiment in VR."}
         </p>
 
-        <div className="grid lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 flex flex-col gap-6">
+        <div className="grid lg:grid-cols-3 gap-6 mb-6 items-stretch">
+          <div className="flex flex-col gap-6">
             <section className="border border-gray-300 rounded-xl p-5">
               <h2 className="text-lg font-medium mb-4">Session Control</h2>
 
@@ -272,7 +279,7 @@ export default function StudentExperimentRun() {
 
               {!vrConnected ? (
                 <button
-                  onClick={handleConnectHeadset}
+                  onClick={handleConnectDevice}
                   disabled={connecting}
                   className="
                     w-full
@@ -287,7 +294,7 @@ export default function StudentExperimentRun() {
                     disabled:cursor-wait
                   "
                 >
-                  {connecting ? "Connecting..." : "Connect VR Headset"}
+                  {connecting ? "Connecting..." : "Connect VR Device"}
                 </button>
               ) : (
                 <button
@@ -296,7 +303,7 @@ export default function StudentExperimentRun() {
                   title={
                     isRunning
                       ? "Session is running"
-                      : "Start a new session with this headset"
+                      : "Start a new session with this device"
                   }
                   className={`
                     w-full
@@ -310,7 +317,7 @@ export default function StudentExperimentRun() {
                     ${isRunning ? "bg-green-50 cursor-default" : "bg-white hover:bg-green-50"}
                   `}
                 >
-                  VR Headset Connected
+                  VR Device Connected
                 </button>
               )}
 
@@ -340,16 +347,30 @@ export default function StudentExperimentRun() {
             </section>
 
             <section className="border border-gray-300 rounded-xl p-5">
+              <h2 className="text-lg font-medium mb-4">Session Timer</h2>
+
+              <p className="text-4xl font-medium text-center tabular-nums">
+                {formatTime(elapsedSeconds)}
+              </p>
+            </section>
+          </div>
+
+          <div className="lg:col-span-2">
+            <section className="border border-gray-300 rounded-xl p-5 h-full flex flex-col">
               <h2 className="text-lg font-medium mb-4">VR Preview</h2>
 
               {/*
-                feed is rendered here
+                TODO (backend): once a live feed exists, render it here
+                (e.g. a <video>/<canvas> fed by the VR stream) while
+                isRunning is true. Left as the static placeholder for
+                every state until that's wired up.
               */}
               <div
                 className="
+                  flex-1
+                  min-h-[260px]
                   bg-gray-200
                   rounded-lg
-                  h-64
                   flex
                   flex-col
                   items-center
@@ -367,79 +388,72 @@ export default function StudentExperimentRun() {
               </div>
             </section>
           </div>
-
-          <div className="flex flex-col gap-6">
-            <section className="border border-gray-300 rounded-xl p-5">
-              <h2 className="text-lg font-medium mb-4">Session Timer</h2>
-
-              <p className="text-4xl font-medium text-center tabular-nums">
-                {formatTime(elapsedSeconds)}
-              </p>
-            </section>
-
-            <section className="border border-gray-300 rounded-xl p-5">
-              <h2 className="text-lg font-medium mb-4">Live Metrics</h2>
-
-              {/*
-                also placeholder for actual thing
-              */}
-              <div className="mb-4">
-                <p className="text-sm text-gray-500 mb-1">Head Rotation</p>
-
-                <div className="flex flex-col gap-1 text-gray-700">
-                  <p>X: {formatMetric(metrics.headRotation.x, "°")}</p>
-                  <p>Y: {formatMetric(metrics.headRotation.y, "°")}</p>
-                  <p>Z: {formatMetric(metrics.headRotation.z, "°")}</p>
-                </div>
-              </div>
-
-              <div className="border-t border-gray-200 pt-4 mb-4">
-                <p className="text-sm text-gray-500 mb-1">Position</p>
-
-                <div className="flex flex-col gap-1 text-gray-700">
-                  <p>X: {formatMetric(metrics.position.x, "m")}</p>
-                  <p>Y: {formatMetric(metrics.position.y, "m")}</p>
-                  <p>Z: {formatMetric(metrics.position.z, "m")}</p>
-                </div>
-              </div>
-
-              <div className="border-t border-gray-200 pt-4">
-                <p className="text-sm text-gray-500 mb-1">Heart Rate</p>
-
-                <p className="text-gray-700">
-                  {formatMetric(metrics.heartRate, " bpm")}
-                </p>
-              </div>
-            </section>
-
-            {isCompleted && (
-              <section className="border border-gray-300 rounded-xl p-5">
-                <h2 className="text-lg font-medium mb-4">Export Data</h2>
-
-                <button
-                  onClick={handleDownloadResults}
-                  className="
-                    w-full
-                    flex
-                    items-center
-                    justify-center
-                    gap-2
-                    border
-                    border-gray-300
-                    hover:bg-gray-50
-                    rounded-lg
-                    py-2.5
-                    transition
-                  "
-                >
-                  <Download size={18} />
-
-                  <span>Download Results</span>
-                </button>
-              </section>
-            )}
-          </div>
         </div>
+
+        <section className="border border-gray-300 rounded-xl p-5 mb-6">
+          <h2 className="text-lg font-medium mb-4">Live Metrics</h2>
+
+          {/*
+            TODO (backend): these render "--" until setMetrics is
+            populated from the real feed (see handleStartSession).
+          */}
+          <div className="mb-4">
+            <p className="text-sm text-gray-500 mb-1">Head Rotation</p>
+
+            <div className="flex flex-col gap-1 text-gray-700">
+              <p>X: {formatMetric(metrics.headRotation.x, "°")}</p>
+              <p>Y: {formatMetric(metrics.headRotation.y, "°")}</p>
+              <p>Z: {formatMetric(metrics.headRotation.z, "°")}</p>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-200 pt-4 mb-4">
+            <p className="text-sm text-gray-500 mb-1">Position</p>
+
+            <div className="flex flex-col gap-1 text-gray-700">
+              <p>X: {formatMetric(metrics.position.x, "m")}</p>
+              <p>Y: {formatMetric(metrics.position.y, "m")}</p>
+              <p>Z: {formatMetric(metrics.position.z, "m")}</p>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-200 pt-4">
+            <p className="text-sm text-gray-500 mb-1">Heart Rate</p>
+
+            <p className="text-gray-700">
+              {formatMetric(metrics.heartRate, " bpm")}
+            </p>
+          </div>
+        </section>
+
+        {isCompleted && (
+          <section className="border border-gray-300 rounded-xl p-5">
+            <h2 className="text-lg font-medium mb-4">Export Data</h2>
+
+            <button
+              onClick={handleDownloadResults}
+              className="
+                w-full
+                sm:w-auto
+                flex
+                items-center
+                justify-center
+                gap-2
+                border
+                border-gray-300
+                hover:bg-gray-50
+                rounded-lg
+                px-5
+                py-2.5
+                transition
+              "
+            >
+              <Download size={18} />
+
+              <span>Download Results</span>
+            </button>
+          </section>
+        )}
       </main>
     </div>
   );
