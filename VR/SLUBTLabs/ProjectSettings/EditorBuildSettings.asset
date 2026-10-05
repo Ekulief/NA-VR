@@ -12,7 +12,7 @@ EditorBuildSettings:
     path: Assets/Scenes/Depth Perception Scene.unity
     guid: a7a10082256d5704c9bd20a74a7d350e
   - enabled: 1
-    path: Assets/Scenes/OddItemDetection.unity
+    path: Assets/Scenes/Odd Item Detection Scene.unity
     guid: 57087892fdd76644cb65e5ab602605c8
   - enabled: 1
     path: Assets/Scenes/Attentional Blindness Scene.unity
