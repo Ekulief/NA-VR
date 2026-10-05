@@ -7,23 +7,28 @@ using System.Threading.Tasks;
 /// <summary>
 /// SLUBT Labs — Experiment Config Loader
 /// 
-/// New flow:
+/// Flow:
 /// 1. Wait for Firebase
-/// 2. Find the current experimentProgress document for this VR headset
-/// 3. Read studentId, groupId, experimentId
-/// 4. Fetch the experiment document and apply its "configuration"
-/// 5. Set IsReady = true
+/// 2. Get this headset's unique device ID
+/// 3. Look it up in the vrDevices collection → get the friendly vrId (e.g. "VR-01")
+/// 4. Find the matching experimentProgress document
+/// 5. Read studentId, groupId, experimentId
+/// 6. Fetch the experiment document and apply its "configuration"
+/// 7. Set IsReady = true
 /// </summary>
 public class ExperimentConfigLoader : MonoBehaviour
 {
     [Tooltip("Drag your ExperimentConfig asset here.")]
     public ExperimentConfig config;
 
-    [Tooltip("The vrId of this headset (must match the value stored in experimentProgress).")]
-    public string vrId = "VR-01";
+    [Tooltip("Fallback vrId used only if the device is not found in the vrDevices collection.")]
+    public string fallbackVrId = "VR-01";
 
     public static ExperimentConfig Current { get; private set; }
     public static bool IsReady { get; private set; } = false;
+
+    // The friendly vrId that was resolved for this headset
+    public string ResolvedVrId { get; private set; } = "";
 
     private void Awake()
     {
@@ -50,7 +55,7 @@ public class ExperimentConfigLoader : MonoBehaviour
         Debug.Log("[ConfigLoader] Waiting for Firebase initialization...");
         yield return new WaitUntil(() => FirebaseManager.IsInitialized);
 
-        Debug.Log("[ConfigLoader] Looking for experimentProgress document...");
+        Debug.Log("[ConfigLoader] Resolving device identity and loading config...");
 
         var task = FetchProgressAndConfigAsync();
         yield return new WaitUntil(() => task.IsCompleted);
@@ -61,19 +66,65 @@ public class ExperimentConfigLoader : MonoBehaviour
         }
 
         IsReady = true;
-        Debug.Log("[ConfigLoader] Config ready.");
+        Debug.Log($"[ConfigLoader] Config ready. Resolved vrId = {ResolvedVrId}");
     }
 
     private async Task FetchProgressAndConfigAsync()
     {
         FirebaseFirestore db = FirebaseFirestore.DefaultInstance;
 
-        // 1. Query experimentProgress for this VR headset that is currently active/idle
-        Query query = db.Collection("experimentProgress")
-                        .WhereEqualTo("vrId", vrId)
-                        .Limit(1);
+        // ─────────────────────────────────────────────
+        // STEP 1: Get this headset's unique hardware ID
+        // ─────────────────────────────────────────────
+        string deviceId = SystemInfo.deviceUniqueIdentifier;
+        Debug.Log($"[ConfigLoader] This device hardware ID = {deviceId}");
 
-        QuerySnapshot progressSnap = await query.GetSnapshotAsync();
+        // ─────────────────────────────────────────────
+        // STEP 2: Look up the device in vrDevices collection
+        // ─────────────────────────────────────────────
+        string vrId = fallbackVrId; // default
+
+        Query deviceQuery = db.Collection("vrDevices")
+                              .WhereEqualTo("deviceId", deviceId)
+                              .Limit(1);
+
+        QuerySnapshot deviceSnap = await deviceQuery.GetSnapshotAsync();
+
+        if (deviceSnap.Count > 0)
+        {
+            DocumentSnapshot deviceDoc = null;
+            foreach (var doc in deviceSnap.Documents)
+            {
+                deviceDoc = doc;
+                break;
+            }
+
+            if (deviceDoc != null && deviceDoc.ContainsField("vrId"))
+            {
+                vrId = deviceDoc.GetValue<string>("vrId");
+                Debug.Log($"[ConfigLoader] Found matching device → assigned vrId = {vrId}");
+            }
+            else
+            {
+                Debug.LogWarning("[ConfigLoader] Device found but has no 'vrId' field. Using fallback.");
+            }
+        }
+        else
+        {
+            Debug.LogWarning($"[ConfigLoader] No matching device found in vrDevices for deviceId={deviceId}. " +
+                             $"Using fallback vrId = {fallbackVrId}");
+        }
+
+        ResolvedVrId = vrId;
+
+        // ─────────────────────────────────────────────
+        // STEP 3: Find the experimentProgress document
+        // ─────────────────────────────────────────────
+        Query progressQuery = db.Collection("experimentProgress")
+                                .WhereEqualTo("vrId", vrId)
+                                .Limit(1);
+
+        QuerySnapshot progressSnap = await progressQuery.GetSnapshotAsync();
 
         if (progressSnap.Count == 0)
         {
@@ -82,11 +133,10 @@ public class ExperimentConfigLoader : MonoBehaviour
         }
 
         DocumentSnapshot progressDoc = null;
-
-        foreach (DocumentSnapshot doc in progressSnap.Documents)
+        foreach (var doc in progressSnap.Documents)
         {
             progressDoc = doc;
-            break; // take the first one
+            break;
         }
 
         if (progressDoc == null)
@@ -94,7 +144,10 @@ public class ExperimentConfigLoader : MonoBehaviour
             Debug.LogWarning("[ConfigLoader] No progress document found.");
             return;
         }
-        // 2. Extract studentId, groupId, experimentId
+
+        // ─────────────────────────────────────────────
+        // STEP 4: Extract studentId, groupId, experimentId
+        // ─────────────────────────────────────────────
         string studentId = progressDoc.ContainsField("studentId") ? progressDoc.GetValue<string>("studentId") : "";
         string groupId = progressDoc.ContainsField("groupId") ? progressDoc.GetValue<string>("groupId") : "";
         string experimentId = progressDoc.ContainsField("experimentId") ? progressDoc.GetValue<string>("experimentId") : "";
@@ -102,7 +155,7 @@ public class ExperimentConfigLoader : MonoBehaviour
         config.studentId = studentId;
         config.groupId = groupId;
 
-        Debug.Log($"[ConfigLoader] Found progress → studentId={studentId}, groupId={groupId}, experimentId={experimentId}");
+        Debug.Log($"[ConfigLoader] Progress loaded → studentId={studentId}, groupId={groupId}, experimentId={experimentId}");
 
         if (string.IsNullOrEmpty(experimentId))
         {
@@ -110,7 +163,9 @@ public class ExperimentConfigLoader : MonoBehaviour
             return;
         }
 
-        // 3. Fetch the experiment document
+        // ─────────────────────────────────────────────
+        // STEP 5: Fetch the experiment document
+        // ─────────────────────────────────────────────
         DocumentSnapshot experimentDoc = await db.Collection("experiment").Document(experimentId).GetSnapshotAsync();
 
         if (!experimentDoc.Exists)
@@ -119,7 +174,9 @@ public class ExperimentConfigLoader : MonoBehaviour
             return;
         }
 
-        // 4. Apply the nested "configuration" map
+        // ─────────────────────────────────────────────
+        // STEP 6: Apply the nested "configuration" map
+        // ─────────────────────────────────────────────
         if (experimentDoc.TryGetValue("configuration", out Dictionary<string, object> configMap))
         {
             ApplyConfigurationMap(configMap);
@@ -133,7 +190,6 @@ public class ExperimentConfigLoader : MonoBehaviour
 
     private void ApplyConfigurationMap(Dictionary<string, object> map)
     {
-        // Helper local functions
         float GetFloat(string key, float fallback) =>
             map.TryGetValue(key, out object v) ? System.Convert.ToSingle(v) : fallback;
 
