@@ -143,12 +143,6 @@ export default function Login() {
                 >
                   Password
                 </label>
-                <a
-                  href="#"
-                  className="text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors"
-                >
-                  Forgot password?
-                </a>
               </div>
               <div className="relative">
                 <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-slate-400 pointer-events-none" />
@@ -193,10 +187,6 @@ export default function Login() {
             </button>
           </form>
         </div>
-
-        <p className="text-center text-sm text-slate-400 mt-6">
-          Having trouble signing in? Contact your administrator.
-        </p>
       </div>
     </div>
   );

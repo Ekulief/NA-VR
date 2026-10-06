@@ -12,7 +12,7 @@ import {
   where,
 } from "firebase/firestore";
 
-import { FileText, User } from "lucide-react";
+import { FileText, User, ArrowLeft } from "lucide-react";
 
 export default function StudentCourseExperiments() {
   const navigate = useNavigate();
@@ -172,14 +172,13 @@ export default function StudentCourseExperiments() {
 
   return (
     <div className="font-google min-h-screen bg-white text-black">
-      <main className="pt-20">
+      <main className="px-70 pt-20">
         <button
           onClick={() => navigate("/student")}
           className="
             flex
             items-center
             gap-1
-            px-4
             pt-4
             pb-2
             text-gray-600
@@ -187,12 +186,12 @@ export default function StudentCourseExperiments() {
             transition
           "
         >
-          <span className="text-lg">←</span>
+          <ArrowLeft size={20} />
           <span>Back to Home</span>
         </button>
 
         <div className="border-b border-gray-300">
-          <div className="flex items-center gap-8 px-4">
+          <div className="flex items-center gap-8">
             <button
               onClick={() => setActiveTab("experiments")}
               className={`
@@ -236,7 +235,7 @@ export default function StudentCourseExperiments() {
         </div>
 
         {activeTab === "experiments" && (
-          <section className="px-3 py-2">
+          <section className="py-3">
             {experiments.length === 0 ? (
               <div className="py-10 text-center">
                 <p className="text-gray-500">
@@ -244,7 +243,7 @@ export default function StudentCourseExperiments() {
                 </p>
               </div>
             ) : (
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-3">
                 {experiments.map((experiment) => (
                   <div
                     key={experiment.id}
@@ -259,14 +258,20 @@ export default function StudentCourseExperiments() {
                       justify-between
                       hover:bg-gray-50
                       transition
+                      cursor-pointer
                     "
+                    onClick={() =>
+                      navigate(
+                        `/student/course/${blockId}/experiment/${experiment.id}`,
+                      )
+                    }
                   >
                     <div className="flex-1">
                       <div className="flex items-center gap-3">
                         <h2 className="font-medium text-xl">
                           {experiment.experimentName || "Untitled Experiment"}
                         </h2>
-
+                        {/*
                         <span
                           className={`
                             px-2
@@ -281,14 +286,14 @@ export default function StudentCourseExperiments() {
                           `}
                         >
                           {experiment.status || "Available"}
-                        </span>
+                        </span>*/}
                       </div>
 
                       <div className="flex items-center gap-8 mt-3">
                         <p className="text-md text-gray-600">
-                          Due:{" "}
-                          {experiment.dueAt
-                            ? experiment.dueAt
+                          {" "}
+                          {experiment.createdAt
+                            ? experiment.createdAt
                                 .toDate()
                                 .toLocaleDateString("en-US", {
                                   month: "short",
@@ -297,35 +302,8 @@ export default function StudentCourseExperiments() {
                                 })
                             : "No due date"}
                         </p>
-
-                        <p className="text-md text-gray-600">
-                          Total Score:{" "}
-                          {experiment.totalScore ?? experiment.maxScore ?? 0}
-                        </p>
                       </div>
                     </div>
-
-                    <button
-                      onClick={() =>
-                        navigate(
-                          `/student/course/${blockId}/experiment/${experiment.id}`,
-                        )
-                      }
-                      className="
-                        w-8
-                        h-8
-                        flex
-                        items-center
-                        justify-center
-                        bg-indigo-800
-                        hover:bg-indigo-700
-                        text-white
-                        rounded-lg
-                        transition
-                      "
-                    >
-                      <span className="text-lg leading-none">▶</span>
-                    </button>
                   </div>
                 ))}
               </div>
@@ -334,7 +312,7 @@ export default function StudentCourseExperiments() {
         )}
 
         {activeTab === "students" && (
-          <section className="max-w-4xl mx-auto px-4 py-5">
+          <section className="mx-auto py-3">
             <div
               className="
                 w-full
