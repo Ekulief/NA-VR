@@ -115,15 +115,11 @@ function App() {
           }
         />
 
-        <Route 
-          path="/student/course/:blockId/experiment/:experimentId/run" 
+        <Route
+          path="/student/course/:blockId/experiment/:experimentId/run"
           element={
-            user ? (
-            <StudentExperimentRun />
-           ) : (
-              <Navigate to="/login" replace />
-            )
-          } 
+            user ? <StudentExperimentRun /> : <Navigate to="/login" replace />
+          }
         />
 
         <Route

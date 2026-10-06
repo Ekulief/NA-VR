@@ -394,6 +394,7 @@ export default function InstructorCourseExperiments() {
   return (
     <div
       className="
+        px-60
         font-google
         min-h-screen
         text-black
@@ -489,13 +490,12 @@ export default function InstructorCourseExperiments() {
       </div>
 
       {activeTab === "experiments" && (
-        <section className="px-5 py-9">
+        <section className="px-5 py-5">
           <div
             className="
               flex
               items-center
               justify-between
-              mb-10
             "
           >
             <button
@@ -519,22 +519,12 @@ export default function InstructorCourseExperiments() {
               <Plus size={24} />
               New Experiment
             </button>
-
-            <p
-              className="
-                text-2xl
-                text-gray-600
-              "
-            >
-              Total Experiments:{" "}
-              <span className="font-medium">{experiments.length}</span>
-            </p>
           </div>
 
           <div
             className="
               relative
-              mb-4
+              my-4
             "
           >
             <Search
