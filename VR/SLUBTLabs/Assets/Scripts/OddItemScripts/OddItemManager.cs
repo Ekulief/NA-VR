@@ -1,4 +1,4 @@
-﻿using Firebase.Firestore;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using TMPro;
@@ -7,12 +7,10 @@ using UnityEngine.InputSystem;
 using UnityEngine.UI;
 using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.Interactables;
+using Firebase.Firestore;
 
 /// <summary>
-/// SLUBT Labs — Odd Item Detection Manager
-/// All experiment parameters are read from ExperimentConfig at runtime.
-/// Odd item is selected via dropdown in the Inspector (OddItemManagerEditor).
-/// Items are shuffled across all shelves before the trial starts.
+/// Odd-item search trial. Config drives timings/text; results save to experimentResults.
 /// </summary>
 public class OddItemManager : MonoBehaviour
 {
@@ -23,16 +21,10 @@ public class OddItemManager : MonoBehaviour
     public InputActionReference triggerAction;
 
     [Header("Odd Items")]
-    [Tooltip("List of possible odd item prefabs. Select which one to use via the dropdown below.")]
     public List<GameObject> oddItemPrefabs = new();
-
-    [Tooltip("Index of the odd item to inject this trial — set via the Inspector dropdown.")]
     public int selectedOddItemIndex = 0;
 
     [Header("Shuffle")]
-    [Tooltip("If true, item positions within each shelf are shuffled each trial " +
-             "so participants cannot memorize slot positions. " +
-             "Items stay on their own shelf — only positions within each shelf are randomized.")]
     public bool shuffleItems = true;
 
     [Header("UI — Instruction Panel")]
@@ -44,9 +36,10 @@ public class OddItemManager : MonoBehaviour
     public GameObject resultsPanel;
     public TMP_Text resultsSummaryText;
 
-    // ── State ─────────────────────────────────────────────────────────────────
     private float _trialStartTime;
     private float _foundTime;
+    private float _experimentStartRealtime;
+    private DateTime _startedAtUtc;
     private List<GameObject> _allSpawnedItems = new();
     private GameObject _targetInstance;
     private GameObject _chosenOddItemPrefab;
@@ -55,12 +48,10 @@ public class OddItemManager : MonoBehaviour
     private FeedbackDisplay _feedbackDisplay;
     private Transform _rightControllerTransform;
 
-    // ── Resolved config values ────────────────────────────────────────────────
     private float _searchTimeLimit;
     private float _raycastDistance;
     private float _instructionDelay;
 
-    // ── Unity lifecycle ───────────────────────────────────────────────────────
     private void OnEnable()
     {
         if (triggerAction != null)
@@ -76,19 +67,42 @@ public class OddItemManager : MonoBehaviour
             triggerAction.action.performed -= OnTriggerPressed;
     }
 
-    private void Start()
+    private void Awake()
     {
-        instructionPanel.SetActive(false);
-        resultsPanel.SetActive(false);
-        _feedbackDisplay = GetComponent<FeedbackDisplay>();
+        if (!shuffleItems) return;
 
-        // Wire start button click event
-        if (startButton != null)
+        ShelfSpawner[] shelves = FindObjectsByType<ShelfSpawner>(FindObjectsSortMode.None);
+        if (shelves.Length < 2) return;
+
+        List<List<GameObject>> allLists = new();
+        foreach (ShelfSpawner shelf in shelves)
+            allLists.Add(new List<GameObject>(shelf.distractorPrefabs));
+
+        for (int i = allLists.Count - 1; i > 0; i--)
         {
-            startButton.onClick.AddListener(OnStartButtonClicked);
+            int j = UnityEngine.Random.Range(0, i + 1);
+            (allLists[i], allLists[j]) = (allLists[j], allLists[i]);
         }
 
-        ExperimentConfig cfg = config;
+        for (int i = 0; i < shelves.Length; i++)
+            shelves[i].distractorPrefabs = allLists[i];
+
+        Debug.Log("[OddItemDetection] Shelf categories shuffled between shelves.");
+    }
+
+    private void Start()
+    {
+        if (instructionPanel != null) instructionPanel.SetActive(false);
+        if (resultsPanel != null) resultsPanel.SetActive(false);
+
+        _feedbackDisplay = GetComponent<FeedbackDisplay>();
+
+        if (startButton != null)
+            startButton.onClick.AddListener(OnStartButtonClicked);
+
+        ExperimentConfig cfg = config != null ? config : ExperimentConfigLoader.Current;
+        config = cfg;
+
         if (cfg != null)
         {
             _searchTimeLimit = cfg.oddItem_SearchTimeLimitSeconds;
@@ -105,10 +119,19 @@ public class OddItemManager : MonoBehaviour
         StartCoroutine(InitialiseAfterSpawn());
     }
 
-    // ── Initialisation ────────────────────────────────────────────────────────
+    private bool IsSessionPaused()
+    {
+        return SessionController.Instance != null && SessionController.Instance.IsPaused;
+    }
+
+    private IEnumerator WaitWhilePaused()
+    {
+        while (IsSessionPaused())
+            yield return null;
+    }
+
     private IEnumerator InitialiseAfterSpawn()
     {
-        // Wait one frame for ShelfSpawners to finish Start()
         yield return null;
 
         if (oddItemPrefabs == null || oddItemPrefabs.Count == 0)
@@ -117,7 +140,6 @@ public class OddItemManager : MonoBehaviour
             yield break;
         }
 
-        // Use selected index from dropdown — clamp for safety
         int index = Mathf.Clamp(selectedOddItemIndex, 0, oddItemPrefabs.Count - 1);
         _chosenOddItemPrefab = oddItemPrefabs[index];
         Debug.Log($"[OddItemDetection] Chosen odd item: '{_chosenOddItemPrefab.name}'");
@@ -134,8 +156,7 @@ public class OddItemManager : MonoBehaviour
         foreach (ShelfSpawner shelf in allShelves)
             Debug.Log($"Shelf '{shelf.gameObject.name}' has {shelf.GetSpawnedItems().Count} items");
 
-        // Inject odd item into a random shelf
-        ShelfSpawner chosenShelf = allShelves[Random.Range(0, allShelves.Length)];
+        ShelfSpawner chosenShelf = allShelves[UnityEngine.Random.Range(0, allShelves.Length)];
         _targetInstance = chosenShelf.InjectTarget(_chosenOddItemPrefab);
 
         if (_targetInstance == null)
@@ -148,7 +169,6 @@ public class OddItemManager : MonoBehaviour
                   $"'{chosenShelf.gameObject.name}' at {_targetInstance.transform.position}");
 
         LayoutManager.Instance?.CaptureLayout(_targetInstance, _chosenOddItemPrefab);
-
         CollectSpawnedItems();
 
         foreach (GameObject item in _allSpawnedItems)
@@ -158,33 +178,6 @@ public class OddItemManager : MonoBehaviour
         ShowInstructions();
     }
 
-    private void Awake()
-    {
-        if (!shuffleItems) return;
-
-        ShelfSpawner[] shelves = FindObjectsByType<ShelfSpawner>(FindObjectsSortMode.None);
-        if (shelves.Length < 2) return;
-
-        // Collect all distractor lists
-        List<List<GameObject>> allLists = new();
-        foreach (ShelfSpawner shelf in shelves)
-            allLists.Add(new List<GameObject>(shelf.distractorPrefabs));
-
-        // Fisher-Yates shuffle the lists
-        for (int i = allLists.Count - 1; i > 0; i--)
-        {
-            int j = Random.Range(0, i + 1);
-            (allLists[i], allLists[j]) = (allLists[j], allLists[i]);
-        }
-
-        // Reassign shuffled lists back to shelves
-        for (int i = 0; i < shelves.Length; i++)
-            shelves[i].distractorPrefabs = allLists[i];
-
-        Debug.Log("[OddItemDetection] Shelf categories shuffled between shelves.");
-    }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
     private Transform FindRightController()
     {
         string[] names = { "Ray Interactor", "RayInteractor", "Right Controller", "Right Hand" };
@@ -193,6 +186,7 @@ public class OddItemManager : MonoBehaviour
             GameObject found = GameObject.Find(n);
             if (found != null) return found.transform;
         }
+
         var ray = FindAnyObjectByType<UnityEngine.XR.Interaction.Toolkit.Interactors.XRRayInteractor>();
         return ray != null ? ray.transform : null;
     }
@@ -218,24 +212,30 @@ public class OddItemManager : MonoBehaviour
         Debug.Log($"[OddItemDetection] Collected {_allSpawnedItems.Count} spawned items.");
     }
 
-    // ── Trial ─────────────────────────────────────────────────────────────────
     private void ShowInstructions()
     {
         ExperimentConfig cfg = config;
-        instructionText.text = cfg != null
-            ? cfg.oddItem_InstructionText
-            : "Find the item that doesn't belong.\nPoint at it and pull the trigger.";
+        if (instructionText != null)
+        {
+            instructionText.text = cfg != null && !string.IsNullOrEmpty(cfg.oddItem_InstructionText)
+                ? cfg.oddItem_InstructionText
+                : "Find the item that doesn't belong.\nPoint at it and pull the trigger.";
+        }
 
-        instructionPanel.SetActive(true);
+        if (instructionPanel != null)
+            instructionPanel.SetActive(true);
     }
 
     private void OnStartButtonClicked()
     {
+        if (IsSessionPaused()) return;
+
         if (instructionPanel != null)
             instructionPanel.SetActive(false);
 
-        // Officially start timing and allow item selection
         _trialStartTime = Time.time;
+        _experimentStartRealtime = Time.realtimeSinceStartup;
+        _startedAtUtc = DateTime.UtcNow;
         _awaitingSelection = true;
 
         if (_searchTimeLimit > 0)
@@ -244,33 +244,47 @@ public class OddItemManager : MonoBehaviour
 
     private IEnumerator SearchTimeLimitCountdown()
     {
-        yield return new WaitForSeconds(_searchTimeLimit);
+        float waited = 0f;
+        while (waited < _searchTimeLimit)
+        {
+            yield return WaitWhilePaused();
+            waited += Time.deltaTime;
+            yield return null;
+        }
+
         if (_awaitingSelection && !_trialComplete)
         {
             _awaitingSelection = false;
             _trialComplete = true;
 
-            resultsSummaryText.text =
-                $"Time's up!\n\n" +
-                $"Search time: {_searchTimeLimit:F0}s (limit reached)\n\n" +
-                $"The odd item was not found in time.";
-            resultsPanel.SetActive(true);
+            if (resultsSummaryText != null)
+            {
+                resultsSummaryText.text =
+                    $"Time's up!\n\n" +
+                    $"Search time: {_searchTimeLimit:F0}s (limit reached)\n\n" +
+                    $"The odd item was not found in time.";
+            }
+
+            if (resultsPanel != null)
+                resultsPanel.SetActive(true);
 
             LayoutManager.Instance?.SaveSession(_searchTimeLimit, foundItem: false);
             SaveResultsToFirestore(_searchTimeLimit, false);
         }
     }
 
-    // ── Selection ─────────────────────────────────────────────────────────────
     private void OnItemSelected(GameObject item)
     {
+        if (IsSessionPaused()) return;
         if (!_awaitingSelection || _trialComplete) return;
+
         if (item == _targetInstance) OnOddItemFound();
         else OnWrongItemSelected();
     }
 
     private void OnTriggerPressed(InputAction.CallbackContext ctx)
     {
+        if (IsSessionPaused()) return;
         if (!_awaitingSelection || _trialComplete) return;
         if (_rightControllerTransform == null) return;
 
@@ -279,6 +293,7 @@ public class OddItemManager : MonoBehaviour
         {
             GameObject hitRoot = GetSpawnedItemRoot(hit.collider.gameObject);
             if (hitRoot == null) return;
+
             if (hitRoot == _targetInstance) OnOddItemFound();
             else OnWrongItemSelected();
         }
@@ -295,7 +310,6 @@ public class OddItemManager : MonoBehaviour
         return null;
     }
 
-    // ── Outcomes ──────────────────────────────────────────────────────────────
     private void OnOddItemFound()
     {
         _awaitingSelection = false;
@@ -304,7 +318,6 @@ public class OddItemManager : MonoBehaviour
 
         _feedbackDisplay?.ShowSuccess("Correct! That's the odd item!");
 
-        // Get rating from config or fallback
         string timeRating;
         ExperimentConfig cfg = config;
         if (cfg != null)
@@ -321,36 +334,45 @@ public class OddItemManager : MonoBehaviour
             timeRating = _foundTime < 10f ? "Excellent!" : _foundTime < 20f ? "Good" : "Keep Practicing";
         }
 
-        resultsSummaryText.text =
-            $"Odd Item Found!\n\n" +
-            $"Search time:    {_foundTime:F1}s\n" +
-            $"Rating:         {timeRating}\n\n" +
-            $"The odd item was the {_chosenOddItemPrefab.name}.";
+        if (resultsSummaryText != null)
+        {
+            resultsSummaryText.text =
+                $"Odd Item Found!\n\n" +
+                $"Search time:    {_foundTime:F1}s\n" +
+                $"Rating:         {timeRating}\n\n" +
+                $"The odd item was the {_chosenOddItemPrefab.name}.";
+        }
 
         StartCoroutine(ShowResultsAfterDelay(2f));
-
-        Debug.Log($"[OddItemDetection] Found '{_chosenOddItemPrefab.name}' in {_foundTime:F2}s — " +
-                  $"studentId: {config?.studentId}");
+        Debug.Log($"[OddItemDetection] Found '{_chosenOddItemPrefab.name}' in {_foundTime:F2}s");
 
         LayoutManager.Instance?.SaveSession(_foundTime, foundItem: true);
         SaveResultsToFirestore(_foundTime, true);
-
     }
 
     private IEnumerator ShowResultsAfterDelay(float delay)
     {
-        yield return new WaitForSeconds(delay);
-        resultsPanel.SetActive(true);
+        float waited = 0f;
+        while (waited < delay)
+        {
+            yield return WaitWhilePaused();
+            waited += Time.deltaTime;
+            yield return null;
+        }
+
+        if (resultsPanel != null)
+            resultsPanel.SetActive(true);
     }
 
     private void OnWrongItemSelected()
     {
+        if (IsSessionPaused()) return;
+
         ExperimentConfig cfg = config;
         string feedback = cfg != null ? cfg.oddItem_WrongItemFeedback : "That item belongs here. Keep looking!";
         _feedbackDisplay?.ShowError(feedback);
         Debug.Log("[OddItemDetection] Wrong item selected.");
     }
-
 
     private async void SaveResultsToFirestore(float searchTime, bool foundItem)
     {
@@ -358,35 +380,118 @@ public class OddItemManager : MonoBehaviour
         {
             FirebaseFirestore db = FirebaseFirestore.DefaultInstance;
 
-            string studentId = "Anonymous";
-            string groupId = "";
+            string studentId = GetConfigString("studentId", "Anonymous");
+            string groupId = GetConfigString("groupId", "");
+            string blockId = GetConfigString("blockId", "");
+            string experimentId = GetConfigString("experimentId", "");
+            string vrId = GetConfigString("vrId", "");
+            string progressId = GetConfigString("progressId", "");
 
-            if (config != null)
+            if (string.IsNullOrEmpty(progressId) && SessionController.Instance != null)
+                progressId = SessionController.Instance.progressDocumentId ?? "";
+
+            float durationSeconds = 0f;
+            if (_experimentStartRealtime > 0f)
+                durationSeconds = Time.realtimeSinceStartup - _experimentStartRealtime;
+            else
+                durationSeconds = searchTime;
+
+            string durationDisplay = FormatDuration(durationSeconds);
+            DateTime completedAtUtc = DateTime.UtcNow;
+
+            var configurations = new List<object>
             {
-                if (!string.IsNullOrEmpty(config.studentId))
-                    studentId = config.studentId;
-                if (!string.IsNullOrEmpty(config.groupId))
-                    groupId = config.groupId;
+                new Dictionary<string, object>
+                {
+                    { "searchTimeLimitSeconds", _searchTimeLimit },
+                    { "raycastDistance", _raycastDistance },
+                    { "shuffleItems", shuffleItems },
+                    { "selectedOddItemIndex", selectedOddItemIndex },
+                    { "oddItemName", _chosenOddItemPrefab != null ? _chosenOddItemPrefab.name : "" },
+                    { "instructionText", config != null ? config.oddItem_InstructionText ?? "" : "" }
+                }
+            };
+
+            var experimentalResults = new List<object>
+            {
+                new Dictionary<string, object>
+                {
+                    { "trialIndex", 0 },
+                    { "searchTimeSeconds", searchTime },
+                    { "itemFound", foundItem },
+                    { "oddItemName", _chosenOddItemPrefab != null ? _chosenOddItemPrefab.name : "" },
+                    { "reactionTimeMs", (int)(searchTime * 1000f) }
+                }
+            };
+
+            var doc = new Dictionary<string, object>
+            {
+                { "blockId", blockId },
+                { "experimentId", experimentId },
+                { "groupId", groupId },
+                { "studentId", studentId },
+                { "vrId", vrId },
+                { "progressId", progressId },
+                { "experimentName", "Odd_Item_Detection" },
+                { "moduleName", "Odd_Item_Detection" },
+                { "completionStatus", "Completed" },
+                { "duration", durationDisplay },
+                { "durationSeconds", durationSeconds },
+                { "startedAt", _startedAtUtc.ToString("o") },
+                { "completedAt", completedAtUtc.ToString("o") },
+                { "timestamp", completedAtUtc.ToString("o") },
+                { "configurations", configurations },
+                { "experimentalResults", experimentalResults }
+            };
+
+            await db.Collection("experimentResults").AddAsync(doc);
+            Debug.Log($"[OddItemDetection] Saved (duration={durationDisplay}, found={foundItem}, progressId={progressId})");
+
+            if (!string.IsNullOrEmpty(progressId))
+            {
+                await db.Collection("experimentProgress").Document(progressId).UpdateAsync(
+                    new Dictionary<string, object>
+                    {
+                        { "sessionControl", "ended" },
+                        { "completionStatus", "Completed" },
+                        { "completionAt", completedAtUtc.ToString("o") }
+                    });
             }
-
-            var trialData = new Dictionary<string, object>
-        {
-            { "studentId", studentId },
-            { "groupId", groupId },
-            { "experimentName", "Odd_Item_Detection" },
-            { "searchTimeSeconds", searchTime },
-            { "itemFound", foundItem },
-            { "oddItemName", _chosenOddItemPrefab != null ? _chosenOddItemPrefab.name : "" },
-            { "timestamp", System.DateTime.UtcNow.ToString("o") },
-            { "sessionControl", "completed" }
-        };
-
-            await db.Collection("experimentResult").AddAsync(trialData);
-            Debug.Log($"[OddItemDetection] Results saved to experimentResult (studentId={studentId})");
         }
-        catch (System.Exception ex)
+        catch (Exception ex)
         {
             Debug.LogError($"[OddItemDetection] Failed to save results: {ex.Message}");
         }
+    }
+
+    private string GetConfigString(string fieldName, string fallback)
+    {
+        if (config == null) return fallback;
+        switch (fieldName)
+        {
+            case "studentId":
+                return !string.IsNullOrEmpty(config.studentId) ? config.studentId : fallback;
+            case "groupId":
+                return !string.IsNullOrEmpty(config.groupId) ? config.groupId : fallback;
+            case "blockId":
+                return !string.IsNullOrEmpty(config.blockId) ? config.blockId : fallback;
+            case "experimentId":
+                return !string.IsNullOrEmpty(config.experimentId) ? config.experimentId : fallback;
+            case "vrId":
+                return !string.IsNullOrEmpty(config.vrId) ? config.vrId : fallback;
+            case "progressId":
+                return !string.IsNullOrEmpty(config.progressId) ? config.progressId : fallback;
+            default:
+                return fallback;
+        }
+    }
+
+    private static string FormatDuration(float totalSeconds)
+    {
+        if (totalSeconds < 0f) totalSeconds = 0f;
+        int t = Mathf.FloorToInt(totalSeconds);
+        int m = t / 60;
+        int s = t % 60;
+        return $"{m}:{s:D2}";
     }
 }

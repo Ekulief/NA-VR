@@ -6,6 +6,9 @@ using UnityEngine.UI;
 using TMPro;
 using Firebase.Firestore;
 
+/// <summary>
+/// Spatial memory / change-detection trial (study → distractor → test).
+/// </summary>
 public class MemoryExperimentManager : MonoBehaviour
 {
     public enum Phase { Idle, Study, Distractor, Test, Complete }
@@ -38,6 +41,9 @@ public class MemoryExperimentManager : MonoBehaviour
     readonly List<Dictionary<string, object>> trialResults = new();
     bool acceptingInput;
 
+    float _experimentStartRealtime;
+    DateTime _startedAtUtc;
+
     void Start()
     {
         sessionId = Guid.NewGuid().ToString("N");
@@ -46,8 +52,21 @@ public class MemoryExperimentManager : MonoBehaviour
             roomNameText.text = "Memory Lab – Dinner / Spatial Recognition";
     }
 
+    private bool IsSessionPaused()
+    {
+        return SessionController.Instance != null && SessionController.Instance.IsPaused;
+    }
+
+    private IEnumerator WaitWhilePaused()
+    {
+        while (IsSessionPaused())
+            yield return null;
+    }
+
     public void StartExperiment()
     {
+        if (IsSessionPaused()) return;
+
         if (objectTracker == null)
         {
             Debug.LogError("[MemoryExperimentManager] objectTracker is not assigned.");
@@ -66,11 +85,16 @@ public class MemoryExperimentManager : MonoBehaviour
         currentTrial = 0;
         correctCount = 0;
         trialResults.Clear();
+        _experimentStartRealtime = Time.realtimeSinceStartup;
+        _startedAtUtc = DateTime.UtcNow;
+
         EnterPhase(Phase.Study);
     }
 
     void Update()
     {
+        if (IsSessionPaused()) return;
+
         if (currentPhase != Phase.Study && currentPhase != Phase.Distractor)
             return;
 
@@ -81,6 +105,7 @@ public class MemoryExperimentManager : MonoBehaviour
             float dur = GetPhaseDuration();
             progressSlider.value = dur > 0 ? 1f - (phaseTimer / dur) : 1f;
         }
+
         if (progressText != null)
             progressText.text = $"{Mathf.CeilToInt(Mathf.Max(0f, phaseTimer))}s";
 
@@ -188,7 +213,9 @@ public class MemoryExperimentManager : MonoBehaviour
 
     void OnChoiceSelected(int choiceIndex, MemoryTrial t)
     {
+        if (IsSessionPaused()) return;
         if (!acceptingInput || currentPhase != Phase.Test) return;
+
         acceptingInput = false;
 
         bool correct = choiceIndex == t.correctIndex;
@@ -197,15 +224,16 @@ public class MemoryExperimentManager : MonoBehaviour
 
         trialResults.Add(new Dictionary<string, object>
         {
-            { "trial", currentTrial },
+            { "trialIndex", currentTrial },
             { "questionType", t.type.ToString() },
+            { "question", t.question ?? "" },
             { "correct", correct },
             { "reactionTimeMs", (int)(rt * 1000) },
             { "choice", choiceIndex },
+            { "correctIndex", t.correctIndex },
             { "sessionId", sessionId }
         });
 
-        // Hide buttons while showing feedback
         if (choiceButtons != null)
         {
             foreach (var b in choiceButtons)
@@ -218,7 +246,13 @@ public class MemoryExperimentManager : MonoBehaviour
 
     IEnumerator DelayThenNext(float delay)
     {
-        yield return new WaitForSeconds(delay);
+        float waited = 0f;
+        while (waited < delay)
+        {
+            yield return WaitWhilePaused();
+            waited += Time.deltaTime;
+            yield return null;
+        }
         NextPhase();
     }
 
@@ -274,41 +308,133 @@ public class MemoryExperimentManager : MonoBehaviour
         try
         {
             FirebaseFirestore db = FirebaseFirestore.DefaultInstance;
-
-            string studentId = "Anonymous";
-            string groupId = "";
-
             var config = ExperimentConfigLoader.Current;
-            if (config != null)
-            {
-                // Use whatever fields your ExperimentConfig actually has
-                var type = config.GetType();
-                var studentProp = type.GetField("studentId") ?? (object)type.GetProperty("studentId");
-                var groupProp = type.GetField("groupId") ?? (object)type.GetProperty("groupId");
-                // Simpler: if you have public strings, assign directly:
-                // studentId = config.participantId;
-            }
 
-            var trialData = new Dictionary<string, object>
+            string studentId = GetId(config, "studentId", "Anonymous");
+            string groupId = GetId(config, "groupId", "");
+            string blockId = GetId(config, "blockId", "");
+            string experimentId = GetId(config, "experimentId", "");
+            string vrId = GetId(config, "vrId", "");
+            string progressId = GetId(config, "progressId", "");
+
+            if (string.IsNullOrEmpty(progressId) && SessionController.Instance != null)
+                progressId = SessionController.Instance.progressDocumentId ?? "";
+
+            float durationSeconds = _experimentStartRealtime > 0f
+                ? Time.realtimeSinceStartup - _experimentStartRealtime
+                : 0f;
+            string durationDisplay = FormatDuration(durationSeconds);
+            DateTime completedAtUtc = DateTime.UtcNow;
+
+            var configurations = new List<object>
             {
-                { "studentId", studentId },
+                new Dictionary<string, object>
+                {
+                    { "studyDuration", studyDuration },
+                    { "distractorDuration", distractorDuration },
+                    { "numberOfTestTrials", numberOfTestTrials },
+                    { "sessionId", sessionId }
+                }
+            };
+
+            var experimentalResults = new List<object>();
+            foreach (var t in trialResults)
+                experimentalResults.Add(t);
+
+            var doc = new Dictionary<string, object>
+            {
+                { "blockId", blockId },
+                { "experimentId", experimentId },
                 { "groupId", groupId },
+                { "studentId", studentId },
+                { "vrId", vrId },
+                { "progressId", progressId },
                 { "sessionId", sessionId },
                 { "experimentName", "MemoryDinner" },
+                { "moduleName", "MemoryDinner" },
+                { "completionStatus", "Completed" },
+                { "duration", durationDisplay },
+                { "durationSeconds", durationSeconds },
+                { "startedAt", _startedAtUtc.ToString("o") },
+                { "completedAt", completedAtUtc.ToString("o") },
+                { "timestamp", completedAtUtc.ToString("o") },
                 { "totalTrials", trials.Count },
                 { "correctCount", correctCount },
                 { "accuracy", trials.Count > 0 ? (float)correctCount / trials.Count : 0f },
-                { "trials", trialResults },
-                { "timestamp", DateTime.UtcNow.ToString("o") },
-                { "sessionControl", "completed" }
+                { "configurations", configurations },
+                { "experimentalResults", experimentalResults }
             };
 
-            await db.Collection("experimentResult").AddAsync(trialData);
-            Debug.Log($"[MemoryExperimentManager] Results saved ({correctCount}/{trials.Count})");
+            await db.Collection("experimentResults").AddAsync(doc);
+            Debug.Log($"[MemoryExperimentManager] Saved ({correctCount}/{trials.Count}, duration={durationDisplay})");
+
+            if (!string.IsNullOrEmpty(progressId))
+            {
+                await db.Collection("experimentProgress").Document(progressId).UpdateAsync(
+                    new Dictionary<string, object>
+                    {
+                        { "sessionControl", "ended" },
+                        { "completionStatus", "Completed" },
+                        { "completionAt", completedAtUtc.ToString("o") }
+                    });
+            }
         }
         catch (Exception ex)
         {
             Debug.LogError($"[MemoryExperimentManager] Failed to save results: {ex.Message}");
         }
+    }
+
+    static string GetId(ExperimentConfig config, string field, string fallback)
+    {
+        if (config == null) return fallback;
+        switch (field)
+        {
+            case "studentId": return string.IsNullOrEmpty(config.studentId) ? fallback : config.studentId;
+            case "groupId": return string.IsNullOrEmpty(config.groupId) ? fallback : config.groupId;
+            case "blockId": return string.IsNullOrEmpty(config.blockId) ? fallback : config.blockId;
+            case "experimentId": return string.IsNullOrEmpty(config.experimentId) ? fallback : config.experimentId;
+            case "vrId": return string.IsNullOrEmpty(config.vrId) ? fallback : config.vrId;
+            case "progressId": return string.IsNullOrEmpty(config.progressId) ? fallback : config.progressId;
+            default: return fallback;
+        }
+    }
+
+    static string FormatDuration(float totalSeconds)
+    {
+        if (totalSeconds < 0f) totalSeconds = 0f;
+        int t = Mathf.FloorToInt(totalSeconds);
+        int m = t / 60;
+        int s = t % 60;
+        return $"{m}:{s:D2}";
+    }
+
+    // ── Editor debug ──────────────────────────────────────────────────────────
+    void OnGUI()
+    {
+#if UNITY_EDITOR
+        GUILayout.BeginArea(new Rect(10, 10, 220, 160));
+
+        if (GUILayout.Button("DEBUG: Start Experiment"))
+            StartExperiment();
+
+        if (GUILayout.Button("DEBUG: Skip Phase Timer"))
+        {
+            if (currentPhase == Phase.Study || currentPhase == Phase.Distractor)
+                phaseTimer = 0f;
+        }
+
+        if (GUILayout.Button("DEBUG: Next Trial / Phase"))
+            NextPhase();
+
+        if (GUILayout.Button("DEBUG: Jump to Complete"))
+            EnterPhase(Phase.Complete);
+
+        GUILayout.Label($"Phase: {currentPhase}");
+        GUILayout.Label($"Trial: {currentTrial + 1}/{trials.Count}");
+        GUILayout.Label($"Paused: {IsSessionPaused()}");
+
+        GUILayout.EndArea();
+#endif
     }
 }
