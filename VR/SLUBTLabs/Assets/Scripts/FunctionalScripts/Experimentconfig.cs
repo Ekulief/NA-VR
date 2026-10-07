@@ -18,6 +18,10 @@ public class ExperimentConfig : ScriptableObject
 
     public string studentId;
     public string groupId;
+    public string blockId;
+    public string experimentId;
+    public string vrId;
+    public string progressId;
     public float globalInstructionDelay = 1.5f;
 
     // ── Attentional Blindness (Furniture Counting) ───────────────────────────

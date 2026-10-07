@@ -7,7 +7,7 @@ using TMPro;
 /// SLUBT Labs —  Feedback Display
 /// Creates a Screen Space - Camera canvas overlay at runtime.
 /// Always appears in front of the player's view in VR — no positioning needed.
-/// Attach to the same GameObject as AttentionalBlindnessManager.
+
 /// </summary>
 public class FeedbackDisplay : MonoBehaviour
 {

@@ -6,39 +6,23 @@ using TMPro;
 using Firebase.Firestore;
 using System;
 
-/// <summary>
-/// SLUBT Labs — Attentional Blindness Manager
-/// Flow: 
-/// 1. Waits for Firestore config via ExperimentConfigLoader.IsReady
-/// 2. Instruction Panel visible first (uses ExperimentConfig text)
-/// 3. Click "Start Counting" -> Shows Count Input Panel
-/// 4. Submit Count -> Shows Awareness Panel
-/// 5. Answer Awareness Question -> Shows Results Panel
-/// </summary>
 public class AttentionalBlindnessManager : MonoBehaviour
 {
     [Header("Config")]
     public ExperimentConfig config;
 
     [Header("Furniture Items")]
-    [Tooltip("Drag all furniture GameObjects in the scene here.")]
     public List<GameObject> furnitureItems = new();
 
     [Header("Fade Target")]
-    [Tooltip("If true, a random furniture item fades each trial. If false, uses specificFadeTarget.")]
     public bool useRandomFadeTarget = true;
-
-    [Tooltip("The specific furniture item to fade — only used when useRandomFadeTarget is false.")]
     public GameObject specificFadeTarget;
 
     [Header("Fade Settings")]
-    [Tooltip("Seconds after trial starts before the item begins fading.")]
     public float fadeDelay = 8f;
-
-    [Tooltip("How long the fade takes to complete in seconds.")]
     public float fadeDuration = 3f;
 
-    [Header("UI — Instruction Panel (Visible First)")]
+    [Header("UI — Instruction Panel")]
     public GameObject instructionPanel;
     public TMP_Text instructionText;
     public Button startCountingButton;
@@ -61,7 +45,6 @@ public class AttentionalBlindnessManager : MonoBehaviour
     public GameObject resultsPanel;
     public TMP_Text resultsSummaryText;
 
-    // ── State ─────────────────────────────────────────────────────────────────
     private float _trialStartTime;
     private float _countSubmitTime;
     private int _participantCount = 0;
@@ -71,11 +54,11 @@ public class AttentionalBlindnessManager : MonoBehaviour
     private GameObject _fadeTarget;
     private List<Renderer[]> _fadeTargetRenderers = new();
     private List<float[]> _originalAlphas = new();
+    private float _experimentStartRealtime;
+    private DateTime _startedAtUtc;
 
-    // ── Unity lifecycle ───────────────────────────────────────────────────────
     private void Start()
     {
-        // Hide all sub-panels initially
         if (instructionPanel != null) instructionPanel.SetActive(false);
         if (countInputPanel != null) countInputPanel.SetActive(false);
         if (awarenessPanel != null) awarenessPanel.SetActive(false);
@@ -83,10 +66,17 @@ public class AttentionalBlindnessManager : MonoBehaviour
 
         _actualCount = furnitureItems.Count;
 
-        // Wire UI Listeners
         if (startCountingButton != null) startCountingButton.onClick.AddListener(OnStartCounting);
-        if (incrementCountButton != null) incrementCountButton.onClick.AddListener(() => SetCount(_participantCount + 1));
-        if (decrementCountButton != null) decrementCountButton.onClick.AddListener(() => SetCount(_participantCount - 1));
+        if (incrementCountButton != null) incrementCountButton.onClick.AddListener(() =>
+        {
+            if (IsSessionPaused()) return;
+            SetCount(_participantCount + 1);
+        });
+        if (decrementCountButton != null) decrementCountButton.onClick.AddListener(() =>
+        {
+            if (IsSessionPaused()) return;
+            SetCount(_participantCount - 1);
+        });
         if (submitCountButton != null) submitCountButton.onClick.AddListener(OnSubmitCount);
         if (yesButton != null) yesButton.onClick.AddListener(() => OnAwarenessResponse(true));
         if (noButton != null) noButton.onClick.AddListener(() => OnAwarenessResponse(false));
@@ -94,22 +84,28 @@ public class AttentionalBlindnessManager : MonoBehaviour
         StartCoroutine(BeginExperiment());
     }
 
-    // ── Experiment flow ───────────────────────────────────────────────────────
+    private bool IsSessionPaused()
+    {
+        return SessionController.Instance != null && SessionController.Instance.IsPaused;
+    }
+
+    private IEnumerator WaitWhilePaused()
+    {
+        while (IsSessionPaused())
+            yield return null;
+    }
+
     private IEnumerator BeginExperiment()
     {
         Debug.Log("[AttentionalBlindness] Waiting for Firestore config to be ready...");
         yield return new WaitUntil(() => ExperimentConfigLoader.IsReady);
 
-        // Assign active config from loader if missing in inspector
         if (config == null)
-        {
             config = ExperimentConfigLoader.Current;
-        }
 
         float delay = config != null ? config.globalInstructionDelay : 1.5f;
         yield return new WaitForSeconds(delay);
 
-        // Apply config settings if present
         if (config != null)
         {
             fadeDelay = config.ab_FadeDelaySeconds;
@@ -118,7 +114,6 @@ public class AttentionalBlindnessManager : MonoBehaviour
             Debug.Log("[AttentionalBlindness] Applied parameters from Firestore config.");
         }
 
-        // Select fade target
         if (useRandomFadeTarget)
         {
             if (furnitureItems.Count == 0)
@@ -140,11 +135,8 @@ public class AttentionalBlindnessManager : MonoBehaviour
         }
 
         Debug.Log($"[AttentionalBlindness] Fade target selected: '{_fadeTarget.name}'");
-
-        // Cache renderers for transparency modifications
         CacheRenderers(_fadeTarget);
 
-        // Show instruction text from config
         if (instructionText != null)
         {
             instructionText.text = (config != null && !string.IsNullOrEmpty(config.ab_InstructionText))
@@ -152,21 +144,20 @@ public class AttentionalBlindnessManager : MonoBehaviour
                 : "<b>Count the furniture</b>\n\nWalk around the scene and count how many furniture items you can see.\n\nPress <b>Start Counting</b> when you are ready.";
         }
 
-        // Show Instruction Panel FIRST
         if (instructionPanel != null) instructionPanel.SetActive(true);
     }
 
     private void OnStartCounting()
     {
-        // Hide instructions & start counting phase
+        if (IsSessionPaused()) return;
+
         if (instructionPanel != null) instructionPanel.SetActive(false);
 
         _trialStartTime = Time.time;
+        _experimentStartRealtime = Time.realtimeSinceStartup;
+        _startedAtUtc = DateTime.UtcNow;
 
-        // Show Count Panel
         ShowCountInput();
-
-        // Trigger item fade sequence after delay
         StartCoroutine(FadeOutAfterDelay());
     }
 
@@ -174,18 +165,20 @@ public class AttentionalBlindnessManager : MonoBehaviour
     {
         _participantCount = 0;
         UpdateCountDisplay();
-
         if (countPromptText != null)
-        {
             countPromptText.text = "How many furniture items do you count?";
-        }
-
         if (countInputPanel != null) countInputPanel.SetActive(true);
     }
 
     private IEnumerator FadeOutAfterDelay()
     {
-        yield return new WaitForSeconds(fadeDelay);
+        float waited = 0f;
+        while (waited < fadeDelay)
+        {
+            yield return WaitWhilePaused();
+            waited += Time.deltaTime;
+            yield return null;
+        }
 
         if (_trialComplete) yield break;
 
@@ -196,12 +189,12 @@ public class AttentionalBlindnessManager : MonoBehaviour
 
     private void OnSubmitCount()
     {
+        if (IsSessionPaused()) return;
+
         _countSubmitTime = Time.time - _trialStartTime;
 
-        // Hide Count Panel immediately upon submission
         if (countInputPanel != null) countInputPanel.SetActive(false);
 
-        // Show Awareness Question Panel
         if (awarenessQuestionText != null)
         {
             awarenessQuestionText.text = (config != null && !string.IsNullOrEmpty(config.ab_AwarenessQuestionText))
@@ -210,19 +203,17 @@ public class AttentionalBlindnessManager : MonoBehaviour
         }
 
         if (awarenessPanel != null) awarenessPanel.SetActive(true);
-
         Debug.Log($"[AttentionalBlindness] Count submitted: {_participantCount} (actual: {_actualCount}) after {_countSubmitTime:F1}s");
     }
 
     private void OnAwarenessResponse(bool noticed)
     {
+        if (IsSessionPaused()) return;
+
         _noticedAnomaly = noticed;
         _trialComplete = true;
 
-        // Hide Awareness Panel immediately
         if (awarenessPanel != null) awarenessPanel.SetActive(false);
-
-        // Show Results Panel
         ShowResults();
     }
 
@@ -253,19 +244,14 @@ public class AttentionalBlindnessManager : MonoBehaviour
         SaveResultsToFirestore();
     }
 
-    // ── Fade logic ────────────────────────────────────────────────────────────
-
     private void CacheRenderers(GameObject target)
     {
         _fadeTargetRenderers.Clear();
         _originalAlphas.Clear();
-
         Renderer[] renderers = target.GetComponentsInChildren<Renderer>();
-
         foreach (Renderer r in renderers)
         {
             _fadeTargetRenderers.Add(new Renderer[] { r });
-
             float[] alphas = new float[r.materials.Length];
             for (int i = 0; i < r.materials.Length; i++)
             {
@@ -280,9 +266,10 @@ public class AttentionalBlindnessManager : MonoBehaviour
     private IEnumerator FadeOut()
     {
         float elapsed = 0f;
-
         while (elapsed < fadeDuration)
         {
+            yield return WaitWhilePaused();
+
             elapsed += Time.deltaTime;
             float alpha = Mathf.Lerp(1f, 0f, elapsed / fadeDuration);
 
@@ -296,11 +283,11 @@ public class AttentionalBlindnessManager : MonoBehaviour
                     r.materials[j].color = c;
                 }
             }
-
             yield return null;
         }
 
-        _fadeTarget.SetActive(false);
+        if (_fadeTarget != null)
+            _fadeTarget.SetActive(false);
     }
 
     private void SetMaterialTransparent(Material mat)
@@ -314,7 +301,6 @@ public class AttentionalBlindnessManager : MonoBehaviour
         mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
     }
 
-    // ── Count display ─────────────────────────────────────────────────────────
     private void SetCount(int value)
     {
         _participantCount = Mathf.Max(0, value);
@@ -327,41 +313,94 @@ public class AttentionalBlindnessManager : MonoBehaviour
         if (decrementCountButton != null) decrementCountButton.interactable = _participantCount > 0;
     }
 
-
     private async void SaveResultsToFirestore()
     {
         try
         {
             FirebaseFirestore db = FirebaseFirestore.DefaultInstance;
 
-            string studentId = "Anonymous";
-            string groupId = "";
+            string studentId = GetConfigString("studentId", "Anonymous");
+            string groupId = GetConfigString("groupId", "");
+            string blockId = GetConfigString("blockId", "");
+            string experimentId = GetConfigString("experimentId", "");
+            string vrId = GetConfigString("vrId", "");
+            string progressId = GetConfigString("progressId", "");
 
-            if (config != null)
+            if (string.IsNullOrEmpty(progressId) && SessionController.Instance != null)
+                progressId = SessionController.Instance.progressDocumentId ?? "";
+
+            float durationSeconds = 0f;
+            if (_experimentStartRealtime > 0f)
+                durationSeconds = Time.realtimeSinceStartup - _experimentStartRealtime;
+            else if (_trialStartTime > 0f)
+                durationSeconds = Time.time - _trialStartTime;
+
+            string durationDisplay = FormatDuration(durationSeconds);
+            DateTime completedAtUtc = DateTime.UtcNow;
+
+            var configurations = new List<object>
             {
-                if (!string.IsNullOrEmpty(config.studentId))
-                    studentId = config.studentId;
-                if (!string.IsNullOrEmpty(config.groupId))
-                    groupId = config.groupId;
+                new Dictionary<string, object>
+                {
+                    { "fadeDelaySeconds", fadeDelay },
+                    { "fadeDurationSeconds", fadeDuration },
+                    { "useRandomFadeTarget", useRandomFadeTarget },
+                    { "actualFurnitureCount", _actualCount },
+                    { "fadedItemName", _fadeTarget != null ? _fadeTarget.name : "" },
+                    { "instructionText", config != null ? config.ab_InstructionText ?? "" : "" },
+                    { "awarenessQuestionText", config != null ? config.ab_AwarenessQuestionText ?? "" : "" }
+                }
+            };
+
+            var experimentalResults = new List<object>
+            {
+                new Dictionary<string, object>
+                {
+                    { "trialIndex", 0 },
+                    { "participantCount", _participantCount },
+                    { "actualCount", _actualCount },
+                    { "countDifference", Mathf.Abs(_participantCount - _actualCount) },
+                    { "countCorrect", _participantCount == _actualCount },
+                    { "noticedAnomaly", _noticedAnomaly },
+                    { "fadedItemName", _fadeTarget != null ? _fadeTarget.name : "" },
+                    { "countSubmitTimeSeconds", _countSubmitTime },
+                    { "reactionTimeMs", (int)(_countSubmitTime * 1000f) }
+                }
+            };
+
+            var doc = new Dictionary<string, object>
+            {
+                { "blockId", blockId },
+                { "experimentId", experimentId },
+                { "groupId", groupId },
+                { "studentId", studentId },
+                { "vrId", vrId },
+                { "progressId", progressId },
+                { "experimentName", "Attentional_Blindness" },
+                { "moduleName", "Attentional_Blindness" },
+                { "completionStatus", "Completed" },
+                { "duration", durationDisplay },
+                { "durationSeconds", durationSeconds },
+                { "startedAt", _startedAtUtc.ToString("o") },
+                { "completedAt", completedAtUtc.ToString("o") },
+                { "timestamp", completedAtUtc.ToString("o") },
+                { "configurations", configurations },
+                { "experimentalResults", experimentalResults }
+            };
+
+            await db.Collection("experimentResults").AddAsync(doc);
+            Debug.Log($"[AttentionalBlindness] Saved (duration={durationDisplay}, progressId={progressId})");
+
+            if (!string.IsNullOrEmpty(progressId))
+            {
+                await db.Collection("experimentProgress").Document(progressId).UpdateAsync(
+                    new Dictionary<string, object>
+                    {
+                        { "sessionControl", "ended" },
+                        { "completionStatus", "Completed" },
+                        { "completionAt", completedAtUtc.ToString("o") }
+                    });
             }
-
-            var trialData = new Dictionary<string, object>
-        {
-            { "studentId", studentId },
-            { "groupId", groupId },
-            { "experimentName", "Attentional_Blindness" },
-            { "participantCount", _participantCount },
-            { "actualCount", _actualCount },
-            { "countDifference", Mathf.Abs(_participantCount - _actualCount) },
-            { "noticedAnomaly", _noticedAnomaly },
-            { "fadedItemName", _fadeTarget != null ? _fadeTarget.name : "" },
-            { "countSubmitTimeSeconds", _countSubmitTime },
-            { "timestamp", DateTime.UtcNow.ToString("o") },
-            { "sessionControl", "completed" }
-        };
-
-            await db.Collection("experimentResult").AddAsync(trialData);
-            Debug.Log($"[AttentionalBlindness] Results saved (studentId={studentId}, groupId={groupId})");
         }
         catch (Exception ex)
         {
@@ -369,5 +408,34 @@ public class AttentionalBlindnessManager : MonoBehaviour
         }
     }
 
+    private string GetConfigString(string fieldName, string fallback)
+    {
+        if (config == null) return fallback;
+        switch (fieldName)
+        {
+            case "studentId":
+                return !string.IsNullOrEmpty(config.studentId) ? config.studentId : fallback;
+            case "groupId":
+                return !string.IsNullOrEmpty(config.groupId) ? config.groupId : fallback;
+            case "blockId":
+                return !string.IsNullOrEmpty(config.blockId) ? config.blockId : fallback;
+            case "experimentId":
+                return !string.IsNullOrEmpty(config.experimentId) ? config.experimentId : fallback;
+            case "vrId":
+                return !string.IsNullOrEmpty(config.vrId) ? config.vrId : fallback;
+            case "progressId":
+                return !string.IsNullOrEmpty(config.progressId) ? config.progressId : fallback;
+            default:
+                return fallback;
+        }
+    }
 
+    private static string FormatDuration(float totalSeconds)
+    {
+        if (totalSeconds < 0f) totalSeconds = 0f;
+        int t = Mathf.FloorToInt(totalSeconds);
+        int m = t / 60;
+        int s = t % 60;
+        return $"{m}:{s:D2}";
+    }
 }
