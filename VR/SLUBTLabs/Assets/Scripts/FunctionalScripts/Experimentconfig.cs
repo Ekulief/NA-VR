@@ -1,5 +1,6 @@
 ﻿using Firebase.Firestore;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -14,8 +15,6 @@ public class ExperimentConfig : ScriptableObject
 {
     // ── General ───────────────────────────────────────────────────────────────
     [Header("General")]
-    public string sessionId = "session-001";
-
     public string studentId;
     public string groupId;
     public string blockId;
@@ -105,8 +104,10 @@ public class ExperimentConfig : ScriptableObject
     public float memory_DistractorTaskDuration = 30f;
     public bool memory_UseDistractorTask = true;
     public bool memory_RandomizeQuestions = true;
+
     [Header("Memory – Remote Targets (from Firestore)")]
     public List<MemoryTargetEntry> memory_Targets = new List<MemoryTargetEntry>();
+
     [TextArea(2, 4)]
     public string memory_BriefingText =
         "<b>Memory Experiment</b>\n\n" +
@@ -168,7 +169,7 @@ public class ExperimentConfig : ScriptableObject
             DocumentSnapshot depth2Snapshot = await depth2Ref.GetSnapshotAsync();
             if (depth2Snapshot.Exists) ApplyDepthPerception2Values(depth2Snapshot);
 
-            // 5. Memory (NEW)
+            // 5. Memory
             DocumentReference memoryRef = db.Collection("experimentModule").Document("Memory2");
             DocumentSnapshot memorySnapshot = await memoryRef.GetSnapshotAsync();
             if (memorySnapshot.Exists)
@@ -183,51 +184,92 @@ public class ExperimentConfig : ScriptableObject
         }
     }
 
+    public void ApplyConfigurationMap(Dictionary<string, object> configMap)
+    {
+        if (configMap == null) return;
+
+        float GetFloat(string key, float fallback) =>
+            configMap.TryGetValue(key, out object v) ? Convert.ToSingle(v) : fallback;
+        bool GetBool(string key, bool fallback) =>
+            configMap.TryGetValue(key, out object v) ? Convert.ToBoolean(v) : fallback;
+        string GetString(string key, string fallback) =>
+            configMap.TryGetValue(key, out object v) ? v.ToString() : fallback;
+
+        globalInstructionDelay = GetFloat("globalInstructionDelay", globalInstructionDelay);
+
+        // Depth (Height)
+        depth_MaxHeightMetres = GetFloat("depth_MaxHeightMetres", depth_MaxHeightMetres);
+        depth_ActualHeightMetres = GetFloat("depth_ActualHeightMetres", depth_ActualHeightMetres);
+        depth_StepAmount = GetFloat("depth_StepAmount", depth_StepAmount);
+        depth_InstructionText = GetString("depth_InstructionText", depth_InstructionText);
+
+        // Depth 2 / Distance Perception
+        depth_MinDistanceMeters = Mathf.Clamp(GetFloat("distance_MinDistanceMeters", GetFloat("depth_MinDistanceMeters", depth_MinDistanceMeters)), 0f, 115f);
+        depth_MaxDistanceMeters = Mathf.Clamp(GetFloat("distance_MaxDistanceMeters", GetFloat("depth_MaxDistanceMeters", depth_MaxDistanceMeters)), 0f, 115f);
+        depth_ActualDistanceMeters = Mathf.Clamp(GetFloat("distance_ActualDistanceMeters", GetFloat("depth_ActualDistanceMeters", depth_ActualDistanceMeters)), depth_MinDistanceMeters, depth_MaxDistanceMeters);
+        depth_InstructionText2 = GetString("distance_InstructionText", GetString("depth_InstructionText2", depth_InstructionText2));
+
+        // Attentional Blindness
+        ab_FadeDelaySeconds = GetFloat("ab_FadeDelaySeconds", ab_FadeDelaySeconds);
+        ab_FadeDurationSeconds = GetFloat("ab_FadeDurationSeconds", ab_FadeDurationSeconds);
+        ab_PostFadePauseSeconds = GetFloat("ab_PostFadePauseSeconds", ab_PostFadePauseSeconds);
+        ab_UseRandomFadeTarget = GetBool("ab_UseRandomFadeTarget", ab_UseRandomFadeTarget);
+        ab_InstructionText = GetString("ab_InstructionText", ab_InstructionText);
+        ab_AwarenessQuestionText = GetString("ab_AwarenessQuestionText", ab_AwarenessQuestionText);
+        ab_NoticedText = GetString("ab_NoticedText", ab_NoticedText);
+        ab_NotNoticedText = GetString("ab_NotNoticedText", ab_NotNoticedText);
+
+        // Odd Item
+        oddItem_SearchTimeLimitSeconds = GetFloat("oddItem_SearchTimeLimitSeconds", oddItem_SearchTimeLimitSeconds);
+        oddItem_RaycastDistance = GetFloat("oddItem_RaycastDistance", oddItem_RaycastDistance);
+        oddItem_InstructionText = GetString("oddItem_InstructionText", oddItem_InstructionText);
+        oddItem_TargetDisplayName = GetString("oddItem_TargetDisplayName", oddItem_TargetDisplayName);
+        oddItem_WrongItemFeedback = GetString("oddItem_WrongItemFeedback", oddItem_WrongItemFeedback);
+        oddItem_ExcellentThresholdSeconds = GetFloat("oddItem_ExcellentThresholdSeconds", oddItem_ExcellentThresholdSeconds);
+        oddItem_GoodThresholdSeconds = GetFloat("oddItem_GoodThresholdSeconds", oddItem_GoodThresholdSeconds);
+        oddItem_RatingExcellent = GetString("oddItem_RatingExcellent", oddItem_RatingExcellent);
+        oddItem_RatingGood = GetString("oddItem_RatingGood", oddItem_RatingGood);
+        oddItem_RatingKeepPracticing = GetString("oddItem_RatingKeepPracticing", oddItem_RatingKeepPracticing);
+
+        // Memory
+        memory_TimePerRoomSeconds = GetFloat("memory_TimePerRoomSeconds", memory_TimePerRoomSeconds);
+        memory_TransitionFadeDuration = GetFloat("memory_TransitionFadeDuration", memory_TransitionFadeDuration);
+        memory_DistractorTaskDuration = GetFloat("memory_DistractorTaskDuration", memory_DistractorTaskDuration);
+        memory_UseDistractorTask = GetBool("memory_UseDistractorTask", memory_UseDistractorTask);
+        memory_RandomizeQuestions = GetBool("memory_RandomizeQuestions", memory_RandomizeQuestions);
+        memory_BriefingText = GetString("memory_BriefingText", memory_BriefingText);
+        memory_RoomInstructionText = GetString("memory_RoomInstructionText", memory_RoomInstructionText);
+        memory_DistractorInstructionText = GetString("memory_DistractorInstructionText", memory_DistractorInstructionText);
+        memory_RecallInstructionText = GetString("memory_RecallInstructionText", memory_RecallInstructionText);
+
+        if (configMap.TryGetValue("targets", out object targetsObj))
+        {
+            ParseMemoryTargets(targetsObj);
+        }
+    }
+
     private void ApplyAttentionalBlindnessValues(DocumentSnapshot snap)
     {
         if (!snap.TryGetValue("defaultConfig", out Dictionary<string, object> configMap)) return;
-
-        if (configMap.TryGetValue("ab_InstructionText", out object v)) ab_InstructionText = v.ToString();
-        if (configMap.TryGetValue("ab_AwarenessQuestionText", out object v2)) ab_AwarenessQuestionText = v2.ToString();
-        if (configMap.TryGetValue("ab_NoticedText", out object v3)) ab_NoticedText = v3.ToString();
-        if (configMap.TryGetValue("ab_NotNoticedText", out object v4)) ab_NotNoticedText = v4.ToString();
-        if (configMap.TryGetValue("ab_FadeDelaySeconds", out object v5)) ab_FadeDelaySeconds = Convert.ToSingle(v5);
-        if (configMap.TryGetValue("ab_FadeDurationSeconds", out object v6)) ab_FadeDurationSeconds = Convert.ToSingle(v6);
-        if (configMap.TryGetValue("ab_PostFadePauseSeconds", out object v7)) ab_PostFadePauseSeconds = Convert.ToSingle(v7);
-        if (configMap.TryGetValue("globalInstructionDelay", out object v8)) globalInstructionDelay = Convert.ToSingle(v8);
-        if (configMap.TryGetValue("ab_UseRandomFadeTarget", out object v9)) ab_UseRandomFadeTarget = Convert.ToBoolean(v9);
+        ApplyConfigurationMap(configMap);
     }
 
     private void ApplyOddItemValues(DocumentSnapshot snap)
     {
         if (!snap.TryGetValue("defaultConfig", out Dictionary<string, object> configMap)) return;
-
-        if (configMap.TryGetValue("oddItem_InstructionText", out object v)) oddItem_InstructionText = v.ToString();
-        if (configMap.TryGetValue("oddItem_TargetDisplayName", out object v2)) oddItem_TargetDisplayName = v2.ToString();
-        if (configMap.TryGetValue("oddItem_WrongItemFeedback", out object v3)) oddItem_WrongItemFeedback = v3.ToString();
-        if (configMap.TryGetValue("oddItem_SearchTimeLimitSeconds", out object v4)) oddItem_SearchTimeLimitSeconds = Convert.ToSingle(v4);
-        if (configMap.TryGetValue("oddItem_RaycastDistance", out object v5)) oddItem_RaycastDistance = Convert.ToSingle(v5);
+        ApplyConfigurationMap(configMap);
     }
 
     private void ApplyDepthPerceptionValues(DocumentSnapshot snap)
     {
         if (!snap.TryGetValue("defaultConfig", out Dictionary<string, object> configMap)) return;
-
-        if (configMap.TryGetValue("depth_InstructionText", out object v)) depth_InstructionText = v.ToString();
-        if (configMap.TryGetValue("depth_MaxHeightMetres", out object v2)) depth_MaxHeightMetres = Convert.ToSingle(v2);
-        if (configMap.TryGetValue("depth_ActualHeightMetres", out object v3)) depth_ActualHeightMetres = Convert.ToSingle(v3);
-        if (configMap.TryGetValue("depth_StepAmount", out object v4)) depth_StepAmount = Convert.ToSingle(v4);
+        ApplyConfigurationMap(configMap);
     }
 
     private void ApplyDepthPerception2Values(DocumentSnapshot snap)
     {
         if (!snap.TryGetValue("defaultConfig", out Dictionary<string, object> configMap)) return;
-
-        if (configMap.TryGetValue("depth_InstructionText", out object v)) depth_InstructionText2 = v.ToString();
-        if (configMap.TryGetValue("depth_MinDistanceMeters", out object v2)) depth_MinDistanceMeters = Mathf.Clamp(Convert.ToSingle(v2), 0f, 115f);
-        if (configMap.TryGetValue("depth_MaxDistanceMeters", out object v3)) depth_MaxDistanceMeters = Mathf.Clamp(Convert.ToSingle(v3), 0f, 115f);
-        if (configMap.TryGetValue("depth_ActualDistanceMeters", out object v4)) depth_ActualDistanceMeters = Mathf.Clamp(Convert.ToSingle(v4), depth_MinDistanceMeters, depth_MaxDistanceMeters);
-        if (configMap.TryGetValue("depth_StepAmount", out object v5)) depth_StepAmount = Convert.ToSingle(v5);
+        ApplyConfigurationMap(configMap);
     }
 
     private void ApplyMemoryValues(DocumentSnapshot snap)
@@ -238,89 +280,67 @@ public class ExperimentConfig : ScriptableObject
             return;
         }
 
-        // Timing & settings
-        if (configMap.TryGetValue("memory_TimePerRoomSeconds", out object v)) memory_TimePerRoomSeconds = Convert.ToSingle(v);
-        if (configMap.TryGetValue("memory_TransitionFadeDuration", out object v2)) memory_TransitionFadeDuration = Convert.ToSingle(v2);
-        if (configMap.TryGetValue("memory_DistractorTaskDuration", out object v3)) memory_DistractorTaskDuration = Convert.ToSingle(v3);
-        if (configMap.TryGetValue("memory_UseDistractorTask", out object v4)) memory_UseDistractorTask = Convert.ToBoolean(v4);
-        if (configMap.TryGetValue("memory_RandomizeQuestions", out object v5)) memory_RandomizeQuestions = Convert.ToBoolean(v5);
+        ApplyConfigurationMap(configMap);
+    }
 
-        // Texts
-        if (configMap.TryGetValue("memory_BriefingText", out object v6)) memory_BriefingText = v6.ToString();
-        if (configMap.TryGetValue("memory_RoomInstructionText", out object v7)) memory_RoomInstructionText = v7.ToString();
-        if (configMap.TryGetValue("memory_DistractorInstructionText", out object v8)) memory_DistractorInstructionText = v8.ToString();
-        if (configMap.TryGetValue("memory_RecallInstructionText", out object v9)) memory_RecallInstructionText = v9.ToString();
+    private void ParseMemoryTargets(object targetsObj)
+    {
+        if (targetsObj is not List<object> targetsList) return;
 
-        if (configMap.TryGetValue("globalInstructionDelay", out object v10)) globalInstructionDelay = Convert.ToSingle(v10);
+        memory_Targets.Clear();
 
-        
+        foreach (object targetObj in targetsList)
         {
-            memory_Targets.Clear();
+            if (targetObj is not Dictionary<string, object> targetMap) continue;
 
-            if (configMap.TryGetValue("targets", out object targetsObj) &&
-                targetsObj is List<object> targetsList)
+            MemoryTargetEntry entry = new MemoryTargetEntry();
+
+            if (targetMap.TryGetValue("gameID", out object id)) entry.gameID = id.ToString();
+            if (targetMap.TryGetValue("objectName", out object name)) entry.objectName = name.ToString();
+            if (targetMap.TryGetValue("room", out object room)) entry.room = room.ToString();
+
+            if (targetMap.TryGetValue("questions", out object questionsObj) &&
+                questionsObj is List<object> questionsList)
             {
-                Debug.Log($"[ExperimentConfig] Found targets inside defaultConfig, count = {targetsList.Count}");
+                List<QuestionData> qList = new List<QuestionData>();
 
-                foreach (object targetObj in targetsList)
+                foreach (object qObj in questionsList)
                 {
-                    if (targetObj is not Dictionary<string, object> targetMap) continue;
+                    if (qObj is not Dictionary<string, object> qMap) continue;
 
-                    MemoryTargetEntry entry = new MemoryTargetEntry();
+                    QuestionData q = new QuestionData();
 
-                    if (targetMap.TryGetValue("gameID", out object id)) entry.gameID = id.ToString();
-                    if (targetMap.TryGetValue("objectName", out object name)) entry.objectName = name.ToString();
-                    if (targetMap.TryGetValue("room", out object room)) entry.room = room.ToString();
+                    if (qMap.TryGetValue("questionText", out object qt)) q.questionText = qt.ToString();
+                    if (qMap.TryGetValue("correctAnswer", out object ca)) q.correctAnswer = ca.ToString();
 
-                    if (targetMap.TryGetValue("questions", out object questionsObj) &&
-                        questionsObj is List<object> questionsList)
+                    if (qMap.TryGetValue("questionType", out object typeObj) &&
+                        Enum.TryParse(typeObj.ToString(), true, out QuestionType parsedType))
                     {
-                        List<QuestionData> qList = new List<QuestionData>();
-
-                        foreach (object qObj in questionsList)
-                        {
-                            if (qObj is not Dictionary<string, object> qMap) continue;
-
-                            QuestionData q = new QuestionData();
-
-                            if (qMap.TryGetValue("questionText", out object qt))
-                                q.questionText = qt.ToString();
-                            if (qMap.TryGetValue("correctAnswer", out object ca))
-                                q.correctAnswer = ca.ToString();
-
-                            if (qMap.TryGetValue("questionType", out object typeObj) &&
-                                System.Enum.TryParse(typeObj.ToString(), true, out QuestionType parsedType))
-                            {
-                                q.questionType = parsedType;
-                            }
-
-                            if (qMap.TryGetValue("multipleChoiceOptions", out object optsObj) &&
-                                optsObj is List<object> optsList)
-                            {
-                                q.multipleChoiceOptions = optsList.ConvertAll(o => o.ToString()).ToArray();
-                            }
-                            else
-                            {
-                                q.multipleChoiceOptions = new string[0];
-                            }
-
-                            qList.Add(q);
-                        }
-
-                        entry.questions = qList.ToArray();
+                        q.questionType = parsedType;
                     }
 
-                    memory_Targets.Add(entry);
+                    if (qMap.TryGetValue("multipleChoiceOptions", out object optsObj) &&
+                        optsObj is List<object> optsList)
+                    {
+                        q.multipleChoiceOptions = optsList.ConvertAll(o => o.ToString()).ToArray();
+                    }
+                    else
+                    {
+                        q.multipleChoiceOptions = new string[0];
+                    }
+
+                    qList.Add(q);
                 }
 
-                Debug.Log($"[ExperimentConfig] Loaded {memory_Targets.Count} remote targets from defaultConfig.targets.");
+                entry.questions = qList.ToArray();
             }
-            else
-            {
-                Debug.LogWarning("[ExperimentConfig] defaultConfig.targets missing or not a list.");
-            }
+
+            memory_Targets.Add(entry);
         }
+
+        Debug.Log($"[ExperimentConfig] Parsed {memory_Targets.Count} memory targets.");
     }
+
     public void ApplyFromJson(string json)
     {
         JsonUtility.FromJsonOverwrite(json, this);
