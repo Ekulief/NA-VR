@@ -38,6 +38,7 @@ public class DepthPerceptionUI : MonoBehaviour
     [Header("Navigation")]
     public Vector3 hubReturnPosition = Vector3.zero;
 
+    public Button[] returnHomeButtons;
     private float _currentHeight = 0f;
     private float _actualHeight;
     private float _maxHeightMetres = 100f;
@@ -63,7 +64,14 @@ public class DepthPerceptionUI : MonoBehaviour
         if (submitButton != null) submitButton.onClick.AddListener(OnSubmit);
         if (returnHomeButton != null) returnHomeButton.onClick.AddListener(OnReturnHome);
         if (heightSlider != null) heightSlider.onValueChanged.AddListener(OnSliderChanged);
-
+        if (returnHomeButtons != null)
+        {
+            foreach (Button btn in returnHomeButtons)
+            {
+                if (btn != null)
+                    btn.onClick.AddListener(OnReturnHome);
+            }
+        }
         StartCoroutine(BeginExperiment());
     }
 

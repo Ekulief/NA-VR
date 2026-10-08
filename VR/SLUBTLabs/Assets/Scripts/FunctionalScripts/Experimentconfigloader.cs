@@ -1,33 +1,26 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
-using UnityEngine;
-using Firebase.Firestore;
 using System.Threading.Tasks;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using Firebase.Firestore;
 
 /// <summary>
-/// SLUBT Labs — Experiment Config Loader
-/// 
-/// Flow:
-/// 1. Wait for Firebase
-/// 2. Get this headset's unique device ID
-/// 3. Look it up in the vrDevices collection → get the friendly vrId (e.g. "VR-01")
-/// 4. Find the matching experimentProgress document
-/// 5. Read studentId, groupId, experimentId
-/// 6. Fetch the experiment document and apply its "configuration"
-/// 7. Set IsReady = true
+/// Loads session IDs from experimentProgress and applies experiment.configuration.
+/// Prefers device currentProgressId, then sceneId match, then first In Progress.
 /// </summary>
 public class ExperimentConfigLoader : MonoBehaviour
 {
     [Tooltip("Drag your ExperimentConfig asset here.")]
     public ExperimentConfig config;
 
-    [Tooltip("Fallback vrId used only if the device is not found in the vrDevices collection.")]
+    [Tooltip("Fallback vrId if device is not found in vrDevices.")]
     public string fallbackVrId = "VR-01";
 
     public static ExperimentConfig Current { get; private set; }
     public static bool IsReady { get; private set; } = false;
 
-    // The friendly vrId that was resolved for this headset
     public string ResolvedVrId { get; private set; } = "";
 
     private void Awake()
@@ -56,14 +49,11 @@ public class ExperimentConfigLoader : MonoBehaviour
         yield return new WaitUntil(() => FirebaseManager.IsInitialized);
 
         Debug.Log("[ConfigLoader] Resolving device identity and loading config...");
-
         var task = FetchProgressAndConfigAsync();
         yield return new WaitUntil(() => task.IsCompleted);
 
         if (task.IsFaulted)
-        {
             Debug.LogError($"[ConfigLoader] Failed to load config: {task.Exception}");
-        }
 
         IsReady = true;
         Debug.Log($"[ConfigLoader] Config ready. Resolved vrId = {ResolvedVrId}");
@@ -73,26 +63,21 @@ public class ExperimentConfigLoader : MonoBehaviour
     {
         FirebaseFirestore db = FirebaseFirestore.DefaultInstance;
 
-        // ─────────────────────────────────────────────
-        // STEP 1: Get this headset's unique hardware ID
-        // ─────────────────────────────────────────────
+        // ── STEP 1: Hardware ID ───────────────────────────────────────────────
         string deviceId = SystemInfo.deviceUniqueIdentifier;
         Debug.Log($"[ConfigLoader] This device hardware ID = {deviceId}");
 
-        // ─────────────────────────────────────────────
-        // STEP 2: Look up the device in vrDevices collection
-        // ─────────────────────────────────────────────
-        string vrId = fallbackVrId; // default
+        // ── STEP 2: vrDevices → vrId + optional currentProgressId ─────────────
+        string vrId = fallbackVrId;
+        DocumentSnapshot deviceDoc = null;
 
-        Query deviceQuery = db.Collection("vrDevices")
-                              .WhereEqualTo("deviceId", deviceId)
-                              .Limit(1);
-
-        QuerySnapshot deviceSnap = await deviceQuery.GetSnapshotAsync();
+        QuerySnapshot deviceSnap = await db.Collection("vrDevices")
+            .WhereEqualTo("deviceId", deviceId)
+            .Limit(1)
+            .GetSnapshotAsync();
 
         if (deviceSnap.Count > 0)
         {
-            DocumentSnapshot deviceDoc = null;
             foreach (var doc in deviceSnap.Documents)
             {
                 deviceDoc = doc;
@@ -101,83 +86,63 @@ public class ExperimentConfigLoader : MonoBehaviour
 
             if (deviceDoc != null && deviceDoc.ContainsField("vrId"))
             {
-                vrId = deviceDoc.GetValue<string>("vrId");
+                vrId = deviceDoc.GetValue<string>("vrId") ?? fallbackVrId;
                 Debug.Log($"[ConfigLoader] Found matching device → assigned vrId = {vrId}");
             }
             else
             {
-                Debug.LogWarning("[ConfigLoader] Device found but has no 'vrId' field. Using fallback.");
+                Debug.LogWarning("[ConfigLoader] Device found but has no 'vrId'. Using fallback.");
             }
         }
         else
         {
-            Debug.LogWarning($"[ConfigLoader] No matching device found in vrDevices for deviceId={deviceId}. " +
-                             $"Using fallback vrId = {fallbackVrId}");
+            Debug.LogWarning($"[ConfigLoader] No vrDevices row for deviceId={deviceId}. Using fallback vrId={fallbackVrId}");
         }
 
         ResolvedVrId = vrId;
 
-        // ─────────────────────────────────────────────
-        // STEP 3: Find the experimentProgress document
-        // ─────────────────────────────────────────────
-        Query progressQuery = db.Collection("experimentProgress")
-            .WhereEqualTo("vrId", vrId)
-            .WhereEqualTo("completionStatus", "In Progress") // or sessionControl in idle/running/paused
-            .Limit(1);
-
-        QuerySnapshot progressSnap = await progressQuery.GetSnapshotAsync();
-
-        if (progressSnap.Count == 0)
-        {
-            Debug.LogWarning($"[ConfigLoader] No experimentProgress found for vrId={vrId}. Using local values.");
-            return;
-        }
-
-        DocumentSnapshot progressDoc = null;
-        foreach (var doc in progressSnap.Documents)
-        {
-            progressDoc = doc;
-            break;
-        }
-
+        // ── STEP 3: Choose progress document ──────────────────────────────────
+        DocumentSnapshot progressDoc = await ResolveProgressDocAsync(db, deviceDoc, vrId);
         if (progressDoc == null)
         {
-            Debug.LogWarning("[ConfigLoader] No progress document found.");
+            Debug.LogWarning($"[ConfigLoader] No experimentProgress resolved for vrId={vrId}. Using local values.");
             return;
         }
-        if (SessionController.Instance != null)
-            SessionController.Instance.StartListening(progressDoc.Id);
-        else
-            Debug.LogWarning("[ConfigLoader] SessionController not found.");
-        // ─────────────────────────────────────────────
-        // STEP 4: Extract studentId, groupId, experimentId
-        // ─────────────────────────────────────────────
-        string studentId = progressDoc.ContainsField("studentId") ? progressDoc.GetValue<string>("studentId") : "";
-        string groupId = progressDoc.ContainsField("groupId") ? progressDoc.GetValue<string>("groupId") : "";
-        string experimentId = progressDoc.ContainsField("experimentId") ? progressDoc.GetValue<string>("experimentId") : "";
-        string blockId = progressDoc.ContainsField("blockId") ? progressDoc.GetValue<string>("blockId") : "";
-        string progressId = progressDoc.Id; 
+
+        string progressId = progressDoc.Id;
+
+        // ── STEP 4: Assign standard session IDs ────────────────────────────────
+        string studentId = GetFieldString(progressDoc, "studentId");
+        string groupId = GetFieldString(progressDoc, "groupId");
+        string blockId = GetFieldString(progressDoc, "blockId");
+        string experimentId = GetFieldString(progressDoc, "experimentId");
+        if (string.IsNullOrEmpty(experimentId))
+            experimentId = GetFieldString(progressDoc, "exeprimentId"); // typo fallback
 
         config.studentId = studentId;
         config.groupId = groupId;
-        config.experimentId = experimentId;
         config.blockId = blockId;
+        config.experimentId = experimentId;
         config.progressId = progressId;
         config.vrId = vrId;
 
-        Debug.Log($"[ConfigLoader] Progress loaded → studentId={studentId}, groupId={groupId}, experimentId={experimentId}");
+        Debug.Log($"[ConfigLoader] Progress loaded → studentId={studentId}, groupId={groupId}, experimentId={experimentId}, progressId={progressId}");
+
+        if (SessionController.Instance != null)
+            SessionController.Instance.StartListening(progressId);
+        else
+            Debug.LogWarning("[ConfigLoader] SessionController not found.");
 
         if (string.IsNullOrEmpty(experimentId))
         {
             Debug.LogWarning("[ConfigLoader] experimentId is empty. Cannot load configuration.");
             return;
         }
-        if (SessionController.Instance != null)
-            SessionController.Instance.StartListening(progressId);
-        // ─────────────────────────────────────────────
-        // STEP 5: Fetch the experiment document
-        // ─────────────────────────────────────────────
-        DocumentSnapshot experimentDoc = await db.Collection("experiment").Document(experimentId).GetSnapshotAsync();
+
+        // ── STEP 5: Experiment document ───────────────────────────────────────
+        DocumentSnapshot experimentDoc = await db.Collection("experiment")
+            .Document(experimentId)
+            .GetSnapshotAsync();
 
         if (!experimentDoc.Exists)
         {
@@ -185,67 +150,151 @@ public class ExperimentConfigLoader : MonoBehaviour
             return;
         }
 
-        // ─────────────────────────────────────────────
-        // STEP 6: Apply the nested "configuration" map
-        // ─────────────────────────────────────────────
-        if (experimentDoc.TryGetValue("configuration", out Dictionary<string, object> configMap))
+        // ── STEP 6: Apply configuration map ───────────────────────────────────
+        Dictionary<string, object> configMap = null;
+        if (experimentDoc.TryGetValue("configuration", out Dictionary<string, object> c1))
+            configMap = c1;
+        else if (experimentDoc.TryGetValue("defaultConfig", out Dictionary<string, object> c2))
+            configMap = c2;
+
+        if (configMap != null)
         {
-            ApplyConfigurationMap(configMap);
+            config.ApplyConfigurationMap(configMap);
             Debug.Log("[ConfigLoader] Configuration applied from experiment document.");
         }
         else
         {
-            Debug.LogWarning("[ConfigLoader] No 'configuration' field found in experiment document.");
+            Debug.LogWarning("[ConfigLoader] No 'configuration' or 'defaultConfig' on experiment document.");
         }
     }
 
-    private void ApplyConfigurationMap(Dictionary<string, object> map)
+    private async Task<DocumentSnapshot> ResolveProgressDocAsync(
+        FirebaseFirestore db,
+        DocumentSnapshot deviceDoc,
+        string vrId)
     {
-        float GetFloat(string key, float fallback) =>
-            map.TryGetValue(key, out object v) ? System.Convert.ToSingle(v) : fallback;
+        // 1. Pinned currentProgressId on device
+        if (deviceDoc != null && deviceDoc.ContainsField("currentProgressId"))
+        {
+            string pinnedId = deviceDoc.GetValue<string>("currentProgressId") ?? "";
+            if (!string.IsNullOrEmpty(pinnedId))
+            {
+                DocumentSnapshot pinned = await db.Collection("experimentProgress")
+                    .Document(pinnedId)
+                    .GetSnapshotAsync();
 
-        bool GetBool(string key, bool fallback) =>
-            map.TryGetValue(key, out object v) ? System.Convert.ToBoolean(v) : fallback;
+                if (pinned.Exists)
+                {
+                    Debug.Log($"[ConfigLoader] Using pinned currentProgressId={pinnedId}");
+                    return pinned;
+                }
 
-        string GetString(string key, string fallback) =>
-            map.TryGetValue(key, out object v) ? v.ToString() : fallback;
+                Debug.LogWarning($"[ConfigLoader] currentProgressId={pinnedId} missing. Falling back.");
+            }
+        }
 
-        // General
-        config.globalInstructionDelay = GetFloat("globalInstructionDelay", config.globalInstructionDelay);
+        // 2. Query all 'In Progress' for this vrId and match scene
+        QuerySnapshot progressSnap = await db.Collection("experimentProgress")
+            .WhereEqualTo("vrId", vrId)
+            .WhereEqualTo("completionStatus", "In Progress")
+            .GetSnapshotAsync();
 
-        // Depth Perception (Height)
-        config.depth_MaxHeightMetres = GetFloat("depth_MaxHeightMetres", config.depth_MaxHeightMetres);
-        config.depth_ActualHeightMetres = GetFloat("depth_ActualHeightMetres", config.depth_ActualHeightMetres);
-        config.depth_StepAmount = GetFloat("depth_StepAmount", config.depth_StepAmount);
-        config.depth_InstructionText = GetString("depth_InstructionText", config.depth_InstructionText);
+        if (progressSnap.Count == 0)
+            return null;
 
-        // Depth Perception 2 (Distance)
-        config.depth_MinDistanceMeters = GetFloat("depth_MinDistanceMeters", config.depth_MinDistanceMeters);
-        config.depth_MaxDistanceMeters = GetFloat("depth_MaxDistanceMeters", config.depth_MaxDistanceMeters);
-        config.depth_ActualDistanceMeters = GetFloat("depth_ActualDistanceMeters", config.depth_ActualDistanceMeters);
-        config.depth_InstructionText2 = GetString("depth_InstructionText", config.depth_InstructionText2);
+        string currentScene = SceneManager.GetActiveScene().name;
+        Debug.Log($"[ConfigLoader] Active scene='{currentScene}', In Progress count={progressSnap.Count}");
 
-        // Attentional Blindness
-        config.ab_FadeDelaySeconds = GetFloat("ab_FadeDelaySeconds", config.ab_FadeDelaySeconds);
-        config.ab_FadeDurationSeconds = GetFloat("ab_FadeDurationSeconds", config.ab_FadeDurationSeconds);
-        config.ab_UseRandomFadeTarget = GetBool("ab_UseRandomFadeTarget", config.ab_UseRandomFadeTarget);
-        config.ab_InstructionText = GetString("ab_InstructionText", config.ab_InstructionText);
-        config.ab_AwarenessQuestionText = GetString("ab_AwarenessQuestionText", config.ab_AwarenessQuestionText);
+        foreach (DocumentSnapshot progressDoc in progressSnap.Documents)
+        {
+            string experimentId = GetFieldString(progressDoc, "experimentId");
+            if (string.IsNullOrEmpty(experimentId))
+                experimentId = GetFieldString(progressDoc, "exeprimentId");
 
-        // Odd Item
-        config.oddItem_SearchTimeLimitSeconds = GetFloat("oddItem_SearchTimeLimitSeconds", config.oddItem_SearchTimeLimitSeconds);
-        config.oddItem_RaycastDistance = GetFloat("oddItem_RaycastDistance", config.oddItem_RaycastDistance);
-        config.oddItem_InstructionText = GetString("oddItem_InstructionText", config.oddItem_InstructionText);
+            if (string.IsNullOrEmpty(experimentId))
+                continue;
 
-        // Memory
-        config.memory_TimePerRoomSeconds = GetFloat("memory_TimePerRoomSeconds", config.memory_TimePerRoomSeconds);
-        config.memory_DistractorTaskDuration = GetFloat("memory_DistractorTaskDuration", config.memory_DistractorTaskDuration);
-        config.memory_UseDistractorTask = GetBool("memory_UseDistractorTask", config.memory_UseDistractorTask);
-        config.memory_BriefingText = GetString("memory_BriefingText", config.memory_BriefingText);
-        config.memory_RoomInstructionText = GetString("memory_RoomInstructionText", config.memory_RoomInstructionText);
-        config.memory_DistractorInstructionText = GetString("memory_DistractorInstructionText", config.memory_DistractorInstructionText);
-        config.memory_RecallInstructionText = GetString("memory_RecallInstructionText", config.memory_RecallInstructionText);
-        config.memory_TransitionFadeDuration = GetFloat("memory_TransitionFadeDuration", config.memory_TransitionFadeDuration);
-        config.memory_RandomizeQuestions = GetBool("memory_RandomizeQuestions", config.memory_RandomizeQuestions);
+            DocumentSnapshot experimentDoc = await db.Collection("experiment")
+                .Document(experimentId)
+                .GetSnapshotAsync();
+
+            if (!experimentDoc.Exists)
+                continue;
+
+            string sceneId = GetFieldString(experimentDoc, "sceneId");
+            string moduleId = GetFieldString(experimentDoc, "moduleId");
+
+            if (SceneMatches(currentScene, sceneId, moduleId))
+            {
+                Debug.Log($"[ConfigLoader] Scene match → progress={progressDoc.Id}, experiment={experimentId}, sceneId={sceneId}");
+                return progressDoc;
+            }
+        }
+
+        // 3. Fallback: return the first active session
+        foreach (DocumentSnapshot progressDoc in progressSnap.Documents)
+        {
+            Debug.LogWarning($"[ConfigLoader] No scene match for '{currentScene}'. Using first In Progress: {progressDoc.Id}");
+            return progressDoc;
+        }
+
+        return null;
+    }
+
+    private static bool SceneMatches(string currentScene, string sceneId, string moduleId = null)
+    {
+        if (string.IsNullOrEmpty(currentScene))
+            return false;
+
+        string Clean(string input)
+        {
+            if (string.IsNullOrEmpty(input)) return "";
+            return input
+                .Replace(" ", "")
+                .Replace("_", "")
+                .Replace("Scene", "")
+                .Replace("scene", "")
+                .Trim();
+        }
+
+        string cleanCurrent = Clean(currentScene);
+
+        if (!string.IsNullOrEmpty(sceneId))
+        {
+            string cleanTarget = Clean(sceneId);
+            if (string.Equals(cleanCurrent, cleanTarget, StringComparison.OrdinalIgnoreCase) ||
+                cleanCurrent.IndexOf(cleanTarget, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                cleanTarget.IndexOf(cleanCurrent, StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return true;
+            }
+        }
+
+        if (!string.IsNullOrEmpty(moduleId))
+        {
+            string cleanModule = Clean(moduleId);
+            if (string.Equals(cleanCurrent, cleanModule, StringComparison.OrdinalIgnoreCase) ||
+                cleanCurrent.IndexOf(cleanModule, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                cleanModule.IndexOf(cleanCurrent, StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string GetFieldString(DocumentSnapshot snap, string field)
+    {
+        if (snap == null || !snap.ContainsField(field))
+            return "";
+        try
+        {
+            return snap.GetValue<string>(field) ?? "";
+        }
+        catch
+        {
+            return snap.GetValue<object>(field)?.ToString() ?? "";
+        }
     }
 }

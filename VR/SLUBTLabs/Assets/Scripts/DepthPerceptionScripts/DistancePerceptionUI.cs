@@ -8,7 +8,7 @@ using TMPro;
 using Firebase.Firestore;
 
 /// <summary>
-/// Distance 
+/// Distance Perception UI
 /// Waits for config, shows instructions, collects an estimate, then saves results.
 /// </summary>
 public class DistancePerceptionUI : MonoBehaviour
@@ -68,6 +68,16 @@ public class DistancePerceptionUI : MonoBehaviour
         StartCoroutine(BeginExperiment());
     }
 
+    private void OnDestroy()
+    {
+        if (startTestButton != null) startTestButton.onClick.RemoveListener(OnStartTest);
+        if (incrementButton != null) incrementButton.onClick.RemoveListener(OnIncrement);
+        if (decrementButton != null) decrementButton.onClick.RemoveListener(OnDecrement);
+        if (submitButton != null) submitButton.onClick.RemoveListener(OnSubmit);
+        if (returnHomeButton != null) returnHomeButton.onClick.RemoveListener(OnReturnHome);
+        if (distanceSlider != null) distanceSlider.onValueChanged.RemoveListener(OnSliderChanged);
+    }
+
     private bool IsSessionPaused()
     {
         return SessionController.Instance != null && SessionController.Instance.IsPaused;
@@ -88,7 +98,7 @@ public class DistancePerceptionUI : MonoBehaviour
         {
             _minDistanceMetres = config.depth_MinDistanceMeters;
             _maxDistanceMetres = config.depth_MaxDistanceMeters;
-            _stepAmount = config.depth_StepAmount;
+            _stepAmount = Mathf.Max(0.1f, config.depth_StepAmount);
             _actualDistance = config.depth_ActualDistanceMeters;
             Debug.Log("[DistancePerception] Applied config parameters.");
         }
@@ -111,8 +121,10 @@ public class DistancePerceptionUI : MonoBehaviour
 
         if (instructionText != null)
         {
-            instructionText.text = (config != null && !string.IsNullOrEmpty(config.depth_InstructionText))
-                ? config.depth_InstructionText
+            string loadedInstruction = config != null ? config.depth_InstructionText2 : null;
+
+            instructionText.text = !string.IsNullOrEmpty(loadedInstruction)
+                ? loadedInstruction
                 : "<b>Horizontal Distance Perception Test</b>\n\nObserve the target object ahead and estimate its horizontal distance in meters.\n\nPress <b>Start Test</b> when ready.";
         }
 
@@ -137,19 +149,20 @@ public class DistancePerceptionUI : MonoBehaviour
         if (inputPanel != null) inputPanel.SetActive(true);
     }
 
-    private void OnSubmit()
+    private async void OnSubmit()
     {
-        if (IsSessionPaused()) return;
-        if (_submitted) return;
+        if (IsSessionPaused() || _submitted) return;
 
         _submitted = true;
+        if (submitButton != null) submitButton.interactable = false;
+
         _completionTime = Time.time - _trialStartTime;
 
         if (inputPanel != null) inputPanel.SetActive(false);
-        ShowResults();
+        await ShowResultsAsync();
     }
 
-    private void ShowResults()
+    private async Task ShowResultsAsync()
     {
         float error = Mathf.Abs(_currentDistance - _actualDistance);
 
@@ -166,7 +179,7 @@ public class DistancePerceptionUI : MonoBehaviour
         }
 
         if (resultsPanel != null) resultsPanel.SetActive(true);
-        _ = SaveResultsToFirestoreAsync(error);
+        await SaveResultsToFirestoreAsync(error);
     }
 
     private async Task SaveResultsToFirestoreAsync(float error)
@@ -202,7 +215,7 @@ public class DistancePerceptionUI : MonoBehaviour
                     { "maxDistanceMeters", _maxDistanceMetres },
                     { "stepAmount", _stepAmount },
                     { "actualDistanceMeters", _actualDistance },
-                    { "instructionText", config != null ? config.depth_InstructionText ?? "" : "" }
+                    { "instructionText", config != null ? config.depth_InstructionText2 ?? "" : "" }
                 }
             };
 
@@ -227,8 +240,8 @@ public class DistancePerceptionUI : MonoBehaviour
                 { "studentId", studentId },
                 { "vrId", vrId },
                 { "progressId", progressId },
-                { "experimentName", "Depth_Perception2" },
-                { "moduleName", "Depth_Perception2" },
+                { "experimentName", "Distance Perception" },
+                { "moduleName", "Distance Perception" },
                 { "completionStatus", "Completed" },
                 { "duration", durationDisplay },
                 { "durationSeconds", durationSeconds },

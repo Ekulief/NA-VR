@@ -243,7 +243,6 @@ public class ExperimentLoader : MonoBehaviour
 
         string studentId = config != null ? config.studentId : "";
         string groupId = config != null ? config.groupId : "";
-        string sessionId = config != null ? config.sessionId : "";
 
         Dictionary<string, object> update = new()
 {
@@ -252,7 +251,6 @@ public class ExperimentLoader : MonoBehaviour
     { "currentUserId",        studentId },
     { "currentGroupId",       groupId },
     { "currentSessionStart",  FieldValue.ServerTimestamp },
-    { "notes",                sessionId }
 };
 
         var docRef = _db.Collection("vrDevices").Document(vrDeviceDocumentId);
