@@ -1,0 +1,82 @@
+{
+  "project_info": {
+    "project_number": "436564810069",
+    "project_id": "slubt-labs-5e96f",
+    "storage_bucket": "slubt-labs-5e96f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:436564810069:android:9cdef2a901a213194d37dc",
+        "android_client_info": {
+          "package_name": "com.SLU.SLUBTLabs"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "436564810069-ib787dqs2hhaufmnq6h96fai4cl9se98.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA-nkc1dIGatW63acLB4RhWhnrSv1cZd9E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "436564810069-ib787dqs2hhaufmnq6h96fai4cl9se98.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "436564810069-27mm2uk1kgr0lis2q5m9r0enffp2rgqp.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.unityvrdatabase.firebasedb"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:436564810069:android:bec747498adc62164d37dc",
+        "android_client_info": {
+          "package_name": "com.unityvrdatabase.firebasedb"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "436564810069-ib787dqs2hhaufmnq6h96fai4cl9se98.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA-nkc1dIGatW63acLB4RhWhnrSv1cZd9E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "436564810069-ib787dqs2hhaufmnq6h96fai4cl9se98.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "436564810069-27mm2uk1kgr0lis2q5m9r0enffp2rgqp.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.unityvrdatabase.firebasedb"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
