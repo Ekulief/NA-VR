@@ -121,8 +121,9 @@ public class ExperimentConfigLoader : MonoBehaviour
         // STEP 3: Find the experimentProgress document
         // ─────────────────────────────────────────────
         Query progressQuery = db.Collection("experimentProgress")
-                                .WhereEqualTo("vrId", vrId)
-                                .Limit(1);
+            .WhereEqualTo("vrId", vrId)
+            .WhereEqualTo("completionStatus", "In Progress") // or sessionControl in idle/running/paused
+            .Limit(1);
 
         QuerySnapshot progressSnap = await progressQuery.GetSnapshotAsync();
 
@@ -144,16 +145,25 @@ public class ExperimentConfigLoader : MonoBehaviour
             Debug.LogWarning("[ConfigLoader] No progress document found.");
             return;
         }
-
+        if (SessionController.Instance != null)
+            SessionController.Instance.StartListening(progressDoc.Id);
+        else
+            Debug.LogWarning("[ConfigLoader] SessionController not found.");
         // ─────────────────────────────────────────────
         // STEP 4: Extract studentId, groupId, experimentId
         // ─────────────────────────────────────────────
         string studentId = progressDoc.ContainsField("studentId") ? progressDoc.GetValue<string>("studentId") : "";
         string groupId = progressDoc.ContainsField("groupId") ? progressDoc.GetValue<string>("groupId") : "";
         string experimentId = progressDoc.ContainsField("experimentId") ? progressDoc.GetValue<string>("experimentId") : "";
+        string blockId = progressDoc.ContainsField("blockId") ? progressDoc.GetValue<string>("blockId") : "";
+        string progressId = progressDoc.Id; 
 
         config.studentId = studentId;
         config.groupId = groupId;
+        config.experimentId = experimentId;
+        config.blockId = blockId;
+        config.progressId = progressId;
+        config.vrId = vrId;
 
         Debug.Log($"[ConfigLoader] Progress loaded → studentId={studentId}, groupId={groupId}, experimentId={experimentId}");
 
@@ -162,7 +172,8 @@ public class ExperimentConfigLoader : MonoBehaviour
             Debug.LogWarning("[ConfigLoader] experimentId is empty. Cannot load configuration.");
             return;
         }
-
+        if (SessionController.Instance != null)
+            SessionController.Instance.StartListening(progressId);
         // ─────────────────────────────────────────────
         // STEP 5: Fetch the experiment document
         // ─────────────────────────────────────────────
@@ -234,5 +245,7 @@ public class ExperimentConfigLoader : MonoBehaviour
         config.memory_RoomInstructionText = GetString("memory_RoomInstructionText", config.memory_RoomInstructionText);
         config.memory_DistractorInstructionText = GetString("memory_DistractorInstructionText", config.memory_DistractorInstructionText);
         config.memory_RecallInstructionText = GetString("memory_RecallInstructionText", config.memory_RecallInstructionText);
+        config.memory_TransitionFadeDuration = GetFloat("memory_TransitionFadeDuration", config.memory_TransitionFadeDuration);
+        config.memory_RandomizeQuestions = GetBool("memory_RandomizeQuestions", config.memory_RandomizeQuestions);
     }
 }
