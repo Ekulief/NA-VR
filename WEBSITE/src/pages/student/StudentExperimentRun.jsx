@@ -1,21 +1,83 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, onSnapshot } from "firebase/firestore";
 
 import { db } from "../../config/firebase-config";
+import { useAuth } from "../../context/AuthContext";
 
 import { ArrowLeft, Box, Square, Download } from "lucide-react";
 
-const EMPTY_METRICS = {
-  headRotation: { x: null, y: null, z: null },
-  position: { x: null, y: null, z: null },
-  heartRate: null,
+const VR_IDENTIFIER_OPTIONS = ["VR-01", "VR-02", "VR-03", "VR-04"];
+
+const formatValue = (value, unit = "") => {
+  if (value === null || value === undefined || value === "") {
+    return "--";
+  }
+
+  if (typeof value === "number" && unit === "s") {
+    return `${value.toFixed(1)}s`;
+  }
+
+  return `${value}${unit}`;
 };
+
+const formatYesNo = (value) => {
+  if (value === true) return "Yes";
+  if (value === false) return "No";
+  return "--";
+};
+
+const MODULE_METRICS = {
+  Attentional_Blindness: [
+    { key: "trialPhase", label: "Trial Phase" },
+    { key: "elapsedSeconds", label: "Time Elapsed", unit: "s" },
+    { key: "noticedChange", label: "Noticed Change", format: formatYesNo },
+    { key: "responseTimeSeconds", label: "Response Time", unit: "s" },
+  ],
+
+  Depth_Perception: [
+    { key: "estimatedHeightMeters", label: "Estimated Height", unit: "m" },
+    { key: "actualHeightMeters", label: "Actual Height", unit: "m" },
+    { key: "stepCount", label: "Adjustments Made" },
+    {
+      key: "responseSubmitted",
+      label: "Response Submitted",
+      format: formatYesNo,
+    },
+  ],
+
+  Depth_Perception2: [
+    { key: "estimatedDistanceMeters", label: "Estimated Distance", unit: "m" },
+    { key: "actualDistanceMeters", label: "Actual Distance", unit: "m" },
+    {
+      key: "responseSubmitted",
+      label: "Response Submitted",
+      format: formatYesNo,
+    },
+  ],
+
+  Odd_Item_Detection: [
+    { key: "searchTimeSeconds", label: "Search Time", unit: "s" },
+    { key: "itemSelected", label: "Item Selected" },
+    { key: "correct", label: "Correct", format: formatYesNo },
+    { key: "rating", label: "Rating" },
+  ],
+
+  Memory2: [
+    { key: "currentRoom", label: "Current Room" },
+    { key: "targetsFound", label: "Targets Found" },
+    { key: "recallAccuracy", label: "Recall Accuracy", unit: "%" },
+    { key: "responseTimeSeconds", label: "Response Time", unit: "s" },
+  ],
+};
+
+const DEFAULT_METRIC_FIELDS = [{ key: "result", label: "Result" }];
 
 export default function StudentExperimentRun() {
   const navigate = useNavigate();
   const { blockId, experimentId } = useParams();
+  const { user } = useAuth();
 
   const [experiment, setExperiment] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -25,11 +87,10 @@ export default function StudentExperimentRun() {
   const [connecting, setConnecting] = useState(false);
   const [vrConnected, setVrConnected] = useState(false);
 
-  // "idle" | "running" | "completed"
   const [sessionState, setSessionState] = useState("idle");
-
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [metrics, setMetrics] = useState(EMPTY_METRICS);
+
+  const [sessionData, setSessionData] = useState(null);
 
   const timerRef = useRef(null);
   const connectTimeoutRef = useRef(null);
@@ -68,6 +129,26 @@ export default function StudentExperimentRun() {
   }, [experimentId]);
 
   useEffect(() => {
+    if (!experimentId || !user?.uid) {
+      return;
+    }
+
+    const sessionRef = doc(db, "session", `${experimentId}_${user.uid}`);
+
+    const unsubscribe = onSnapshot(
+      sessionRef,
+      (snapshot) => {
+        setSessionData(snapshot.exists() ? snapshot.data().data || {} : null);
+      },
+      (error) => {
+        console.error("Error listening to session data:", error);
+      },
+    );
+
+    return () => unsubscribe();
+  }, [experimentId, user?.uid]);
+
+  useEffect(() => {
     return () => {
       if (timerRef.current) {
         clearInterval(timerRef.current);
@@ -89,20 +170,13 @@ export default function StudentExperimentRun() {
     return `${minutes}:${seconds}`;
   };
 
-  const formatMetric = (value, suffix = "") =>
-    value === null || value === undefined ? "--" : `${value}${suffix}`;
-
-  // Step 1: connect the VR device.
-  // TODO (backend): replace this timeout with the real connect call
-  // (e.g. POST /sessions/connect or a WebSocket handshake with vrIdentifier),
-  // and only call setVrConnected(true) once the backend confirms the link.
   const handleConnectDevice = () => {
     if (vrConnected || connecting) {
       return;
     }
 
-    if (!vrIdentifier.trim()) {
-      alert("Please enter a VR identifier.");
+    if (!vrIdentifier) {
+      alert("Please select a VR identifier.");
       return;
     }
 
@@ -114,10 +188,6 @@ export default function StudentExperimentRun() {
     }, 900);
   };
 
-  // Step 2: start the session.
-  // TODO (backend): tell the backend to start the session here, and
-  // subscribe to its live feed (WebSocket/polling) to push real values
-  // into setMetrics as they arrive, instead of leaving them blank.
   const handleStartSession = () => {
     if (!vrConnected || sessionState === "running") {
       return;
@@ -125,16 +195,12 @@ export default function StudentExperimentRun() {
 
     setSessionState("running");
     setElapsedSeconds(0);
-    setMetrics(EMPTY_METRICS);
 
     timerRef.current = setInterval(() => {
       setElapsedSeconds((previous) => previous + 1);
     }, 1000);
   };
 
-  // Step 3: stop the session.
-  // TODO (backend): tell the backend to end the session and unsubscribe
-  // from the live feed here.
   const handleStopSession = () => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -144,15 +210,13 @@ export default function StudentExperimentRun() {
     setSessionState("completed");
   };
 
-  // TODO (backend): once results are stored server-side, this should
-  // fetch/export the real session record instead of the local snapshot.
   const handleDownloadResults = () => {
     const payload = {
       experimentName: experiment?.experimentName || "Untitled Experiment",
       vrIdentifier,
       durationSeconds: elapsedSeconds,
       duration: formatTime(elapsedSeconds),
-      metrics,
+      metrics: sessionData || {},
       completedAt: new Date().toISOString(),
     };
 
@@ -197,6 +261,9 @@ export default function StudentExperimentRun() {
   const statusStyle = isCompleted
     ? "bg-indigo-100 text-indigo-700"
     : "bg-green-100 text-green-700";
+
+  const metricFields =
+    MODULE_METRICS[experiment.moduleId] || DEFAULT_METRIC_FIELDS;
 
   return (
     <div className="font-google min-h-screen bg-white text-black">
@@ -255,12 +322,10 @@ export default function StudentExperimentRun() {
                 VR Identifier
               </label>
 
-              <input
-                type="text"
+              <select
                 value={vrIdentifier}
                 onChange={(e) => setVrIdentifier(e.target.value)}
                 disabled={vrConnected || connecting}
-                placeholder="Enter VR identifier"
                 className="
                   w-full
                   bg-gray-100
@@ -275,7 +340,15 @@ export default function StudentExperimentRun() {
                   focus:ring-indigo-500
                   disabled:text-gray-500
                 "
-              />
+              >
+                <option value="">Select VR identifier</option>
+
+                {VR_IDENTIFIER_OPTIONS.map((identifier) => (
+                  <option key={identifier} value={identifier}>
+                    {identifier}
+                  </option>
+                ))}
+              </select>
 
               {!vrConnected ? (
                 <button
@@ -359,12 +432,6 @@ export default function StudentExperimentRun() {
             <section className="border border-gray-300 rounded-xl p-5 h-full flex flex-col">
               <h2 className="text-lg font-medium mb-4">VR Preview</h2>
 
-              {/*
-                TODO (backend): once a live feed exists, render it here
-                (e.g. a <video>/<canvas> fed by the VR stream) while
-                isRunning is true. Left as the static placeholder for
-                every state until that's wired up.
-              */}
               <div
                 className="
                   flex-1
@@ -393,36 +460,33 @@ export default function StudentExperimentRun() {
         <section className="border border-gray-300 rounded-xl p-5 mb-6">
           <h2 className="text-lg font-medium mb-4">Live Metrics</h2>
 
-          {/*
-            TODO (backend): these render "--" until setMetrics is
-            populated from the real feed (see handleStartSession).
-          */}
-          <div className="mb-4">
-            <p className="text-sm text-gray-500 mb-1">Head Rotation</p>
+          <div className="flex flex-col">
+            {metricFields.map((field, index) => {
+              const rawValue = sessionData ? sessionData[field.key] : null;
 
-            <div className="flex flex-col gap-1 text-gray-700">
-              <p>X: {formatMetric(metrics.headRotation.x, "°")}</p>
-              <p>Y: {formatMetric(metrics.headRotation.y, "°")}</p>
-              <p>Z: {formatMetric(metrics.headRotation.z, "°")}</p>
-            </div>
-          </div>
+              const displayValue = field.format
+                ? field.format(rawValue)
+                : formatValue(rawValue, field.unit);
 
-          <div className="border-t border-gray-200 pt-4 mb-4">
-            <p className="text-sm text-gray-500 mb-1">Position</p>
+              return (
+                <div
+                  key={field.key}
+                  className={`
+                    flex
+                    items-center
+                    justify-between
+                    py-3
+                    ${index > 0 ? "border-t border-gray-200" : ""}
+                  `}
+                >
+                  <span className="text-gray-500">{field.label}</span>
 
-            <div className="flex flex-col gap-1 text-gray-700">
-              <p>X: {formatMetric(metrics.position.x, "m")}</p>
-              <p>Y: {formatMetric(metrics.position.y, "m")}</p>
-              <p>Z: {formatMetric(metrics.position.z, "m")}</p>
-            </div>
-          </div>
-
-          <div className="border-t border-gray-200 pt-4">
-            <p className="text-sm text-gray-500 mb-1">Heart Rate</p>
-
-            <p className="text-gray-700">
-              {formatMetric(metrics.heartRate, " bpm")}
-            </p>
+                  <span className="text-gray-700 font-medium">
+                    {displayValue}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </section>
 
