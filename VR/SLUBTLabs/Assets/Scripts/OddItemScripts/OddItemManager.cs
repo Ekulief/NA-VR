@@ -10,7 +10,7 @@ using UnityEngine.XR.Interaction.Toolkit.Interactables;
 using Firebase.Firestore;
 
 /// <summary>
-/// Odd-item search trial. Config drives timings/text; results save to experimentResults.
+/// Odd-item search trial. Config drives timings/text/target selection; results save to experimentResults.
 /// </summary>
 public class OddItemManager : MonoBehaviour
 {
@@ -22,7 +22,7 @@ public class OddItemManager : MonoBehaviour
 
     [Header("Odd Items")]
     public List<GameObject> oddItemPrefabs = new();
-    public int selectedOddItemIndex = 0;
+    public int selectedOddItemIndex = 0;          // fallback when no remote selection
 
     [Header("Shuffle")]
     public bool shuffleItems = true;
@@ -40,11 +40,14 @@ public class OddItemManager : MonoBehaviour
     private float _foundTime;
     private float _experimentStartRealtime;
     private DateTime _startedAtUtc;
+
     private List<GameObject> _allSpawnedItems = new();
     private GameObject _targetInstance;
     private GameObject _chosenOddItemPrefab;
+
     private bool _awaitingSelection = false;
     private bool _trialComplete = false;
+
     private FeedbackDisplay _feedbackDisplay;
     private Transform _rightControllerTransform;
 
@@ -140,9 +143,10 @@ public class OddItemManager : MonoBehaviour
             yield break;
         }
 
-        int index = Mathf.Clamp(selectedOddItemIndex, 0, oddItemPrefabs.Count - 1);
-        _chosenOddItemPrefab = oddItemPrefabs[index];
+        // ---------- Choose target (Selected → Random → Index) ----------
+        _chosenOddItemPrefab = ResolveTargetPrefab();
         Debug.Log($"[OddItemDetection] Chosen odd item: '{_chosenOddItemPrefab.name}'");
+        // ---------------------------------------------------------------
 
         _rightControllerTransform = FindRightController();
 
@@ -169,6 +173,7 @@ public class OddItemManager : MonoBehaviour
                   $"'{chosenShelf.gameObject.name}' at {_targetInstance.transform.position}");
 
         LayoutManager.Instance?.CaptureLayout(_targetInstance, _chosenOddItemPrefab);
+
         CollectSpawnedItems();
 
         foreach (GameObject item in _allSpawnedItems)
@@ -176,6 +181,63 @@ public class OddItemManager : MonoBehaviour
 
         yield return new WaitForSeconds(_instructionDelay);
         ShowInstructions();
+    }
+
+    /// <summary>
+    /// Priority:
+    /// 1. Explicit oddItem_SelectedTarget from Firestore (if it matches a prefab)
+    /// 2. Random pick (if oddItem_RandomizeTarget == true)
+    /// 3. Fallback to inspector selectedOddItemIndex
+    /// </summary>
+    private GameObject ResolveTargetPrefab()
+    {
+        ExperimentConfig cfg = config != null ? config : ExperimentConfigLoader.Current;
+
+        // 1. Explicit selection from Firestore
+        if (cfg != null && !string.IsNullOrEmpty(cfg.oddItem_SelectedTarget))
+        {
+            GameObject match = oddItemPrefabs.Find(p =>
+                p != null &&
+                p.name.Equals(cfg.oddItem_SelectedTarget, StringComparison.OrdinalIgnoreCase));
+
+            if (match != null)
+            {
+                Debug.Log($"[OddItemDetection] Using selected target from config: {match.name}");
+                return match;
+            }
+
+            Debug.LogWarning(
+                $"[OddItemDetection] Selected target '{cfg.oddItem_SelectedTarget}' " +
+                "not found in oddItemPrefabs. Falling back...");
+        }
+
+        // 2. Randomize
+        if (cfg != null && cfg.oddItem_RandomizeTarget)
+        {
+            // Optionally restrict to the available targets list if it exists
+            List<GameObject> pool = oddItemPrefabs;
+
+            if (cfg.oddItem_AvailableTargets != null && cfg.oddItem_AvailableTargets.Count > 0)
+            {
+                pool = oddItemPrefabs.FindAll(p =>
+                    p != null &&
+                    cfg.oddItem_AvailableTargets.Exists(name =>
+                        name.Equals(p.name, StringComparison.OrdinalIgnoreCase)));
+            }
+
+            if (pool.Count > 0)
+            {
+                GameObject random = pool[UnityEngine.Random.Range(0, pool.Count)];
+                Debug.Log($"[OddItemDetection] Randomized target: {random.name}");
+                return random;
+            }
+
+            Debug.LogWarning("[OddItemDetection] Randomize enabled but pool is empty. Falling back to index.");
+        }
+
+        // 3. Fallback to inspector index
+        int index = Mathf.Clamp(selectedOddItemIndex, 0, oddItemPrefabs.Count - 1);
+        return oddItemPrefabs[index];
     }
 
     private Transform FindRightController()
@@ -215,6 +277,7 @@ public class OddItemManager : MonoBehaviour
     private void ShowInstructions()
     {
         ExperimentConfig cfg = config;
+
         if (instructionText != null)
         {
             instructionText.text = cfg != null && !string.IsNullOrEmpty(cfg.oddItem_InstructionText)
@@ -245,6 +308,7 @@ public class OddItemManager : MonoBehaviour
     private IEnumerator SearchTimeLimitCountdown()
     {
         float waited = 0f;
+
         while (waited < _searchTimeLimit)
         {
             yield return WaitWhilePaused();
@@ -289,6 +353,7 @@ public class OddItemManager : MonoBehaviour
         if (_rightControllerTransform == null) return;
 
         Ray ray = new Ray(_rightControllerTransform.position, _rightControllerTransform.forward);
+
         if (Physics.Raycast(ray, out RaycastHit hit, _raycastDistance))
         {
             GameObject hitRoot = GetSpawnedItemRoot(hit.collider.gameObject);
@@ -320,6 +385,7 @@ public class OddItemManager : MonoBehaviour
 
         string timeRating;
         ExperimentConfig cfg = config;
+
         if (cfg != null)
         {
             if (_foundTime < cfg.oddItem_ExcellentThresholdSeconds)
@@ -344,6 +410,7 @@ public class OddItemManager : MonoBehaviour
         }
 
         StartCoroutine(ShowResultsAfterDelay(2f));
+
         Debug.Log($"[OddItemDetection] Found '{_chosenOddItemPrefab.name}' in {_foundTime:F2}s");
 
         LayoutManager.Instance?.SaveSession(_foundTime, foundItem: true);
@@ -371,6 +438,7 @@ public class OddItemManager : MonoBehaviour
         ExperimentConfig cfg = config;
         string feedback = cfg != null ? cfg.oddItem_WrongItemFeedback : "That item belongs here. Keep looking!";
         _feedbackDisplay?.ShowError(feedback);
+
         Debug.Log("[OddItemDetection] Wrong item selected.");
     }
 
@@ -408,6 +476,8 @@ public class OddItemManager : MonoBehaviour
                     { "shuffleItems", shuffleItems },
                     { "selectedOddItemIndex", selectedOddItemIndex },
                     { "oddItemName", _chosenOddItemPrefab != null ? _chosenOddItemPrefab.name : "" },
+                    { "oddItem_SelectedTarget", config != null ? config.oddItem_SelectedTarget ?? "" : "" },
+                    { "oddItem_RandomizeTarget", config != null && config.oddItem_RandomizeTarget },
                     { "instructionText", config != null ? config.oddItem_InstructionText ?? "" : "" }
                 }
             };
@@ -467,6 +537,7 @@ public class OddItemManager : MonoBehaviour
     private string GetConfigString(string fieldName, string fallback)
     {
         if (config == null) return fallback;
+
         switch (fieldName)
         {
             case "studentId":

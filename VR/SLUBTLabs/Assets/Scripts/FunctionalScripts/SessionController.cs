@@ -1,9 +1,9 @@
-﻿using System;
+﻿using Firebase.Firestore;
+using System;
 using System.Collections;
 using System.Threading.Tasks;
 using UnityEngine;
-using Firebase.Firestore;
-using Firebase.Extensions;
+using UnityEngine.XR.Interaction.Toolkit.Inputs;   // ← for InputActionManager
 
 /// <summary>
 /// Listens to experimentProgress.sessionControl and applies:
@@ -27,7 +27,7 @@ public class SessionController : MonoBehaviour
 
     [Header("Behaviour")]
     public bool returnToHubOnEnd = true;
-    public bool freezeTimeScaleWhenPaused = false; // usually false in VR; we freeze systems manually
+    public bool freezeTimeScaleWhenPaused = false; // usually false in VR
 
     public SessionState CurrentState { get; private set; } = SessionState.Idle;
     public bool IsPaused => CurrentState == SessionState.Paused;
@@ -38,7 +38,6 @@ public class SessionController : MonoBehaviour
     public event Action<SessionState> OnStateChanged;
 
     private ListenerRegistration _listener;
-    private bool _movementFrozen;
 
     private void Awake()
     {
@@ -57,7 +56,6 @@ public class SessionController : MonoBehaviour
             StartListening(progressDocumentId);
     }
 
-    /// <summary>Call after Connect VR / when you know the progress doc id.</summary>
     public void StartListening(string progressId)
     {
         if (string.IsNullOrEmpty(progressId))
@@ -85,7 +83,6 @@ public class SessionController : MonoBehaviour
             string control = "idle";
             if (snapshot.ContainsField("sessionControl"))
                 control = snapshot.GetValue<string>("sessionControl") ?? "idle";
-
 
             ApplyState(ParseControl(control));
         });
@@ -140,7 +137,6 @@ public class SessionController : MonoBehaviour
                 EnterEnded();
                 break;
             case SessionState.Idle:
-                // Connected but not started: ensure not frozen in a weird way
                 PauseOverlay.Instance?.Hide();
                 SetMovementEnabled(true);
                 break;
@@ -190,7 +186,6 @@ public class SessionController : MonoBehaviour
     {
         yield return null;
 
-        // Prefer your existing loader if present
         var loader = FindFirstObjectByType<ExperimentLoader>();
         if (loader != null)
         {
@@ -202,38 +197,42 @@ public class SessionController : MonoBehaviour
     }
 
     /// <summary>
-    /// Disable XR move / turn while paused.
-    /// Adjust component names to match your rig if needed.
+    /// Freezes / unfreezes player movement by enabling/disabling
+    /// the XR Interaction Simulator (keeps hands locked in place).
     /// </summary>
     private void SetMovementEnabled(bool enabled)
     {
-        _movementFrozen = !enabled;
+        // Find every XR Interaction Simulator in the scene (including inactive)
+        var simulators = FindObjectsByType<MonoBehaviour>(
+            FindObjectsInactive.Include,
+            FindObjectsSortMode.None);
 
-        // XR Interaction Toolkit continuous move / turn (common setup)
-        var movers = FindObjectsByType<UnityEngine.XR.Interaction.Toolkit.Locomotion.Movement.ContinuousMoveProvider>(
-            FindObjectsInactive.Include, FindObjectsSortMode.None);
-        foreach (var m in movers)
-            m.enabled = enabled;
+        int count = 0;
+        foreach (var mb in simulators)
+        {
+            // Match by class name so we don't need the exact namespace
+            if (mb.GetType().Name == "XRInteractionSimulator")
+            {
+                mb.enabled = enabled;
+                count++;
+                Debug.Log($"[SessionController] XRInteractionSimulator on '{mb.gameObject.name}' → enabled = {enabled}");
+            }
+        }
 
-        // If the above type doesn't exist in your XRI version, use a broader approach:
-        // Disable CharacterController driven scripts or your custom locomotor.
-        var characterControllers = FindObjectsByType<CharacterController>(
-            FindObjectsInactive.Include, FindObjectsSortMode.None);
-        // Don't disable CC itself (teleport needs it); disable move providers only.
+        if (count == 0)
+            Debug.LogWarning("[SessionController] No XRInteractionSimulator found in scene.");
     }
 
     private void FreezeExperimentSystems(bool freeze)
     {
-        // Memory Scene 2 style
+        // Soft freeze flag other scripts can read
         if (ExperimentManager.Instance != null)
         {
-            // Soft freeze: pause flag other scripts can read
-            // possible Add public bool IsExternallyPaused on ExperimentManager 
+            // ExperimentManager.Instance.IsExternallyPaused = freeze;   // uncomment when you add the flag
         }
 
-        // Optional: disable question buttons while paused
-        var canvases = FindObjectsByType<Canvas>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
-        // Prefer explicit IsPaused checks inside Update/timers rather than killing all UI
+        // Prefer explicit IsPaused checks inside your experiment scripts
+        // rather than disabling whole canvases.
     }
 
     private void OnDestroy()
