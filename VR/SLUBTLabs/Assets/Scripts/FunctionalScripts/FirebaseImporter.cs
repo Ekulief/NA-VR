@@ -4,17 +4,41 @@ using UnityEngine;
 using Firebase.Firestore;
 
 /// <summary>
-/// One-shot: fills experimentModule/Memory (or Memory2) defaultConfig
-/// with editable Memory Scene values. Does not wipe existing targets.
+/// One-shot importer for experimentModule/Odd_Item_Detection.
+/// Writes the available targets list + randomize flag into defaultConfig.
 /// </summary>
 public class FirestoreImporter : MonoBehaviour
 {
     [Header("Which document to update")]
-    public string documentId = "Memory"; // change to "Memory2" if needed
+    public string documentId = "Odd_Item_Detection";
 
     [Header("Run")]
     public bool runOnStart = true;
-    public bool alsoNormalizeQuestionTypes = true;
+
+    // Exact names from your OddItemManager.oddItemPrefabs list
+    private static readonly string[] OddItemTargetNames =
+    {
+        "RubberDuck",
+        "Bowl",
+        "Crown",
+        "Backpack",
+        "Bomb",
+        "Diver's Mask",
+        "Dynamite",
+        "Frying Pan",
+        "Hat",
+        "Headphones",
+        "Idol",
+        "Piggybank",
+        "Pot",
+        "Smartphone",
+        "Smiley",
+        "Soccer Boot",
+        "Steering Wheel",
+        "Water Mine",
+        "Watering Can",
+        "Wheel"
+    };
 
     async void Start()
     {
@@ -22,7 +46,7 @@ public class FirestoreImporter : MonoBehaviour
         await ImportDefaultConfig();
     }
 
-    [ContextMenu("Import Default Config Now")]
+    [ContextMenu("Import Odd Item Config Now")]
     public async void ImportDefaultConfigMenu()
     {
         await ImportDefaultConfig();
@@ -44,7 +68,7 @@ public class FirestoreImporter : MonoBehaviour
 
             Dictionary<string, object> data = snapshot.ToDictionary();
 
-            // Existing defaultConfig (or new)
+            // Keep existing defaultConfig if present
             Dictionary<string, object> defaultConfig = new Dictionary<string, object>();
             if (data.TryGetValue("defaultConfig", out object dcObj) &&
                 dcObj is Dictionary<string, object> existing)
@@ -52,51 +76,40 @@ public class FirestoreImporter : MonoBehaviour
                 defaultConfig = new Dictionary<string, object>(existing);
             }
 
-            // ——— Editable Memory Scene defaults ———
-            // Only set if missing, so you don't wipe values you already tuned.
-            SetIfMissing(defaultConfig, "memory_TimePerRoomSeconds", 60L);
-            SetIfMissing(defaultConfig, "memory_TransitionFadeDuration", 0.5);
-            SetIfMissing(defaultConfig, "memory_DistractorTaskDuration", 30L);
-            SetIfMissing(defaultConfig, "memory_UseDistractorTask", true);
-            SetIfMissing(defaultConfig, "memory_RandomizeQuestions", true);
+            // ——— Odd Item specific fields ———
+            // Always overwrite the targets list so it stays in sync with the scene
+            defaultConfig["oddItem_AvailableTargets"] = new List<object>(OddItemTargetNames);
+            defaultConfig["oddItem_SelectedTarget"] = "";          // empty = no forced selection
+            defaultConfig["oddItem_RandomizeTarget"] = true;       // randomize by default
 
-            SetIfMissing(defaultConfig, "memory_BriefingText",
-                "You will explore several rooms. Pay close attention to the objects and details in each room. Press Begin Experiment when you are ready.");
-
-            SetIfMissing(defaultConfig, "memory_RoomInstructionText",
-                "Explore this room carefully. Remember what you see.");
-
-            SetIfMissing(defaultConfig, "memory_DistractorInstructionText",
-                "Count backwards from 100 by 3s.\n\nSay each number aloud.");
-
-            SetIfMissing(defaultConfig, "memory_RecallInstructionText",
-                "You will now answer questions about what you saw. Press Begin Questioning when you are ready.");
-
-            // Module meta (from your console)
-            SetIfMissing(defaultConfig, "moduleName", "Memory");
-            SetIfMissing(defaultConfig, "sceneId", "Memory Scene");
+            // Keep / set the other common fields only if missing
             SetIfMissing(defaultConfig, "globalInstructionDelay", 1.5);
-            SetIfMissing(defaultConfig, "description", "");
+            SetIfMissing(defaultConfig, "oddItem_SearchTimeLimitSeconds", 120L);
+            SetIfMissing(defaultConfig, "oddItem_RaycastDistance", 10L);
+            SetIfMissing(defaultConfig, "oddItem_ExcellentThresholdSeconds", 10L);
+            SetIfMissing(defaultConfig, "oddItem_GoodThresholdSeconds", 20L);
+            SetIfMissing(defaultConfig, "oddItem_InstructionText",
+                "Find the item that doesn't belong on the shelves.\n\nPoint at it and pull the trigger to confirm.");
+            SetIfMissing(defaultConfig, "oddItem_WrongItemFeedback",
+                "That item belongs here. Keep looking!");
+            SetIfMissing(defaultConfig, "oddItem_RatingExcellent", "Excellent!");
+            SetIfMissing(defaultConfig, "oddItem_RatingGood", "Good");
+            SetIfMissing(defaultConfig, "oddItem_RatingKeepPracticing", "Keep Practicing");
+            SetIfMissing(defaultConfig, "oddItem_TargetDisplayName", "the odd item");
 
-            // Optional: clean junk field "memory_" empty string if present
-            if (defaultConfig.ContainsKey("memory_"))
-                defaultConfig.Remove("memory_");
-
-            // Optional: normalize question types inside targets (same as your old script)
-            if (alsoNormalizeQuestionTypes &&
-                defaultConfig.TryGetValue("targets", out object targetsObj) &&
-                targetsObj is List<object> targets)
-            {
-                NormalizeTargets(targets);
-                defaultConfig["targets"] = targets;
-            }
+            // Module meta
+            SetIfMissing(defaultConfig, "moduleName", "Odd Item Detection");
+            SetIfMissing(defaultConfig, "sceneId", "Odd Item Scene");
+            SetIfMissing(defaultConfig, "description",
+                "Participant finds the item that does not belong on the shelves.");
 
             await docRef.UpdateAsync(new Dictionary<string, object>
             {
                 { "defaultConfig", defaultConfig }
             });
 
-            Debug.Log($"<color=green>[FirestoreImporter] defaultConfig updated on experimentModule/{documentId}</color>");
+            Debug.Log($"<color=green>[FirestoreImporter] Updated experimentModule/{documentId} " +
+                      $"with {OddItemTargetNames.Length} available targets + randomize=true</color>");
         }
         catch (System.Exception ex)
         {
@@ -113,33 +126,5 @@ public class FirestoreImporter : MonoBehaviour
     private static bool IsEmptyString(object o)
     {
         return o is string s && string.IsNullOrWhiteSpace(s);
-    }
-
-    private static void NormalizeTargets(List<object> targets)
-    {
-        foreach (var targetObj in targets)
-        {
-            if (targetObj is not Dictionary<string, object> target) continue;
-            if (!target.TryGetValue("questions", out object qObj) || qObj is not List<object> questions)
-                continue;
-
-            foreach (var questionObj in questions)
-            {
-                if (questionObj is not Dictionary<string, object> question) continue;
-
-                question.Remove("enabled");
-                question.Remove("enabledQuestion");
-
-                if (question.TryGetValue("questionType", out object typeObj) && typeObj is string currentType)
-                {
-                    string t = currentType.ToLower().Trim();
-                    if (t == "color" || t == "detail" || t == "symbol" ||
-                        t == "count" || t == "identification")
-                    {
-                        question["questionType"] = "MultipleChoice";
-                    }
-                }
-            }
-        }
     }
 }

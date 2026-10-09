@@ -38,11 +38,11 @@ const CONFIGURATION_ORDER = {
     "globalInstructionDelay",
   ],
 
-  Depth_Perception2: [
-    "depth_ActualDistanceMeters",
-    "depth_InstructionText",
-    "depth_MaxDistanceMeters",
-    "depth_MinDistanceMeters",
+  Distance_Perception_Scene: [
+    "distance_ActualDistanceMeters",
+    "distance_InstructionText",
+    "distance_MaxDistanceMeters",
+    "distance_MinDistanceMeters",
     "globalInstructionDelay",
   ],
 
@@ -80,8 +80,8 @@ const ENVIRONMENT_OPTIONS = [
     description: "High-altitude rooftop",
   },
   {
-    moduleId: "Depth_Perception2",
-    name: "Depth Perception (Distance)",
+    moduleId: "Distance Perception Scene",
+    name: "Distance Perception",
     description: "Roadside setting",
   },
   {

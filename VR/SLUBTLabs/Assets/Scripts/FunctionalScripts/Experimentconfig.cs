@@ -29,16 +29,12 @@ public class ExperimentConfig : ScriptableObject
     public float ab_FadeDurationSeconds = 3f;
     public float ab_PostFadePauseSeconds = 2f;
     public bool ab_UseRandomFadeTarget = true;
-
     [TextArea(2, 4)]
     public string ab_InstructionText = "<b>Count the furniture</b>\n\nWalk around the scene and count how many\nfurniture items you can see.\n\nPress <b>Start Counting</b> when you are ready.";
-
     [TextArea(2, 4)]
     public string ab_AwarenessQuestionText = "While counting the furniture,\ndid you notice anything unusual\nhappening in the scene?";
-
     [TextArea(2, 3)]
     public string ab_NoticedText = "You noticed the furniture item fading —\nyour attention was broadly distributed.";
-
     [TextArea(2, 3)]
     public string ab_NotNoticedText = "You did not notice the fading item.\nThis is the inattentional blindness effect.";
 
@@ -46,12 +42,15 @@ public class ExperimentConfig : ScriptableObject
     [Header("Odd Item Detection")]
     public string oddItem_TargetDisplayName = "the odd item";
     public float oddItem_SearchTimeLimitSeconds = 120f;
-
     [TextArea(2, 4)]
     public string oddItem_InstructionText = "Find the item that doesn't belong on the shelves.\n\nPoint at it and pull the trigger to confirm.";
-
     public string oddItem_WrongItemFeedback = "That item belongs here. Keep looking!";
     public float oddItem_RaycastDistance = 10f;
+
+    [Header("Odd Item Detection — Targets")]
+    public List<string> oddItem_AvailableTargets = new List<string>();  // master list from module
+    public string oddItem_SelectedTarget = "";                          // chosen for this run (empty = use random or index)
+    public bool oddItem_RandomizeTarget = false;                        // if true → pick random every run
 
     [Header("Odd Item Detection — Time Ratings")]
     public float oddItem_ExcellentThresholdSeconds = 10f;
@@ -64,10 +63,8 @@ public class ExperimentConfig : ScriptableObject
     [Header("Depth Perception")]
     public float depth_MaxHeightMetres = 100f;
     public float depth_StepAmount = 1f;
-
     [TextArea(2, 4)]
     public string depth_InstructionText = "You are standing on top of a building.\nHow high up do you think you are?\n\nUse the +/- buttons or slider to input your estimate.";
-
     public float depth_ActualHeightMetres = 50f;
 
     // ── Depth Perception 2 (Horizontal Distance) ─────────────────────────────
@@ -75,7 +72,6 @@ public class ExperimentConfig : ScriptableObject
     public float depth_MinDistanceMeters = 0f;
     public float depth_MaxDistanceMeters = 115f;
     public float depth_ActualDistanceMeters = 50f;
-
     [TextArea(2, 4)]
     public string depth_InstructionText2 = "Observe the car ahead and estimate its horizontal distance in meters.";
 
@@ -86,7 +82,6 @@ public class ExperimentConfig : ScriptableObject
     [Range(2f, 5f)] public float rt_MaxForeperiodSeconds = 3.5f;
     [Range(1f, 5f)] public float rt_StimulusTimeoutSeconds = 3.0f;
     [Range(0.5f, 2f)] public float rt_InterTrialIntervalSeconds = 1.0f;
-
     [TextArea(2, 4)]
     public string rt_InstructionText = "Press the trigger when you see the green panel.\n\nPress trigger to begin.";
 
@@ -114,17 +109,14 @@ public class ExperimentConfig : ScriptableObject
         "You will explore several rooms.\n" +
         "Pay close attention to the objects and details in each room.\n\n" +
         "Press <b>Start</b> when you are ready.";
-
     [TextArea(2, 4)]
     public string memory_RoomInstructionText =
         "Explore this room carefully.\n" +
         "Try to remember as many objects and details as you can.";
-
     [TextArea(2, 4)]
     public string memory_DistractorInstructionText =
         "Before we continue, please count backwards from 100 by 3s.\n\n" +
         "Say each number <b>aloud</b>.";
-
     [TextArea(2, 4)]
     public string memory_RecallInstructionText =
         "Now you will be asked questions about the rooms you explored.\n\n" +
@@ -136,7 +128,6 @@ public class ExperimentConfig : ScriptableObject
     public bool useRemoteConfig = true;
 
     // ── Runtime Methods ───────────────────────────────────────────────────────
-
     public async Task FetchFromFirestoreAsync()
     {
         if (!useRemoteConfig)
@@ -190,8 +181,10 @@ public class ExperimentConfig : ScriptableObject
 
         float GetFloat(string key, float fallback) =>
             configMap.TryGetValue(key, out object v) ? Convert.ToSingle(v) : fallback;
+
         bool GetBool(string key, bool fallback) =>
             configMap.TryGetValue(key, out object v) ? Convert.ToBoolean(v) : fallback;
+
         string GetString(string key, string fallback) =>
             configMap.TryGetValue(key, out object v) ? v.ToString() : fallback;
 
@@ -231,6 +224,15 @@ public class ExperimentConfig : ScriptableObject
         oddItem_RatingGood = GetString("oddItem_RatingGood", oddItem_RatingGood);
         oddItem_RatingKeepPracticing = GetString("oddItem_RatingKeepPracticing", oddItem_RatingKeepPracticing);
 
+        // NEW – target selection
+        oddItem_SelectedTarget = GetString("oddItem_SelectedTarget", oddItem_SelectedTarget);
+        oddItem_RandomizeTarget = GetBool("oddItem_RandomizeTarget", oddItem_RandomizeTarget);
+
+        if (configMap.TryGetValue("oddItem_AvailableTargets", out object targetsObj))
+        {
+            ParseOddItemTargets(targetsObj);
+        }
+
         // Memory
         memory_TimePerRoomSeconds = GetFloat("memory_TimePerRoomSeconds", memory_TimePerRoomSeconds);
         memory_TransitionFadeDuration = GetFloat("memory_TransitionFadeDuration", memory_TransitionFadeDuration);
@@ -242,9 +244,9 @@ public class ExperimentConfig : ScriptableObject
         memory_DistractorInstructionText = GetString("memory_DistractorInstructionText", memory_DistractorInstructionText);
         memory_RecallInstructionText = GetString("memory_RecallInstructionText", memory_RecallInstructionText);
 
-        if (configMap.TryGetValue("targets", out object targetsObj))
+        if (configMap.TryGetValue("targets", out object memoryTargetsObj))
         {
-            ParseMemoryTargets(targetsObj);
+            ParseMemoryTargets(memoryTargetsObj);
         }
     }
 
@@ -256,8 +258,17 @@ public class ExperimentConfig : ScriptableObject
 
     private void ApplyOddItemValues(DocumentSnapshot snap)
     {
-        if (!snap.TryGetValue("defaultConfig", out Dictionary<string, object> configMap)) return;
-        ApplyConfigurationMap(configMap);
+        // Support both top-level fields and nested defaultConfig
+        if (snap.TryGetValue("defaultConfig", out Dictionary<string, object> configMap))
+        {
+            ApplyConfigurationMap(configMap);
+        }
+        else
+        {
+            // Fallback: treat the whole document as the config map
+            var map = snap.ToDictionary();
+            ApplyConfigurationMap(map);
+        }
     }
 
     private void ApplyDepthPerceptionValues(DocumentSnapshot snap)
@@ -279,8 +290,27 @@ public class ExperimentConfig : ScriptableObject
             Debug.LogWarning("[ExperimentConfig] 'defaultConfig' field missing in Memory2 document.");
             return;
         }
-
         ApplyConfigurationMap(configMap);
+    }
+
+    private void ParseOddItemTargets(object targetsObj)
+    {
+        oddItem_AvailableTargets.Clear();
+
+        if (targetsObj is List<object> list)
+        {
+            foreach (object item in list)
+            {
+                if (item != null)
+                    oddItem_AvailableTargets.Add(item.ToString());
+            }
+        }
+        else if (targetsObj is string[] arr)
+        {
+            oddItem_AvailableTargets.AddRange(arr);
+        }
+
+        Debug.Log($"[ExperimentConfig] Parsed {oddItem_AvailableTargets.Count} odd-item targets.");
     }
 
     private void ParseMemoryTargets(object targetsObj)
