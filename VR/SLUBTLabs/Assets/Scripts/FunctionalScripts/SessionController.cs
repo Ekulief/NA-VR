@@ -3,7 +3,7 @@ using System;
 using System.Collections;
 using System.Threading.Tasks;
 using UnityEngine;
-using UnityEngine.XR.Interaction.Toolkit.Inputs;   // ← for InputActionManager
+using UnityEngine.XR.Interaction.Toolkit.Inputs;
 
 /// <summary>
 /// Listens to experimentProgress.sessionControl and applies:
@@ -88,6 +88,7 @@ public class SessionController : MonoBehaviour
         });
 
         Debug.Log($"[SessionController] Listening to experimentProgress/{progressDocumentId}");
+        ExperimentLogger.Log("session_listening", $"Started listening to progress document: {progressDocumentId}");
     }
 
     public void StopListening()
@@ -139,6 +140,7 @@ public class SessionController : MonoBehaviour
             case SessionState.Idle:
                 PauseOverlay.Instance?.Hide();
                 SetMovementEnabled(true);
+                ExperimentLogger.Log("session_idle", "Session set to Idle");
                 break;
         }
 
@@ -154,6 +156,8 @@ public class SessionController : MonoBehaviour
         if (freezeTimeScaleWhenPaused)
             Time.timeScale = 0f;
 
+        ExperimentLogger.Log("session_paused", "Session paused");
+
         OnPaused?.Invoke();
     }
 
@@ -166,6 +170,8 @@ public class SessionController : MonoBehaviour
         if (freezeTimeScaleWhenPaused)
             Time.timeScale = 1f;
 
+        ExperimentLogger.Log("session_resumed", "Session running / resumed");
+
         OnResumed?.Invoke();
     }
 
@@ -175,6 +181,8 @@ public class SessionController : MonoBehaviour
         SetMovementEnabled(true);
         FreezeExperimentSystems(false);
         Time.timeScale = 1f;
+
+        ExperimentLogger.Log("session_ended", "Session ended");
 
         OnSessionEnded?.Invoke();
 
@@ -202,7 +210,6 @@ public class SessionController : MonoBehaviour
     /// </summary>
     private void SetMovementEnabled(bool enabled)
     {
-        // Find every XR Interaction Simulator in the scene (including inactive)
         var simulators = FindObjectsByType<MonoBehaviour>(
             FindObjectsInactive.Include,
             FindObjectsSortMode.None);
@@ -210,7 +217,6 @@ public class SessionController : MonoBehaviour
         int count = 0;
         foreach (var mb in simulators)
         {
-            // Match by class name so we don't need the exact namespace
             if (mb.GetType().Name == "XRInteractionSimulator")
             {
                 mb.enabled = enabled;
@@ -225,14 +231,10 @@ public class SessionController : MonoBehaviour
 
     private void FreezeExperimentSystems(bool freeze)
     {
-        // Soft freeze flag other scripts can read
         if (ExperimentManager.Instance != null)
         {
-            // ExperimentManager.Instance.IsExternallyPaused = freeze;   // uncomment when you add the flag
+            // ExperimentManager.Instance.IsExternallyPaused = freeze;
         }
-
-        // Prefer explicit IsPaused checks inside your experiment scripts
-        // rather than disabling whole canvases.
     }
 
     private void OnDestroy()

@@ -140,12 +140,22 @@ public class OddItemManager : MonoBehaviour
         if (oddItemPrefabs == null || oddItemPrefabs.Count == 0)
         {
             Debug.LogError("[OddItemDetection] oddItemPrefabs list is empty!");
+            ExperimentLogger.Log("error", "oddItemPrefabs list is empty");
             yield break;
         }
 
         // ---------- Choose target (Selected → Random → Index) ----------
         _chosenOddItemPrefab = ResolveTargetPrefab();
         Debug.Log($"[OddItemDetection] Chosen odd item: '{_chosenOddItemPrefab.name}'");
+
+       /* ExperimentLogger.Log("target_selected",
+            $"Target chosen: {_chosenOddItemPrefab.name}",
+            new Dictionary<string, object>
+            {
+                { "itemName", _chosenOddItemPrefab.name },
+                { "randomize", config != null && config.oddItem_RandomizeTarget },
+                { "selectedTarget", config != null ? config.oddItem_SelectedTarget ?? "" : "" }
+            });*/ 
         // ---------------------------------------------------------------
 
         _rightControllerTransform = FindRightController();
@@ -154,6 +164,7 @@ public class OddItemManager : MonoBehaviour
         if (allShelves.Length == 0)
         {
             Debug.LogError("[OddItemDetection] No ShelfSpawners found in scene!");
+            ExperimentLogger.Log("error", "No ShelfSpawners found in scene");
             yield break;
         }
 
@@ -166,6 +177,7 @@ public class OddItemManager : MonoBehaviour
         if (_targetInstance == null)
         {
             Debug.LogError("[OddItemDetection] Target injection failed!");
+            ExperimentLogger.Log("error", "Target injection failed");
             yield break;
         }
 
@@ -181,14 +193,10 @@ public class OddItemManager : MonoBehaviour
 
         yield return new WaitForSeconds(_instructionDelay);
         ShowInstructions();
+
+        //ExperimentLogger.Log("instructions_shown", "Odd Item instructions displayed to student");
     }
 
-    /// <summary>
-    /// Priority:
-    /// 1. Explicit oddItem_SelectedTarget from Firestore (if it matches a prefab)
-    /// 2. Random pick (if oddItem_RandomizeTarget == true)
-    /// 3. Fallback to inspector selectedOddItemIndex
-    /// </summary>
     private GameObject ResolveTargetPrefab()
     {
         ExperimentConfig cfg = config != null ? config : ExperimentConfigLoader.Current;
@@ -214,7 +222,6 @@ public class OddItemManager : MonoBehaviour
         // 2. Randomize
         if (cfg != null && cfg.oddItem_RandomizeTarget)
         {
-            // Optionally restrict to the available targets list if it exists
             List<GameObject> pool = oddItemPrefabs;
 
             if (cfg.oddItem_AvailableTargets != null && cfg.oddItem_AvailableTargets.Count > 0)
@@ -301,6 +308,8 @@ public class OddItemManager : MonoBehaviour
         _startedAtUtc = DateTime.UtcNow;
         _awaitingSelection = true;
 
+        ExperimentLogger.Log("trial_started", "Student began searching for the odd item");
+
         if (_searchTimeLimit > 0)
             StartCoroutine(SearchTimeLimitCountdown());
     }
@@ -320,6 +329,9 @@ public class OddItemManager : MonoBehaviour
         {
             _awaitingSelection = false;
             _trialComplete = true;
+
+            ExperimentLogger.Log("time_limit_reached",
+                $"Search time limit of {_searchTimeLimit}s reached — item not found");
 
             if (resultsSummaryText != null)
             {
@@ -400,6 +412,16 @@ public class OddItemManager : MonoBehaviour
             timeRating = _foundTime < 10f ? "Excellent!" : _foundTime < 20f ? "Good" : "Keep Practicing";
         }
 
+        ExperimentLogger.Log("item_found",
+            $"Odd item found: {_chosenOddItemPrefab.name} in {_foundTime:F1}s (Rating: {timeRating})",
+            new Dictionary<string, object>
+            {
+                { "itemName", _chosenOddItemPrefab.name },
+                { "searchTimeSeconds", _foundTime },
+                { "rating", timeRating },
+                { "found", true }
+            });
+
         if (resultsSummaryText != null)
         {
             resultsSummaryText.text =
@@ -438,6 +460,8 @@ public class OddItemManager : MonoBehaviour
         ExperimentConfig cfg = config;
         string feedback = cfg != null ? cfg.oddItem_WrongItemFeedback : "That item belongs here. Keep looking!";
         _feedbackDisplay?.ShowError(feedback);
+
+        ExperimentLogger.Log("wrong_item", "Student selected a wrong item");
 
         Debug.Log("[OddItemDetection] Wrong item selected.");
     }
@@ -517,6 +541,15 @@ public class OddItemManager : MonoBehaviour
             await db.Collection("experimentResults").AddAsync(doc);
             Debug.Log($"[OddItemDetection] Saved (duration={durationDisplay}, found={foundItem}, progressId={progressId})");
 
+            ExperimentLogger.Log("experiment_completed",
+                $"Odd Item Detection completed. Found={foundItem}, Duration={durationDisplay}",
+                new Dictionary<string, object>
+                {
+                    { "found", foundItem },
+                    { "durationSeconds", durationSeconds },
+                    { "oddItemName", _chosenOddItemPrefab != null ? _chosenOddItemPrefab.name : "" }
+                });
+
             if (!string.IsNullOrEmpty(progressId))
             {
                 await db.Collection("experimentProgress").Document(progressId).UpdateAsync(
@@ -531,6 +564,7 @@ public class OddItemManager : MonoBehaviour
         catch (Exception ex)
         {
             Debug.LogError($"[OddItemDetection] Failed to save results: {ex.Message}");
+            ExperimentLogger.Log("error", $"Failed to save results: {ex.Message}");
         }
     }
 

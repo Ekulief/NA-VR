@@ -36,11 +36,9 @@ public class MemoryExperimentManager : MonoBehaviour
     int currentTrial;
     readonly List<MemoryTrial> trials = new();
     string sessionId;
-
     int correctCount;
     readonly List<Dictionary<string, object>> trialResults = new();
     bool acceptingInput;
-
     float _experimentStartRealtime;
     DateTime _startedAtUtc;
 
@@ -48,6 +46,7 @@ public class MemoryExperimentManager : MonoBehaviour
     {
         sessionId = Guid.NewGuid().ToString("N");
         HideAllUI();
+
         if (roomNameText != null)
             roomNameText.text = "Memory Lab – Dinner / Spatial Recognition";
     }
@@ -70,6 +69,7 @@ public class MemoryExperimentManager : MonoBehaviour
         if (objectTracker == null)
         {
             Debug.LogError("[MemoryExperimentManager] objectTracker is not assigned.");
+            ExperimentLogger.Log("error", "objectTracker is not assigned");
             return;
         }
 
@@ -79,6 +79,7 @@ public class MemoryExperimentManager : MonoBehaviour
         if (trials.Count == 0)
         {
             Debug.LogError("[MemoryExperimentManager] No trials generated.");
+            ExperimentLogger.Log("error", "No trials generated");
             return;
         }
 
@@ -87,6 +88,16 @@ public class MemoryExperimentManager : MonoBehaviour
         trialResults.Clear();
         _experimentStartRealtime = Time.realtimeSinceStartup;
         _startedAtUtc = DateTime.UtcNow;
+
+        ExperimentLogger.Log("experiment_started",
+            $"Memory Dinner experiment started with {trials.Count} trials",
+            new Dictionary<string, object>
+            {
+                { "sessionId", sessionId },
+                { "numberOfTrials", trials.Count },
+                { "studyDuration", studyDuration },
+                { "distractorDuration", distractorDuration }
+            });
 
         EnterPhase(Phase.Study);
     }
@@ -125,12 +136,16 @@ public class MemoryExperimentManager : MonoBehaviour
             case Phase.Study:
                 SetQuestionText("Memorize the room. Walk around freely.");
                 ShowProgress(true);
+               // ExperimentLogger.Log("study_phase_started",
+             //       $"Study phase started ({studyDuration}s)");
                 break;
 
             case Phase.Distractor:
                 if (distractorPanel != null) distractorPanel.SetActive(true);
                 SetQuestionText("Count backwards from 100 by 3s.");
                 ShowProgress(true);
+                ExperimentLogger.Log("distractor_started",
+                    $"Distractor phase started ({distractorDuration}s)");
                 break;
 
             case Phase.Test:
@@ -141,11 +156,21 @@ public class MemoryExperimentManager : MonoBehaviour
                 }
                 objectTracker.ApplyTrialChanges(trials[currentTrial]);
                 ShowQuestion(trials[currentTrial]);
+                /*ExperimentLogger.Log("trial_started",
+                    $"Test trial {currentTrial + 1}/{trials.Count}: {trials[currentTrial].type}",
+                    new Dictionary<string, object>
+                    {
+                        { "trialIndex", currentTrial },
+                        { "questionType", trials[currentTrial].type.ToString() },
+                        { "question", trials[currentTrial].question ?? "" }
+                    }); */
                 break;
 
             case Phase.Complete:
                 if (endPanel != null) endPanel.SetActive(true);
                 SetQuestionText("Experiment complete. Data uploaded.");
+              /*  ExperimentLogger.Log("experiment_finished",
+                    $"All trials complete. Correct: {correctCount}/{trials.Count}"); */
                 SaveFinalResults();
                 break;
         }
@@ -156,11 +181,15 @@ public class MemoryExperimentManager : MonoBehaviour
         switch (currentPhase)
         {
             case Phase.Study:
+               // ExperimentLogger.Log("study_phase_ended", "Study phase finished");
                 EnterPhase(Phase.Distractor);
                 break;
+
             case Phase.Distractor:
+              //  ExperimentLogger.Log("distractor_ended", "Distractor phase finished");
                 EnterPhase(Phase.Test);
                 break;
+
             case Phase.Test:
                 currentTrial++;
                 if (currentTrial >= trials.Count)
@@ -175,12 +204,12 @@ public class MemoryExperimentManager : MonoBehaviour
     {
         t.onsetTime = Time.time;
         acceptingInput = true;
-
         SetQuestionText(t.question);
         ShowProgress(true);
 
         if (progressSlider != null)
             progressSlider.value = trials.Count > 0 ? (float)currentTrial / trials.Count : 0f;
+
         if (progressText != null)
             progressText.text = $"Trial {currentTrial + 1}/{trials.Count}";
 
@@ -217,9 +246,9 @@ public class MemoryExperimentManager : MonoBehaviour
         if (!acceptingInput || currentPhase != Phase.Test) return;
 
         acceptingInput = false;
-
         bool correct = choiceIndex == t.correctIndex;
         float rt = Time.time - t.onsetTime;
+
         if (correct) correctCount++;
 
         trialResults.Add(new Dictionary<string, object>
@@ -233,6 +262,18 @@ public class MemoryExperimentManager : MonoBehaviour
             { "correctIndex", t.correctIndex },
             { "sessionId", sessionId }
         });
+
+        ExperimentLogger.Log("trial_answered",
+            $"Trial {currentTrial + 1}: {(correct ? "Correct" : "Incorrect")} (RT: {rt:F2}s)",
+            new Dictionary<string, object>
+            {
+                { "trialIndex", currentTrial },
+                { "questionType", t.type.ToString() },
+                { "correct", correct },
+                { "reactionTimeMs", (int)(rt * 1000) },
+                { "choice", choiceIndex },
+                { "correctIndex", t.correctIndex }
+            });
 
         if (choiceButtons != null)
         {
@@ -323,6 +364,7 @@ public class MemoryExperimentManager : MonoBehaviour
             float durationSeconds = _experimentStartRealtime > 0f
                 ? Time.realtimeSinceStartup - _experimentStartRealtime
                 : 0f;
+
             string durationDisplay = FormatDuration(durationSeconds);
             DateTime completedAtUtc = DateTime.UtcNow;
 
@@ -368,6 +410,17 @@ public class MemoryExperimentManager : MonoBehaviour
             await db.Collection("experimentResults").AddAsync(doc);
             Debug.Log($"[MemoryExperimentManager] Saved ({correctCount}/{trials.Count}, duration={durationDisplay})");
 
+            ExperimentLogger.Log("experiment_completed",
+                $"Memory Dinner completed. Score: {correctCount}/{trials.Count}",
+                new Dictionary<string, object>
+                {
+                    { "totalTrials", trials.Count },
+                    { "correctCount", correctCount },
+                    { "accuracy", trials.Count > 0 ? (float)correctCount / trials.Count : 0f },
+                    { "durationSeconds", durationSeconds },
+                    { "sessionId", sessionId }
+                });
+
             if (!string.IsNullOrEmpty(progressId))
             {
                 await db.Collection("experimentProgress").Document(progressId).UpdateAsync(
@@ -382,12 +435,14 @@ public class MemoryExperimentManager : MonoBehaviour
         catch (Exception ex)
         {
             Debug.LogError($"[MemoryExperimentManager] Failed to save results: {ex.Message}");
+            ExperimentLogger.Log("error", $"Failed to save results: {ex.Message}");
         }
     }
 
     static string GetId(ExperimentConfig config, string field, string fallback)
     {
         if (config == null) return fallback;
+
         switch (field)
         {
             case "studentId": return string.IsNullOrEmpty(config.studentId) ? fallback : config.studentId;
@@ -409,31 +464,24 @@ public class MemoryExperimentManager : MonoBehaviour
         return $"{m}:{s:D2}";
     }
 
-    // ── Editor debug ──────────────────────────────────────────────────────────
     void OnGUI()
     {
 #if UNITY_EDITOR
         GUILayout.BeginArea(new Rect(10, 10, 220, 160));
-
         if (GUILayout.Button("DEBUG: Start Experiment"))
             StartExperiment();
-
         if (GUILayout.Button("DEBUG: Skip Phase Timer"))
         {
             if (currentPhase == Phase.Study || currentPhase == Phase.Distractor)
                 phaseTimer = 0f;
         }
-
         if (GUILayout.Button("DEBUG: Next Trial / Phase"))
             NextPhase();
-
         if (GUILayout.Button("DEBUG: Jump to Complete"))
             EnterPhase(Phase.Complete);
-
         GUILayout.Label($"Phase: {currentPhase}");
         GUILayout.Label($"Trial: {currentTrial + 1}/{trials.Count}");
         GUILayout.Label($"Paused: {IsSessionPaused()}");
-
         GUILayout.EndArea();
 #endif
     }

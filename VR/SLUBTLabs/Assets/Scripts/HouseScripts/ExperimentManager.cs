@@ -32,7 +32,6 @@ public class ExperimentManager : MonoBehaviour
     }
 
     public ExperimentState CurrentState { get; private set; } = ExperimentState.Idle;
-
     public int CurrentRoomIndex => currentRoomIndex;
     public int TotalRooms => rooms.Count;
 
@@ -71,12 +70,9 @@ public class ExperimentManager : MonoBehaviour
     private float roomTimeRemaining = 0f;
     private bool isTimerRunning = false;
     private string currentRoomName = "";
-
     private float _experimentStartRealtime;
     private DateTime _startedAtUtc;
     private readonly List<Dictionary<string, object>> _roomResults = new();
-
-    // Optional: QuestionManager can push answers here
     private readonly List<Dictionary<string, object>> _questionResults = new();
 
     public Action<string, float> OnRoomStarted;
@@ -113,9 +109,7 @@ public class ExperimentManager : MonoBehaviour
         if (beginQuestioningButton != null)
             beginQuestioningButton.onClick.AddListener(BeginQuestioning);
 
-        // Collect answers if QuestionManager fires them
         StartCoroutine(SubscribeQuestionAnswers());
-
         ChangeState(ExperimentState.Idle);
     }
 
@@ -150,6 +144,17 @@ public class ExperimentManager : MonoBehaviour
             { "correct", correct },
             { "reactionTimeMs", rtMs }
         });
+
+        ExperimentLogger.Log("question_answered",
+            $"Q: {(entry.questionText ?? "").Substring(0, Math.Min(40, (entry.questionText ?? "").Length))}... → {(correct ? "Correct" : "Wrong")}",
+            new Dictionary<string, object>
+            {
+                { "objectName", entry.objectName ?? "" },
+                { "room", entry.room ?? "" },
+                { "correct", correct },
+                { "reactionTimeMs", rtMs },
+                { "selectedAnswer", answer ?? "" }
+            });
     }
 
     private bool IsSessionPaused()
@@ -177,7 +182,6 @@ public class ExperimentManager : MonoBehaviour
         distractorTaskDuration = c.memory_DistractorTaskDuration;
         useDistractorTask = c.memory_UseDistractorTask;
         randomizeQuestions = c.memory_RandomizeQuestions;
-
         BriefingText = c.memory_BriefingText;
         RoomInstructionText = c.memory_RoomInstructionText;
         DistractorInstructionText = c.memory_DistractorInstructionText;
@@ -237,6 +241,8 @@ public class ExperimentManager : MonoBehaviour
         currentRoomIndex = 0;
 
         Debug.Log("[ExperimentManager] Experiment started.");
+        ExperimentLogger.Log("experiment_started", "Memory experiment started");
+
         StartCoroutine(GoToNextRoom());
     }
 
@@ -246,6 +252,7 @@ public class ExperimentManager : MonoBehaviour
             yield return null;
 
         ApplyConfig();
+        //ExperimentLogger.Log("instructions_shown", "Memory briefing / config applied");
     }
 
     public void OnPlayerEnterRoom(string roomName)
@@ -264,12 +271,14 @@ public class ExperimentManager : MonoBehaviour
         if (currentRoomIndex >= rooms.Count)
         {
             OnAllRoomsExplored?.Invoke();
+          //  ExperimentLogger.Log("all_rooms_explored", $"All {rooms.Count} rooms explored");
             StartCoroutine(BeginTransitionToLab());
             yield break;
         }
 
         RoomConfig room = rooms[currentRoomIndex];
         currentRoomName = room.roomName;
+
         ChangeState(ExperimentState.Transitioning);
 
         if (fadeController != null)
@@ -284,7 +293,17 @@ public class ExperimentManager : MonoBehaviour
         ChangeState(ExperimentState.Exploring);
         roomTimeRemaining = timePerRoom;
         isTimerRunning = true;
+
         OnRoomStarted?.Invoke(room.roomName, timePerRoom);
+
+        /* ExperimentLogger.Log("room_started",
+            $"Entered room: {room.roomName} (index {currentRoomIndex})",
+            new Dictionary<string, object>
+            {
+                { "roomIndex", currentRoomIndex },
+                { "roomName", room.roomName },
+                { "timeAllottedSeconds", timePerRoom }
+            });*/
     }
 
     private void OnRoomTimeUp()
@@ -299,6 +318,15 @@ public class ExperimentManager : MonoBehaviour
         });
 
         OnRoomEnded?.Invoke(endedRoom);
+
+        /* ExperimentLogger.Log("room_ended",
+             $"Room timer finished: {endedRoom}",
+             new Dictionary<string, object>
+             {
+                 { "roomIndex", currentRoomIndex },
+                 { "roomName", endedRoom ?? "" } 
+             });*/
+
         currentRoomIndex++;
         StartCoroutine(GoToNextRoom());
     }
@@ -324,6 +352,8 @@ public class ExperimentManager : MonoBehaviour
         ChangeState(ExperimentState.Recalling);
         ApplyConfig();
 
+        //ExperimentLogger.Log("recall_phase_started", "Recall phase started");
+
         if (recallInstructionPanel != null)
         {
             recallInstructionPanel.SetActive(true);
@@ -346,13 +376,19 @@ public class ExperimentManager : MonoBehaviour
         if (useDistractorTask)
             StartCoroutine(RunDistractorThenQuestions());
         else
+        {
+           // ExperimentLogger.Log("questions_started", "Recall questions started (no distractor)");
             OnRecallStarted?.Invoke();
+        }
     }
 
     private IEnumerator RunDistractorThenQuestions()
     {
         ChangeState(ExperimentState.DistractorTask);
         OnDistractorStarted?.Invoke(distractorTaskDuration);
+
+       // ExperimentLogger.Log("distractor_started",
+         //   $"Distractor task started ({distractorTaskDuration}s)");
 
         float waited = 0f;
         while (waited < distractorTaskDuration)
@@ -363,6 +399,9 @@ public class ExperimentManager : MonoBehaviour
         }
 
         OnDistractorEnded?.Invoke();
+       // ExperimentLogger.Log("distractor_ended", "Distractor task finished");
+
+       // ExperimentLogger.Log("questions_started", "Recall questions started after distractor");
         OnRecallStarted?.Invoke();
     }
 
@@ -371,6 +410,8 @@ public class ExperimentManager : MonoBehaviour
         ChangeState(ExperimentState.Finished);
         OnExperimentFinished?.Invoke();
         Debug.Log("[ExperimentManager] Experiment complete.");
+
+      //  ExperimentLogger.Log("experiment_finished", "Memory experiment finished — saving results");
         SaveResultsToFirestore();
     }
 
@@ -412,6 +453,7 @@ public class ExperimentManager : MonoBehaviour
 
             Vector3 cameraOffset = mainCam.transform.position - playerTransform.position;
             cameraOffset.y = 0f;
+
             Vector3 finalPosition = destination.position - cameraOffset;
 
             Transform cameraOffsetTf = playerTransform.Find("Camera Offset");
@@ -462,6 +504,7 @@ public class ExperimentManager : MonoBehaviour
             float durationSeconds = _experimentStartRealtime > 0f
                 ? Time.realtimeSinceStartup - _experimentStartRealtime
                 : 0f;
+
             string durationDisplay = FormatDuration(durationSeconds);
             DateTime completedAtUtc = DateTime.UtcNow;
 
@@ -480,7 +523,6 @@ public class ExperimentManager : MonoBehaviour
                 }
             };
 
-            // experimentalResults = rooms explored + question answers
             var experimentalResults = new List<object>();
             foreach (var r in _roomResults)
                 experimentalResults.Add(r);
@@ -520,6 +562,16 @@ public class ExperimentManager : MonoBehaviour
             await db.Collection("experimentResults").AddAsync(doc);
             Debug.Log($"[ExperimentManager] Saved (duration={durationDisplay}, Q={_questionResults.Count}, progressId={progressId})");
 
+            ExperimentLogger.Log("experiment_completed",
+                $"Memory experiment completed. Rooms={_roomResults.Count}, Questions={_questionResults.Count}, Correct={correctCount}",
+                new Dictionary<string, object>
+                {
+                    { "roomsCompleted", _roomResults.Count },
+                    { "questionsAnswered", _questionResults.Count },
+                    { "questionsCorrect", correctCount },
+                    { "durationSeconds", durationSeconds }
+                });
+
             if (!string.IsNullOrEmpty(progressId))
             {
                 await db.Collection("experimentProgress").Document(progressId).UpdateAsync(
@@ -534,12 +586,14 @@ public class ExperimentManager : MonoBehaviour
         catch (Exception ex)
         {
             Debug.LogError($"[ExperimentManager] Failed to save results: {ex.Message}");
+            ExperimentLogger.Log("error", $"Failed to save results: {ex.Message}");
         }
     }
 
     private static string GetId(ExperimentConfig config, string field, string fallback)
     {
         if (config == null) return fallback;
+
         switch (field)
         {
             case "studentId": return string.IsNullOrEmpty(config.studentId) ? fallback : config.studentId;
