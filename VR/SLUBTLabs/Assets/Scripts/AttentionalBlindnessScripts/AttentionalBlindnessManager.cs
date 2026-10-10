@@ -67,16 +67,19 @@ public class AttentionalBlindnessManager : MonoBehaviour
         _actualCount = furnitureItems.Count;
 
         if (startCountingButton != null) startCountingButton.onClick.AddListener(OnStartCounting);
+
         if (incrementCountButton != null) incrementCountButton.onClick.AddListener(() =>
         {
             if (IsSessionPaused()) return;
             SetCount(_participantCount + 1);
         });
+
         if (decrementCountButton != null) decrementCountButton.onClick.AddListener(() =>
         {
             if (IsSessionPaused()) return;
             SetCount(_participantCount - 1);
         });
+
         if (submitCountButton != null) submitCountButton.onClick.AddListener(OnSubmitCount);
         if (yesButton != null) yesButton.onClick.AddListener(() => OnAwarenessResponse(true));
         if (noButton != null) noButton.onClick.AddListener(() => OnAwarenessResponse(false));
@@ -119,6 +122,7 @@ public class AttentionalBlindnessManager : MonoBehaviour
             if (furnitureItems.Count == 0)
             {
                 Debug.LogError("[AttentionalBlindness] furnitureItems list is empty!");
+                ExperimentLogger.Log("error", "furnitureItems list is empty");
                 yield break;
             }
             _fadeTarget = furnitureItems[UnityEngine.Random.Range(0, furnitureItems.Count)];
@@ -131,10 +135,20 @@ public class AttentionalBlindnessManager : MonoBehaviour
         if (_fadeTarget == null)
         {
             Debug.LogError("[AttentionalBlindness] No fade target assigned or found!");
+            ExperimentLogger.Log("error", "No fade target assigned or found");
             yield break;
         }
 
         Debug.Log($"[AttentionalBlindness] Fade target selected: '{_fadeTarget.name}'");
+
+        ExperimentLogger.Log("fade_target_selected",
+            $"Fade target selected: {_fadeTarget.name}",
+            new Dictionary<string, object>
+            {
+                { "itemName", _fadeTarget.name },
+                { "useRandom", useRandomFadeTarget }
+            });
+
         CacheRenderers(_fadeTarget);
 
         if (instructionText != null)
@@ -145,6 +159,8 @@ public class AttentionalBlindnessManager : MonoBehaviour
         }
 
         if (instructionPanel != null) instructionPanel.SetActive(true);
+
+        ExperimentLogger.Log("instructions_shown", "Attentional Blindness instructions displayed");
     }
 
     private void OnStartCounting()
@@ -157,6 +173,8 @@ public class AttentionalBlindnessManager : MonoBehaviour
         _experimentStartRealtime = Time.realtimeSinceStartup;
         _startedAtUtc = DateTime.UtcNow;
 
+        ExperimentLogger.Log("trial_started", "Student began counting furniture");
+
         ShowCountInput();
         StartCoroutine(FadeOutAfterDelay());
     }
@@ -165,8 +183,10 @@ public class AttentionalBlindnessManager : MonoBehaviour
     {
         _participantCount = 0;
         UpdateCountDisplay();
+
         if (countPromptText != null)
             countPromptText.text = "How many furniture items do you count?";
+
         if (countInputPanel != null) countInputPanel.SetActive(true);
     }
 
@@ -183,8 +203,12 @@ public class AttentionalBlindnessManager : MonoBehaviour
         if (_trialComplete) yield break;
 
         Debug.Log($"[AttentionalBlindness] Fading out '{_fadeTarget.name}'...");
+        ExperimentLogger.Log("fade_started", $"Fading out '{_fadeTarget.name}'");
+
         yield return StartCoroutine(FadeOut());
+
         Debug.Log($"[AttentionalBlindness] '{_fadeTarget.name}' fully faded.");
+        ExperimentLogger.Log("fade_completed", $"'{_fadeTarget.name}' fully faded");
     }
 
     private void OnSubmitCount()
@@ -195,6 +219,16 @@ public class AttentionalBlindnessManager : MonoBehaviour
 
         if (countInputPanel != null) countInputPanel.SetActive(false);
 
+        ExperimentLogger.Log("count_submitted",
+            $"Student submitted count: {_participantCount} (actual: {_actualCount}) after {_countSubmitTime:F1}s",
+            new Dictionary<string, object>
+            {
+                { "participantCount", _participantCount },
+                { "actualCount", _actualCount },
+                { "countDifference", Mathf.Abs(_participantCount - _actualCount) },
+                { "countSubmitTimeSeconds", _countSubmitTime }
+            });
+
         if (awarenessQuestionText != null)
         {
             awarenessQuestionText.text = (config != null && !string.IsNullOrEmpty(config.ab_AwarenessQuestionText))
@@ -203,6 +237,7 @@ public class AttentionalBlindnessManager : MonoBehaviour
         }
 
         if (awarenessPanel != null) awarenessPanel.SetActive(true);
+
         Debug.Log($"[AttentionalBlindness] Count submitted: {_participantCount} (actual: {_actualCount}) after {_countSubmitTime:F1}s");
     }
 
@@ -214,6 +249,15 @@ public class AttentionalBlindnessManager : MonoBehaviour
         _trialComplete = true;
 
         if (awarenessPanel != null) awarenessPanel.SetActive(false);
+
+        ExperimentLogger.Log("awareness_response",
+            noticed ? "Student reported noticing the anomaly" : "Student did not notice the anomaly",
+            new Dictionary<string, object>
+            {
+                { "noticedAnomaly", noticed },
+                { "fadedItemName", _fadeTarget != null ? _fadeTarget.name : "" }
+            });
+
         ShowResults();
     }
 
@@ -241,6 +285,7 @@ public class AttentionalBlindnessManager : MonoBehaviour
         }
 
         if (resultsPanel != null) resultsPanel.SetActive(true);
+
         SaveResultsToFirestore();
     }
 
@@ -248,6 +293,7 @@ public class AttentionalBlindnessManager : MonoBehaviour
     {
         _fadeTargetRenderers.Clear();
         _originalAlphas.Clear();
+
         Renderer[] renderers = target.GetComponentsInChildren<Renderer>();
         foreach (Renderer r in renderers)
         {
@@ -269,7 +315,6 @@ public class AttentionalBlindnessManager : MonoBehaviour
         while (elapsed < fadeDuration)
         {
             yield return WaitWhilePaused();
-
             elapsed += Time.deltaTime;
             float alpha = Mathf.Lerp(1f, 0f, elapsed / fadeDuration);
 
@@ -391,6 +436,17 @@ public class AttentionalBlindnessManager : MonoBehaviour
             await db.Collection("experimentResults").AddAsync(doc);
             Debug.Log($"[AttentionalBlindness] Saved (duration={durationDisplay}, progressId={progressId})");
 
+            ExperimentLogger.Log("experiment_completed",
+                $"Attentional Blindness completed. Count={_participantCount}/{_actualCount}, Noticed={_noticedAnomaly}",
+                new Dictionary<string, object>
+                {
+                    { "participantCount", _participantCount },
+                    { "actualCount", _actualCount },
+                    { "noticedAnomaly", _noticedAnomaly },
+                    { "fadedItemName", _fadeTarget != null ? _fadeTarget.name : "" },
+                    { "durationSeconds", durationSeconds }
+                });
+
             if (!string.IsNullOrEmpty(progressId))
             {
                 await db.Collection("experimentProgress").Document(progressId).UpdateAsync(
@@ -405,12 +461,14 @@ public class AttentionalBlindnessManager : MonoBehaviour
         catch (Exception ex)
         {
             Debug.LogError($"[AttentionalBlindness] Failed to save results: {ex.Message}");
+            ExperimentLogger.Log("error", $"Failed to save results: {ex.Message}");
         }
     }
 
     private string GetConfigString(string fieldName, string fallback)
     {
         if (config == null) return fallback;
+
         switch (fieldName)
         {
             case "studentId":

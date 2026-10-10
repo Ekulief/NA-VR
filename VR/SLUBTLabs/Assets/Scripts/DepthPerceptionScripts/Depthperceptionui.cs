@@ -37,8 +37,8 @@ public class DepthPerceptionUI : MonoBehaviour
 
     [Header("Navigation")]
     public Vector3 hubReturnPosition = Vector3.zero;
-
     public Button[] returnHomeButtons;
+
     private float _currentHeight = 0f;
     private float _actualHeight;
     private float _maxHeightMetres = 100f;
@@ -64,6 +64,7 @@ public class DepthPerceptionUI : MonoBehaviour
         if (submitButton != null) submitButton.onClick.AddListener(OnSubmit);
         if (returnHomeButton != null) returnHomeButton.onClick.AddListener(OnReturnHome);
         if (heightSlider != null) heightSlider.onValueChanged.AddListener(OnSliderChanged);
+
         if (returnHomeButtons != null)
         {
             foreach (Button btn in returnHomeButtons)
@@ -72,6 +73,7 @@ public class DepthPerceptionUI : MonoBehaviour
                     btn.onClick.AddListener(OnReturnHome);
             }
         }
+
         StartCoroutine(BeginExperiment());
     }
 
@@ -122,6 +124,8 @@ public class DepthPerceptionUI : MonoBehaviour
         }
 
         if (instructionPanel != null) instructionPanel.SetActive(true);
+
+       // ExperimentLogger.Log("instructions_shown", "Depth Perception instructions displayed");
     }
 
     private void OnStartTest()
@@ -140,6 +144,8 @@ public class DepthPerceptionUI : MonoBehaviour
             heightPromptText.text = "Estimate the building height in meters:";
 
         if (inputPanel != null) inputPanel.SetActive(true);
+
+        ExperimentLogger.Log("trial_started", "Student began height estimation");
     }
 
     private void OnSubmit()
@@ -151,6 +157,17 @@ public class DepthPerceptionUI : MonoBehaviour
         _completionTime = Time.time - _trialStartTime;
 
         if (inputPanel != null) inputPanel.SetActive(false);
+
+        ExperimentLogger.Log("estimate_submitted",
+            $"Student submitted height estimate: {_currentHeight:F0} m (actual: {_actualHeight:F0} m)",
+            new Dictionary<string, object>
+            {
+                { "estimatedHeight", _currentHeight },
+                { "actualHeight", _actualHeight },
+                { "errorMargin", Mathf.Abs(_currentHeight - _actualHeight) },
+                { "completionTimeSeconds", _completionTime }
+            });
+
         ShowResults();
     }
 
@@ -171,6 +188,7 @@ public class DepthPerceptionUI : MonoBehaviour
         }
 
         if (resultsPanel != null) resultsPanel.SetActive(true);
+
         _ = SaveResultsToFirestoreAsync(error);
     }
 
@@ -246,6 +264,16 @@ public class DepthPerceptionUI : MonoBehaviour
             await db.Collection("experimentResults").AddAsync(doc);
             Debug.Log($"[DepthPerception] Saved (duration={durationDisplay}, progressId={progressId})");
 
+            ExperimentLogger.Log("experiment_completed",
+                $"Depth Perception completed. Estimate={_currentHeight:F0}m, Actual={_actualHeight:F0}m, Error={error:F1}m",
+                new Dictionary<string, object>
+                {
+                    { "estimatedHeight", _currentHeight },
+                    { "actualHeight", _actualHeight },
+                    { "errorMargin", error },
+                    { "durationSeconds", durationSeconds }
+                });
+
             if (!string.IsNullOrEmpty(progressId))
             {
                 await db.Collection("experimentProgress").Document(progressId).UpdateAsync(
@@ -260,11 +288,14 @@ public class DepthPerceptionUI : MonoBehaviour
         catch (Exception ex)
         {
             Debug.LogError($"[DepthPerception] Failed to save results: {ex.Message}");
+            ExperimentLogger.Log("error", $"Failed to save results: {ex.Message}");
         }
     }
 
     private void OnReturnHome()
     {
+       // ExperimentLogger.Log("return_to_hub", "Student returned to hub");
+
         if (_experimentLoader != null)
             _experimentLoader.ReturnToHub(hubReturnPosition);
         else
@@ -315,6 +346,7 @@ public class DepthPerceptionUI : MonoBehaviour
     private string GetConfigString(string fieldName, string fallback)
     {
         if (config == null) return fallback;
+
         switch (fieldName)
         {
             case "studentId":

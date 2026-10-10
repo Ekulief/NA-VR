@@ -122,13 +122,14 @@ public class DistancePerceptionUI : MonoBehaviour
         if (instructionText != null)
         {
             string loadedInstruction = config != null ? config.depth_InstructionText2 : null;
-
             instructionText.text = !string.IsNullOrEmpty(loadedInstruction)
                 ? loadedInstruction
                 : "<b>Horizontal Distance Perception Test</b>\n\nObserve the target object ahead and estimate its horizontal distance in meters.\n\nPress <b>Start Test</b> when ready.";
         }
 
         if (instructionPanel != null) instructionPanel.SetActive(true);
+
+        //ExperimentLogger.Log("instructions_shown", "Distance Perception instructions displayed");
     }
 
     private void OnStartTest()
@@ -147,6 +148,8 @@ public class DistancePerceptionUI : MonoBehaviour
             distancePromptText.text = "Estimate horizontal distance in meters:";
 
         if (inputPanel != null) inputPanel.SetActive(true);
+
+        ExperimentLogger.Log("trial_started", "Student began distance estimation");
     }
 
     private async void OnSubmit()
@@ -159,6 +162,17 @@ public class DistancePerceptionUI : MonoBehaviour
         _completionTime = Time.time - _trialStartTime;
 
         if (inputPanel != null) inputPanel.SetActive(false);
+
+        ExperimentLogger.Log("estimate_submitted",
+            $"Student submitted distance estimate: {_currentDistance:F0} m (actual: {_actualDistance:F0} m)",
+            new Dictionary<string, object>
+            {
+                { "estimatedDistance", _currentDistance },
+                { "actualDistance", _actualDistance },
+                { "errorMargin", Mathf.Abs(_currentDistance - _actualDistance) },
+                { "completionTimeSeconds", _completionTime }
+            });
+
         await ShowResultsAsync();
     }
 
@@ -179,6 +193,7 @@ public class DistancePerceptionUI : MonoBehaviour
         }
 
         if (resultsPanel != null) resultsPanel.SetActive(true);
+
         await SaveResultsToFirestoreAsync(error);
     }
 
@@ -255,6 +270,16 @@ public class DistancePerceptionUI : MonoBehaviour
             await db.Collection("experimentResults").AddAsync(doc);
             Debug.Log($"[DistancePerception] Saved (duration={durationDisplay}, progressId={progressId})");
 
+           /* ExperimentLogger.Log("experiment_completed",
+                $"Distance Perception completed. Estimate={_currentDistance:F0}m, Actual={_actualDistance:F0}m, Error={error:F1}m",
+                new Dictionary<string, object>
+                {
+                    { "estimatedDistance", _currentDistance },
+                    { "actualDistance", _actualDistance },
+                    { "errorMargin", error },
+                    { "durationSeconds", durationSeconds }
+                }); */
+
             if (!string.IsNullOrEmpty(progressId))
             {
                 await db.Collection("experimentProgress").Document(progressId).UpdateAsync(
@@ -269,11 +294,14 @@ public class DistancePerceptionUI : MonoBehaviour
         catch (Exception ex)
         {
             Debug.LogError($"[DistancePerception] Failed to save results: {ex.Message}");
+            ExperimentLogger.Log("error", $"Failed to save results: {ex.Message}");
         }
     }
 
     private void OnReturnHome()
     {
+       // ExperimentLogger.Log("return_to_hub", "Student returned to hub");
+
         if (_experimentLoader != null)
             _experimentLoader.ReturnToHub(hubReturnPosition);
         else
@@ -325,6 +353,7 @@ public class DistancePerceptionUI : MonoBehaviour
     private string GetConfigString(string fieldName, string fallback)
     {
         if (config == null) return fallback;
+
         switch (fieldName)
         {
             case "studentId":
