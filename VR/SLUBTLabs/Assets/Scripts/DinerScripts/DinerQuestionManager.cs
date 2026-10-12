@@ -2,6 +2,10 @@
 using System.Collections;
 using System.Collections.Generic;
 
+/// <summary>
+/// Builds and runs recall questions for the diner Memory scene.
+/// Subscribes to MemoryExperimentManager (preferred) or ExperimentManager.
+/// </summary>
 public class DinerQuestionManager : MonoBehaviour
 {
     public static DinerQuestionManager Instance { get; private set; }
@@ -24,30 +28,62 @@ public class DinerQuestionManager : MonoBehaviour
 
     private List<QuestionEntry> allQuestions = new List<QuestionEntry>();
     private int currentQuestionIndex = 0;
+    private bool _subscribed;
 
     public System.Action<QuestionEntry, int, int> OnQuestionReady;
     public System.Action<QuestionEntry, string, bool, float> OnAnswerSubmitted;
     public System.Action OnAllQuestionsFinished;
 
-    private void OnEnable()
+    private void Start()
     {
         StartCoroutine(SubscribeWhenReady());
     }
 
     private IEnumerator SubscribeWhenReady()
     {
-        while (ExperimentManager.Instance == null)
+        float t = 0f;
+        while (!_subscribed && t < 15f)
+        {
+            TrySubscribe();
+            if (_subscribed) yield break;
+            t += 0.1f;
             yield return new WaitForSeconds(0.1f);
+        }
 
-        ExperimentManager.Instance.OnRecallStarted -= OnRecallStarted;
-        ExperimentManager.Instance.OnRecallStarted += OnRecallStarted;
-        Debug.Log("[DinerQuestionManager] Subscribed to ExperimentManager.");
+        if (!_subscribed)
+            Debug.LogWarning("[DinerQuestionManager] No ExperimentManager / MemoryExperimentManager found.");
     }
 
-    private void OnDisable()
+    private void TrySubscribe()
     {
+        if (MemoryExperimentManager.Instance != null)
+        {
+            MemoryExperimentManager.Instance.OnRecallStarted -= OnRecallStarted;
+            MemoryExperimentManager.Instance.OnRecallStarted += OnRecallStarted;
+            _subscribed = true;
+            Debug.Log("[DinerQuestionManager] Subscribed to MemoryExperimentManager.");
+            return;
+        }
+
+        if (ExperimentManager.Instance != null)
+        {
+            ExperimentManager.Instance.OnRecallStarted -= OnRecallStarted;
+            ExperimentManager.Instance.OnRecallStarted += OnRecallStarted;
+            _subscribed = true;
+            Debug.Log("[DinerQuestionManager] Subscribed to ExperimentManager.");
+        }
+    }
+
+    private void OnDestroy()
+    {
+        if (MemoryExperimentManager.Instance != null)
+            MemoryExperimentManager.Instance.OnRecallStarted -= OnRecallStarted;
+
         if (ExperimentManager.Instance != null)
             ExperimentManager.Instance.OnRecallStarted -= OnRecallStarted;
+
+        if (Instance == this)
+            Instance = null;
     }
 
     private void OnRecallStarted()
@@ -104,9 +140,7 @@ public class DinerQuestionManager : MonoBehaviour
 
         foreach (QuestionData q in entry.questions)
         {
-            // Choices come from Firestore (or local SO) — do not invent them here
             string[] choices = q.multipleChoiceOptions;
-
             if (choices == null)
                 choices = new string[0];
 
@@ -136,7 +170,13 @@ public class DinerQuestionManager : MonoBehaviour
         {
             Debug.Log("[DinerQuestionManager] All questions answered.");
             OnAllQuestionsFinished?.Invoke();
-            ExperimentManager.Instance?.OnExperimentComplete();
+
+            // Prefer MemoryExperimentManager in this scene
+            if (MemoryExperimentManager.Instance != null)
+                MemoryExperimentManager.Instance.OnExperimentComplete();
+            else
+                ExperimentManager.Instance?.OnExperimentComplete();
+
             return;
         }
 
@@ -154,7 +194,7 @@ public class DinerQuestionManager : MonoBehaviour
 
         Debug.Log($"[DinerQuestionManager] Q{currentQuestionIndex + 1} " +
                   $"Answer: {selectedAnswer} | Correct: {current.correctAnswer} | " +
-                  $"Result: {(correct ? "✓" : "✗")} | RT: {reactionTimeMs:F0}ms");
+                  $"Result: {(correct ? "OK" : "X")} | RT: {reactionTimeMs:F0}ms");
 
         OnAnswerSubmitted?.Invoke(current, selectedAnswer, correct, reactionTimeMs);
         currentQuestionIndex++;

@@ -7,8 +7,8 @@ using Firebase.Extensions;
 
 /// <summary>
 /// SLUBT Labs — Dynamic Experiment Loader
-/// Keep this script attached to your central manager object.
-/// Updates vrDevices status in Firebase when loading/unloading experiments.
+/// Loads experiment scenes additively, teleports XR Origin to "Spawn Point",
+/// updates vrDevices status in Firebase.
 /// </summary>
 public class ExperimentLoader : MonoBehaviour
 {
@@ -16,17 +16,24 @@ public class ExperimentLoader : MonoBehaviour
     public GameObject xrOrigin;
 
     [Header("Spawn Position Settings")]
-    [Tooltip("If checked, forces the player's camera height to fixedSpawnHeight. If unchecked, uses Spawn Point's Y position.")]
-    public bool useFixedSpawnHeight = true;
-    [Tooltip("Target eye height relative to floor (in meters). Standard average standing height is ~1.6m to 1.7m.")]
+    [Tooltip("If true, raises the XR Origin so the camera sits at fixedSpawnHeight above the Spawn Point. " +
+             "Leave OFF for room-scale XR (Spawn Point = feet/floor). ON is what caused the mid-air spawn + fall.")]
+    public bool useFixedSpawnHeight = false;
+
+    [Tooltip("Only used when useFixedSpawnHeight is true. Eye height in meters (~1.6).")]
     public float fixedSpawnHeight = 1.6f;
+
+    [Tooltip("If true, raycasts down from the spawn to find the floor collider and places the origin there.")]
+    public bool snapToFloor = true;
+
+    [Tooltip("How far downward to search for a floor when snapToFloor is enabled.")]
+    public float floorSnapDistance = 3f;
 
     [Header("Main Scene Visibility")]
     public GameObject[] mainSceneObjects;
 
     [Header("Transition")]
     public CanvasGroup fadeCanvas;
-
     [Tooltip("Fade duration in seconds.")]
     public float fadeDuration = 0.4f;
 
@@ -37,14 +44,11 @@ public class ExperimentLoader : MonoBehaviour
     [Tooltip("The Firestore document ID of this VR headset in the vrDevices collection.")]
     public string vrDeviceDocumentId = "";
 
-    // State variables
     private bool _isLoading = false;
     private Scene _loadedScene;
     private bool _experimentSceneLoaded = false;
     private string _currentSceneName = "";
     private FirebaseFirestore _db;
-
-    // ── Unity lifecycle ───────────────────────────────────────────────────────
 
     private void Start()
     {
@@ -61,18 +65,14 @@ public class ExperimentLoader : MonoBehaviour
         Debug.Log("[ExperimentLoader] Firebase ready.");
     }
 
-    // ── Scene loading ─────────────────────────────────────────────────────────
-
     public void LoadScene(string sceneName)
     {
         if (_isLoading) return;
-
         if (string.IsNullOrEmpty(sceneName))
         {
             Debug.LogError("[SLUBT Labs] Cannot load scene: The passed scene name is empty!");
             return;
         }
-
         StartCoroutine(LoadExperimentScene(sceneName));
     }
 
@@ -81,53 +81,38 @@ public class ExperimentLoader : MonoBehaviour
         _isLoading = true;
         _currentSceneName = sceneName;
 
-        // 1. Fade out to loading screen
         if (fadeCanvas != null)
             yield return StartCoroutine(Fade(0f, 1f));
 
-        // 2. Load the dynamic experiment scene additively 
         AsyncOperation load = SceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Additive);
         yield return new WaitUntil(() => load.isDone);
 
         _loadedScene = SceneManager.GetSceneByName(sceneName);
         _experimentSceneLoaded = true;
-
         SceneManager.SetActiveScene(_loadedScene);
-
         SetMainSceneVisible(false);
 
-        // 3. Find the Spawn Point inside the newly loaded scene
         GameObject spawnPoint = FindSpawnPointInScene(_loadedScene);
-
         if (spawnPoint == null)
         {
             Debug.LogError($"[SLUBT Labs] No GameObject named 'Spawn Point' found in '{sceneName}'. " +
-                           "Create an empty GameObject called Spawn Point and position it where the player should appear.");
+                           "Create an empty GameObject called 'Spawn Point' on the FLOOR where the player should appear.");
             _isLoading = false;
             yield break;
         }
 
-        // 4. Move XR Origin precisely accounting for room-scale physical offset
         if (xrOrigin != null)
-        {
             TeleportPlayerToTransform(spawnPoint.transform);
-        }
         else
-        {
             Debug.LogWarning("[SLUBT Labs] xrOrigin is not assigned on Experiment Loader. Player won't be repositioned.");
-        }
 
-        // 5. Update Firebase device status to In Use
         UpdateDeviceStatus("In Use", sceneName);
 
-        // 6. Fade back in
         if (fadeCanvas != null)
             yield return StartCoroutine(Fade(1f, 0f));
 
         _isLoading = false;
     }
-
-    // ── Return to main scene ──────────────────────────────────────────────────
 
     public void ReturnToHub(Vector3 hubSpawnPosition)
     {
@@ -137,15 +122,11 @@ public class ExperimentLoader : MonoBehaviour
     public void ReturnToHub()
     {
         if (!_experimentSceneLoaded) return;
-
         Scene hubScene = SceneManager.GetSceneAt(0);
         SceneManager.SetActiveScene(hubScene);
-
         GameObject respawnObject = GameObject.Find("Respawn");
-
         if (respawnObject == null)
             Debug.LogError("[SLUBT Labs] CRITICAL ERROR: Could not locate 'Respawn' in Main VR Scene!");
-
         StartCoroutine(UnloadExperimentScene(respawnObject));
     }
 
@@ -166,7 +147,6 @@ public class ExperimentLoader : MonoBehaviour
 
         _experimentSceneLoaded = false;
         _currentSceneName = "";
-
         yield return null;
 
         if (xrOrigin != null && respawnObject != null)
@@ -183,55 +163,104 @@ public class ExperimentLoader : MonoBehaviour
         _isLoading = false;
     }
 
-    // ── Helper method for precise physical repositioning ─────────────────────
-
+    /// <summary>
+    /// Places XR Origin so the player stands at the target.
+    /// Default (useFixedSpawnHeight = false): origin Y = spawn Y (spawn must be on the floor).
+    /// Optional snapToFloor raycasts down to the collider under the spawn.
+    /// </summary>
     private void TeleportPlayerToTransform(Transform targetTransform)
     {
-        Camera mainCam = Camera.main;
+        if (xrOrigin == null || targetTransform == null) return;
 
-        if (mainCam == null && xrOrigin != null)
+        Camera mainCam = Camera.main;
+        if (mainCam == null)
             mainCam = xrOrigin.GetComponentInChildren<Camera>();
+
+        // Stop CharacterController / Rigidbody from fighting the teleport (causes the "fall")
+        CharacterController cc = xrOrigin.GetComponentInChildren<CharacterController>();
+        if (cc != null) cc.enabled = false;
+
+        Rigidbody rb = xrOrigin.GetComponentInChildren<Rigidbody>();
+        if (rb != null)
+        {
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+            rb.useGravity = false;
+            rb.isKinematic = true;
+        }
 
         if (mainCam != null)
         {
-            // Rotate origin to match target rotation
             float currentCamYAngle = mainCam.transform.eulerAngles.y;
             float targetYAngle = targetTransform.eulerAngles.y;
-            float rotationDelta = targetYAngle - currentCamYAngle;
-            xrOrigin.transform.Rotate(0f, rotationDelta, 0f, Space.World);
+            xrOrigin.transform.Rotate(0f, targetYAngle - currentCamYAngle, 0f, Space.World);
 
-            // Calculate room-scale horizontal offset from Camera to Origin
             Vector3 cameraPosition = mainCam.transform.position;
             Vector3 originPosition = xrOrigin.transform.position;
-
             Vector3 cameraOffsetHorizontal = cameraPosition - originPosition;
             cameraOffsetHorizontal.y = 0f;
 
-            // Apply horizontal offset so the camera aligns with target spot
             Vector3 finalPosition = targetTransform.position - cameraOffsetHorizontal;
 
-            // Height calculation
             if (useFixedSpawnHeight)
             {
+                // LEGACY: lifts origin so camera sits at fixedSpawnHeight above spawn.
+                // This is what caused mid-air spawn + fall with room-scale XR. Keep OFF.
                 Transform cameraOffset = xrOrigin.transform.Find("Camera Offset");
-                float localCamY = cameraOffset != null ? cameraOffset.localPosition.y : mainCam.transform.localPosition.y;
+                float localCamY = cameraOffset != null
+                    ? cameraOffset.localPosition.y
+                    : mainCam.transform.localPosition.y;
                 finalPosition.y = targetTransform.position.y + fixedSpawnHeight - localCamY;
+                Debug.LogWarning("[ExperimentLoader] useFixedSpawnHeight is ON — origin raised by ~" +
+                                 fixedSpawnHeight + "m. Prefer OFF + Spawn Point on the floor.");
             }
             else
             {
-                finalPosition.y = targetTransform.position.y;
+                // Room-scale: origin on the floor; headset tracking provides eye height.
+                float floorY = targetTransform.position.y;
+
+                if (snapToFloor)
+                {
+                    Vector3 rayOrigin = targetTransform.position + Vector3.up * 0.5f;
+                    if (Physics.Raycast(rayOrigin, Vector3.down, out RaycastHit hit, floorSnapDistance + 0.5f))
+                    {
+                        floorY = hit.point.y;
+                        Debug.Log($"[ExperimentLoader] Floor snap hit '{hit.collider.name}' at Y={floorY:F3}");
+                    }
+                }
+
+                finalPosition.y = floorY;
             }
 
             xrOrigin.transform.position = finalPosition;
+            Debug.Log($"[ExperimentLoader] Teleported XR Origin to {finalPosition} " +
+                      $"(spawn='{targetTransform.name}', fixedHeight={useFixedSpawnHeight})");
         }
         else
         {
             xrOrigin.transform.position = targetTransform.position;
             xrOrigin.transform.rotation = targetTransform.rotation;
         }
+
+        // Re-enable CC next frame so it doesn't instantly apply gravity while mid-air
+        StartCoroutine(ReenableLocomotion(cc, rb));
     }
 
-    // ── Firebase ──────────────────────────────────────────────────────────────
+    private IEnumerator ReenableLocomotion(CharacterController cc, Rigidbody rb)
+    {
+        yield return null;
+        yield return new WaitForFixedUpdate();
+
+        if (cc != null) cc.enabled = true;
+        if (rb != null)
+        {
+            rb.isKinematic = false;
+            // XR locomotion usually drives motion; leave gravity off to avoid a second drop
+            rb.useGravity = false;
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+        }
+    }
 
     private async void UpdateDeviceStatus(string status, string experimentSceneName)
     {
@@ -245,16 +274,15 @@ public class ExperimentLoader : MonoBehaviour
         string groupId = config != null ? config.groupId : "";
 
         Dictionary<string, object> update = new()
-{
-    { "Status",               status },
-    { "currentExperimentId",  experimentSceneName },
-    { "currentUserId",        studentId },
-    { "currentGroupId",       groupId },
-    { "currentSessionStart",  FieldValue.ServerTimestamp },
-};
+        {
+            { "Status", status },
+            { "currentExperimentId", experimentSceneName },
+            { "currentUserId", studentId },
+            { "currentGroupId", groupId },
+            { "currentSessionStart", FieldValue.ServerTimestamp },
+        };
 
         var docRef = _db.Collection("vrDevices").Document(vrDeviceDocumentId);
-
         try
         {
             await docRef.UpdateAsync(update);
@@ -265,8 +293,6 @@ public class ExperimentLoader : MonoBehaviour
             Debug.LogWarning($"[ExperimentLoader] Non-critical Firebase error: {e.Message}");
         }
     }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private void SetMainSceneVisible(bool visible)
     {
@@ -280,7 +306,6 @@ public class ExperimentLoader : MonoBehaviour
         {
             if (root.name == "Spawn Point")
                 return root;
-
             Transform found = root.transform.Find("Spawn Point");
             if (found != null)
                 return found.gameObject;
@@ -291,19 +316,15 @@ public class ExperimentLoader : MonoBehaviour
     private IEnumerator Fade(float from, float to)
     {
         if (fadeCanvas == null) yield break;
-
         fadeCanvas.gameObject.SetActive(true);
         float elapsed = 0f;
-
         while (elapsed < fadeDuration)
         {
             elapsed += Time.deltaTime;
             fadeCanvas.alpha = Mathf.Lerp(from, to, elapsed / fadeDuration);
             yield return null;
         }
-
         fadeCanvas.alpha = to;
-
         if (to <= 0f)
             fadeCanvas.gameObject.SetActive(false);
     }

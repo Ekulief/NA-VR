@@ -3,6 +3,10 @@ using UnityEngine.UI;
 using TMPro;
 using System.Collections;
 
+/// <summary>
+/// Distractor UI for Memory Dinner. Listens to MemoryExperimentManager
+/// (and ExperimentManager if present).
+/// </summary>
 public class DinerDistractorTaskUI : MonoBehaviour
 {
     [Header("UI References")]
@@ -20,37 +24,78 @@ public class DinerDistractorTaskUI : MonoBehaviour
 
     private Coroutine sequenceCoroutine;
     private Coroutine countdownCoroutine;
+    private bool _subscribed;
 
-    private void OnEnable() => StartCoroutine(SubscribeWhenReady());
+    private void Start()
+    {
+        HidePanel();
+        StartCoroutine(SubscribeWhenReady());
+    }
 
     private IEnumerator SubscribeWhenReady()
     {
-        while (ExperimentManager.Instance == null)
+        float t = 0f;
+        while (!_subscribed && t < 15f)
+        {
+            TrySubscribe();
+            if (_subscribed) yield break;
+            t += 0.1f;
             yield return new WaitForSeconds(0.1f);
-
-        ExperimentManager.Instance.OnDistractorStarted -= OnDistractorStarted;
-        ExperimentManager.Instance.OnDistractorEnded -= OnDistractorEnded;
-        ExperimentManager.Instance.OnDistractorStarted += OnDistractorStarted;
-        ExperimentManager.Instance.OnDistractorEnded += OnDistractorEnded;
-        Debug.Log("[DinerDistractorTaskUI] Subscribed.");
+        }
+        if (!_subscribed)
+            Debug.LogWarning("[DinerDistractorTaskUI] No manager found to subscribe to.");
     }
 
-    private void OnDisable()
+    private void TrySubscribe()
     {
-        if (ExperimentManager.Instance == null) return;
-        ExperimentManager.Instance.OnDistractorStarted -= OnDistractorStarted;
-        ExperimentManager.Instance.OnDistractorEnded -= OnDistractorEnded;
+        if (MemoryExperimentManager.Instance != null)
+        {
+            MemoryExperimentManager.Instance.OnDistractorStarted -= OnDistractorStarted;
+            MemoryExperimentManager.Instance.OnDistractorEnded -= OnDistractorEnded;
+            MemoryExperimentManager.Instance.OnDistractorStarted += OnDistractorStarted;
+            MemoryExperimentManager.Instance.OnDistractorEnded += OnDistractorEnded;
+            _subscribed = true;
+            Debug.Log("[DinerDistractorTaskUI] Subscribed to MemoryExperimentManager.");
+            return;
+        }
+
+        // Fallback if someone uses ExperimentManager in this scene
+        if (ExperimentManager.Instance != null)
+        {
+            ExperimentManager.Instance.OnDistractorStarted -= OnDistractorStarted;
+            ExperimentManager.Instance.OnDistractorEnded -= OnDistractorEnded;
+            ExperimentManager.Instance.OnDistractorStarted += OnDistractorStarted;
+            ExperimentManager.Instance.OnDistractorEnded += OnDistractorEnded;
+            _subscribed = true;
+            Debug.Log("[DinerDistractorTaskUI] Subscribed to ExperimentManager.");
+        }
     }
 
-    private void Start() => HidePanel();
+    private void OnDestroy()
+    {
+        if (MemoryExperimentManager.Instance != null)
+        {
+            MemoryExperimentManager.Instance.OnDistractorStarted -= OnDistractorStarted;
+            MemoryExperimentManager.Instance.OnDistractorEnded -= OnDistractorEnded;
+        }
+        if (ExperimentManager.Instance != null)
+        {
+            ExperimentManager.Instance.OnDistractorStarted -= OnDistractorStarted;
+            ExperimentManager.Instance.OnDistractorEnded -= OnDistractorEnded;
+        }
+    }
 
     private void OnDistractorStarted(float duration)
     {
-        // Ensure question UI is not covering distractor
+        Debug.Log($"[DinerDistractorTaskUI] Distractor started ({duration}s).");
         ShowPanel(duration);
     }
 
-    private void OnDistractorEnded() => HidePanel();
+    private void OnDistractorEnded()
+    {
+        Debug.Log("[DinerDistractorTaskUI] Distractor ended.");
+        HidePanel();
+    }
 
     private void ShowPanel(float duration)
     {
@@ -78,6 +123,7 @@ public class DinerDistractorTaskUI : MonoBehaviour
             progressSlider.maxValue = duration;
             progressSlider.value = duration;
         }
+
         if (progressFill != null)
             progressFill.color = progressColor;
 
@@ -107,22 +153,27 @@ public class DinerDistractorTaskUI : MonoBehaviour
 
     private IEnumerator RunCountdown(float duration)
     {
-        float timeRemaining = duration;
-        while (timeRemaining > 0f)
+        // Match MemoryExperimentManager: realtime so pause cannot desync UI vs manager
+        float endAt = Time.realtimeSinceStartup + duration;
+        while (Time.realtimeSinceStartup < endAt)
         {
+            float timeRemaining = endAt - Time.realtimeSinceStartup;
+
             if (countdownText != null)
                 countdownText.text = $"{Mathf.CeilToInt(timeRemaining)} seconds remaining";
+
             if (progressSlider != null)
                 progressSlider.value = timeRemaining;
+
             if (progressFill != null)
                 progressFill.color = timeRemaining <= 10f ? urgentColor : progressColor;
 
-            timeRemaining -= Time.deltaTime;
             yield return null;
         }
 
         if (countdownText != null) countdownText.text = "0 seconds remaining";
         if (progressSlider != null) progressSlider.value = 0f;
+        // Panel stays until OnDistractorEnded from the manager (should fire immediately after)
     }
 
     private IEnumerator ShowCountingSequence()

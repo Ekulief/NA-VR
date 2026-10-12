@@ -7,13 +7,42 @@ using TMPro;
 using Firebase.Firestore;
 
 /// <summary>
-/// Spatial memory / change-detection trial (study → distractor → test).
+/// Memory Dinner flow aligned with ExperimentManager:
+/// Study (diner, timed, TimerHUD events) → teleport to lab/question room →
+/// optional distractor → change-detection test trials → save.
 /// </summary>
 public class MemoryExperimentManager : MonoBehaviour
 {
-    public enum Phase { Idle, Study, Distractor, Test, Complete }
+    public static MemoryExperimentManager Instance { get; private set; }
 
-    [Header("UI References")]
+    public enum Phase { Idle, Study, Transitioning, Recalling, Distractor, Test, Complete }
+
+    // ── Events (same signatures as ExperimentManager so TimerHUD can hook them) ──
+    public Action<string, float> OnRoomStarted;
+    public Action<string> OnRoomEnded;
+    public Action OnAllRoomsExplored;
+    public Action OnExperimentFinished;
+    public Action<float> OnTimerTick;
+    public Action<float> OnDistractorStarted;
+    public Action OnDistractorEnded;
+    public Action OnRecallStarted;
+
+    public Phase CurrentPhase => currentPhase;
+    public int CurrentRoomIndex => 0;
+    public int TotalRooms => 1;
+
+    [Header("UI References – Start / Intro")]
+    public Button startButton;
+    public GameObject startPanel;
+
+    [Header("UI References – Recall (before distractor)")]
+    [Tooltip("Panel with instructions + Begin Questions button (shown after teleport to lab)")]
+    public GameObject recallInstructionPanel;
+    [Tooltip("StartQuestioningButton – player must click before distractor")]
+    public Button beginQuestioningButton;
+    public TextMeshProUGUI recallInstructionTextUI;
+
+    [Header("UI References – Core")]
     public TextMeshProUGUI roomNameText;
     public TextMeshProUGUI questionText;
     public Slider progressSlider;
@@ -22,14 +51,32 @@ public class MemoryExperimentManager : MonoBehaviour
     public GameObject distractorPanel;
     public GameObject endPanel;
 
-    [Header("Timing")]
+    [Header("UI Text (optional – from Firebase)")]
+    public TextMeshProUGUI briefingTextUI;
+    public TextMeshProUGUI roomInstructionTextUI;
+    public TextMeshProUGUI distractorInstructionTextUI;
+
+    [Header("Timing (overridden by Firebase when available)")]
     public float studyDuration = 90f;
     public float distractorDuration = 30f;
+    public float transitionFadeDuration = 0.5f;
     public int numberOfTestTrials = 12;
+    public bool useDistractorTask = true;
+    public bool randomizeQuestions = true;
 
-    [Header("References")]
-    public Transform spawnPoint;
+    [Header("References – Teleport / Lab")]
+    [Tooltip("Where the player starts the study phase (diner). Optional.")]
+    public Transform studySpawnPoint;
+    [Tooltip("Lab / question room entry – assign LabRoom_SpawnPoint from the scene")]
+    public Transform labRoomSpawnPoint;
+    public Transform playerTransform;
+    public FadeController fadeController;
     public MemoryObjectTracker objectTracker;
+
+    public string BriefingText { get; private set; }
+    public string RoomInstructionText { get; private set; }
+    public string DistractorInstructionText { get; private set; }
+    public string RecallInstructionText { get; private set; }
 
     Phase currentPhase = Phase.Idle;
     float phaseTimer;
@@ -39,24 +86,144 @@ public class MemoryExperimentManager : MonoBehaviour
     int correctCount;
     readonly List<Dictionary<string, object>> trialResults = new();
     bool acceptingInput;
+    bool isTimerRunning;
     float _experimentStartRealtime;
     DateTime _startedAtUtc;
+    bool _configApplied;
+    string _studyRoomName = "Diner";
+
+    void Awake()
+    {
+        if (Instance != null && Instance != this)
+            Destroy(Instance.gameObject);
+        Instance = this;
+    }
 
     void Start()
     {
         sessionId = Guid.NewGuid().ToString("N");
         HideAllUI();
+        ShowStartUI(true);
+
+        if (playerTransform == null)
+        {
+            GameObject player = GameObject.FindWithTag("Player")
+                ?? GameObject.Find("XR Origin")
+                ?? GameObject.Find("XR Origin (XR Rig)");
+            if (player != null)
+                playerTransform = player.transform;
+        }
+
+        if (fadeController == null)
+            fadeController = FindFirstObjectByType<FadeController>();
 
         if (roomNameText != null)
             roomNameText.text = "Memory Lab – Dinner / Spatial Recognition";
+
+        if (startButton != null)
+        {
+            startButton.onClick.RemoveAllListeners();
+            startButton.onClick.AddListener(StartExperiment);
+        }
+        else
+        {
+            Debug.LogWarning("[MemoryExperimentManager] startButton is not assigned.");
+        }
+
+        if (beginQuestioningButton != null)
+        {
+            beginQuestioningButton.onClick.RemoveAllListeners();
+            beginQuestioningButton.onClick.AddListener(BeginQuestioning);
+        }
+        else
+        {
+            Debug.LogWarning("[MemoryExperimentManager] beginQuestioningButton is not assigned. " +
+                             "Drag StartQuestioningButton onto Begin Questioning Button.");
+        }
+
+        // Hide recall panel until lab
+        if (recallInstructionPanel != null)
+            recallInstructionPanel.SetActive(false);
+
+        StartCoroutine(WaitForConfigAndApply());
     }
 
-    private bool IsSessionPaused()
+    void OnDestroy()
+    {
+        if (startButton != null)
+            startButton.onClick.RemoveListener(StartExperiment);
+        if (beginQuestioningButton != null)
+            beginQuestioningButton.onClick.RemoveListener(BeginQuestioning);
+        if (Instance == this)
+            Instance = null;
+    }
+
+    IEnumerator WaitForConfigAndApply()
+    {
+        float timeout = 15f;
+        float elapsed = 0f;
+        while ((ExperimentConfigLoader.Current == null || !ExperimentConfigLoader.IsReady) && elapsed < timeout)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            yield return null;
+        }
+        ApplyConfig();
+    }
+
+    void ApplyConfig()
+    {
+        if (ExperimentConfigLoader.Current == null)
+        {
+            Debug.Log("[MemoryExperimentManager] No config — using Inspector values.");
+            ApplyFallbackTexts();
+            return;
+        }
+
+        var c = ExperimentConfigLoader.Current;
+
+        studyDuration = c.memory_TimePerRoomSeconds > 0f ? c.memory_TimePerRoomSeconds : studyDuration;
+        distractorDuration = c.memory_DistractorTaskDuration > 0f ? c.memory_DistractorTaskDuration : distractorDuration;
+        if (c.memory_TransitionFadeDuration > 0f)
+            transitionFadeDuration = c.memory_TransitionFadeDuration;
+        useDistractorTask = c.memory_UseDistractorTask;
+        randomizeQuestions = c.memory_RandomizeQuestions;
+
+        BriefingText = c.memory_BriefingText;
+        RoomInstructionText = c.memory_RoomInstructionText;
+        DistractorInstructionText = c.memory_DistractorInstructionText;
+        RecallInstructionText = c.memory_RecallInstructionText;
+
+        if (briefingTextUI != null && !string.IsNullOrEmpty(BriefingText))
+            briefingTextUI.text = BriefingText;
+        if (roomInstructionTextUI != null && !string.IsNullOrEmpty(RoomInstructionText))
+            roomInstructionTextUI.text = RoomInstructionText;
+        if (distractorInstructionTextUI != null && !string.IsNullOrEmpty(DistractorInstructionText))
+            distractorInstructionTextUI.text = DistractorInstructionText;
+        if (recallInstructionTextUI != null && !string.IsNullOrEmpty(RecallInstructionText))
+            recallInstructionTextUI.text = RecallInstructionText;
+
+        _configApplied = true;
+        Debug.Log($"[MemoryExperimentManager] Applied config. study={studyDuration}s distractor={distractorDuration}s labSpawn={(labRoomSpawnPoint != null)}");
+    }
+
+    void ApplyFallbackTexts()
+    {
+        if (string.IsNullOrEmpty(BriefingText))
+            BriefingText = "You will explore the room. Pay close attention to objects and details.";
+        if (string.IsNullOrEmpty(RoomInstructionText))
+            RoomInstructionText = "Memorize the room. Walk around freely.";
+        if (string.IsNullOrEmpty(DistractorInstructionText))
+            DistractorInstructionText = "Count backwards from 100 by 3s.";
+        if (string.IsNullOrEmpty(RecallInstructionText))
+            RecallInstructionText = "Answer the questions about what you saw.";
+    }
+
+    bool IsSessionPaused()
     {
         return SessionController.Instance != null && SessionController.Instance.IsPaused;
     }
 
-    private IEnumerator WaitWhilePaused()
+    IEnumerator WaitWhilePaused()
     {
         while (IsSessionPaused())
             yield return null;
@@ -66,12 +233,23 @@ public class MemoryExperimentManager : MonoBehaviour
     {
         if (IsSessionPaused()) return;
 
+        if (currentPhase != Phase.Idle)
+        {
+            Debug.LogWarning("[MemoryExperimentManager] Experiment already running.");
+            return;
+        }
+
         if (objectTracker == null)
         {
             Debug.LogError("[MemoryExperimentManager] objectTracker is not assigned.");
             ExperimentLogger.Log("error", "objectTracker is not assigned");
             return;
         }
+
+        if (!_configApplied)
+            ApplyConfig();
+
+        ShowStartUI(false);
 
         objectTracker.CaptureOriginalLayout();
         GenerateTrials();
@@ -90,7 +268,7 @@ public class MemoryExperimentManager : MonoBehaviour
         _startedAtUtc = DateTime.UtcNow;
 
         ExperimentLogger.Log("experiment_started",
-            $"Memory Dinner experiment started with {trials.Count} trials",
+            $"Memory experiment started with {trials.Count} trials",
             new Dictionary<string, object>
             {
                 { "sessionId", sessionId },
@@ -99,105 +277,230 @@ public class MemoryExperimentManager : MonoBehaviour
                 { "distractorDuration", distractorDuration }
             });
 
-        EnterPhase(Phase.Study);
+        StartCoroutine(BeginStudyPhase());
+    }
+
+    IEnumerator BeginStudyPhase()
+    {
+        currentPhase = Phase.Study;
+
+        // Optional: place player at study spawn
+        if (studySpawnPoint != null)
+        {
+            if (fadeController != null)
+                yield return StartCoroutine(fadeController.FadeOut(transitionFadeDuration));
+            TeleportPlayer(studySpawnPoint);
+            yield return new WaitForSeconds(0.3f);
+            if (fadeController != null)
+                yield return StartCoroutine(fadeController.FadeIn(transitionFadeDuration));
+        }
+
+        phaseTimer = studyDuration;
+        isTimerRunning = true;
+
+        SetQuestionText(
+            !string.IsNullOrEmpty(RoomInstructionText)
+                ? RoomInstructionText
+                : "Memorize the room. Walk around freely.");
+        ShowProgress(true);
+
+        // Fire events so TimerHUD (and anything else) can show the study timer
+        OnRoomStarted?.Invoke(_studyRoomName, studyDuration);
+
+        Debug.Log($"[MemoryExperimentManager] Study phase started ({studyDuration}s).");
     }
 
     void Update()
     {
         if (IsSessionPaused()) return;
 
-        if (currentPhase != Phase.Study && currentPhase != Phase.Distractor)
+        if (!isTimerRunning || currentPhase != Phase.Study)
             return;
 
         phaseTimer -= Time.deltaTime;
+        OnTimerTick?.Invoke(phaseTimer);
 
         if (progressSlider != null)
         {
-            float dur = GetPhaseDuration();
+            float dur = studyDuration;
             progressSlider.value = dur > 0 ? 1f - (phaseTimer / dur) : 1f;
         }
-
         if (progressText != null)
             progressText.text = $"{Mathf.CeilToInt(Mathf.Max(0f, phaseTimer))}s";
 
         if (phaseTimer <= 0f)
-            NextPhase();
+        {
+            phaseTimer = 0f;
+            isTimerRunning = false;
+            OnRoomTimeUp();
+        }
     }
 
-    void EnterPhase(Phase p)
+    void OnRoomTimeUp()
     {
-        currentPhase = p;
-        phaseTimer = GetPhaseDuration();
-        acceptingInput = false;
+        OnRoomEnded?.Invoke(_studyRoomName);
+        OnAllRoomsExplored?.Invoke();
+        Debug.Log("[MemoryExperimentManager] Study timer finished → teleport to lab / question room.");
+        StartCoroutine(TransitionToLabAndContinue());
+    }
+
+    IEnumerator TransitionToLabAndContinue()
+    {
+        currentPhase = Phase.Transitioning;
         HideAllUI();
 
-        switch (p)
+        if (fadeController != null)
+            yield return StartCoroutine(fadeController.FadeOut(transitionFadeDuration));
+
+        if (labRoomSpawnPoint != null)
         {
-            case Phase.Study:
-                SetQuestionText("Memorize the room. Walk around freely.");
-                ShowProgress(true);
-               // ExperimentLogger.Log("study_phase_started",
-             //       $"Study phase started ({studyDuration}s)");
-                break;
+            TeleportPlayer(labRoomSpawnPoint);
+            Debug.Log("[MemoryExperimentManager] Teleported to LabRoom_SpawnPoint.");
+        }
+        else
+        {
+            Debug.LogWarning("[MemoryExperimentManager] labRoomSpawnPoint is NOT assigned. " +
+                             "Drag LabRoom_SpawnPoint onto the Lab Room Spawn Point field.");
+        }
 
-            case Phase.Distractor:
-                if (distractorPanel != null) distractorPanel.SetActive(true);
-                SetQuestionText("Count backwards from 100 by 3s.");
-                ShowProgress(true);
-                ExperimentLogger.Log("distractor_started",
-                    $"Distractor phase started ({distractorDuration}s)");
-                break;
+        yield return new WaitForSeconds(0.5f);
 
-            case Phase.Test:
-                if (currentTrial < 0 || currentTrial >= trials.Count)
-                {
-                    EnterPhase(Phase.Complete);
-                    return;
-                }
-                objectTracker.ApplyTrialChanges(trials[currentTrial]);
-                ShowQuestion(trials[currentTrial]);
-                /*ExperimentLogger.Log("trial_started",
-                    $"Test trial {currentTrial + 1}/{trials.Count}: {trials[currentTrial].type}",
-                    new Dictionary<string, object>
-                    {
-                        { "trialIndex", currentTrial },
-                        { "questionType", trials[currentTrial].type.ToString() },
-                        { "question", trials[currentTrial].question ?? "" }
-                    }); */
-                break;
+        if (fadeController != null)
+            yield return StartCoroutine(fadeController.FadeIn(transitionFadeDuration));
 
-            case Phase.Complete:
-                if (endPanel != null) endPanel.SetActive(true);
-                SetQuestionText("Experiment complete. Data uploaded.");
-              /*  ExperimentLogger.Log("experiment_finished",
-                    $"All trials complete. Correct: {correctCount}/{trials.Count}"); */
-                SaveFinalResults();
-                break;
+        // Wait for player to press "Begin Questions" before distractor / questions
+        StartRecallPhase();
+    }
+
+    /// <summary>
+    /// After teleport to lab: show recall instruction panel.
+    /// Player must click Begin Questions (StartQuestioningButton) to continue.
+    /// </summary>
+    void StartRecallPhase()
+    {
+        currentPhase = Phase.Recalling;
+        HideAllUI();
+        ApplyConfig();
+
+        if (recallInstructionPanel != null)
+        {
+            recallInstructionPanel.SetActive(true);
+            if (recallInstructionTextUI != null && !string.IsNullOrEmpty(RecallInstructionText))
+                recallInstructionTextUI.text = RecallInstructionText;
+            Debug.Log("[MemoryExperimentManager] Recall panel shown — waiting for Begin Questions.");
+        }
+        else
+        {
+            // No panel assigned: skip straight to distractor / questions
+            Debug.LogWarning("[MemoryExperimentManager] recallInstructionPanel not assigned — auto-continuing.");
+            BeginQuestioning();
         }
     }
 
-    void NextPhase()
+    /// <summary>
+    /// Wired to StartQuestioningButton. Hides recall panel, then distractor → questions.
+    /// </summary>
+    public void BeginQuestioning()
     {
-        switch (currentPhase)
+        // Do not hard-block on pause — log and continue so the flow cannot soft-lock
+        if (IsSessionPaused())
+            Debug.LogWarning("[MemoryExperimentManager] BeginQuestioning while session paused — continuing anyway.");
+
+        if (currentPhase != Phase.Recalling && currentPhase != Phase.Transitioning)
         {
-            case Phase.Study:
-               // ExperimentLogger.Log("study_phase_ended", "Study phase finished");
-                EnterPhase(Phase.Distractor);
-                break;
-
-            case Phase.Distractor:
-              //  ExperimentLogger.Log("distractor_ended", "Distractor phase finished");
-                EnterPhase(Phase.Test);
-                break;
-
-            case Phase.Test:
-                currentTrial++;
-                if (currentTrial >= trials.Count)
-                    EnterPhase(Phase.Complete);
-                else
-                    EnterPhase(Phase.Test);
-                break;
+            Debug.LogWarning($"[MemoryExperimentManager] BeginQuestioning from phase={currentPhase} (expected Recalling).");
         }
+
+        if (recallInstructionPanel != null)
+            recallInstructionPanel.SetActive(false);
+
+        if (useDistractorTask)
+            StartCoroutine(RunDistractorThenQuestions());
+        else
+            StartTestPhase();
+    }
+
+    IEnumerator RunDistractorThenQuestions()
+    {
+        currentPhase = Phase.Distractor;
+        if (distractorPanel != null) distractorPanel.SetActive(true);
+
+        SetQuestionText(
+            !string.IsNullOrEmpty(DistractorInstructionText)
+                ? DistractorInstructionText
+                : "Count backwards from 100 by 3s.");
+        ShowProgress(true);
+
+        float duration = distractorDuration > 0f ? distractorDuration : 30f;
+        OnDistractorStarted?.Invoke(duration);
+        ExperimentLogger.Log("distractor_started", $"Distractor ({duration}s)");
+        Debug.Log($"[MemoryExperimentManager] Distractor started for {duration}s.");
+
+        // Use realtime so pause / timescale cannot freeze the distractor forever
+        // while DinerDistractorTaskUI still counts to 0 with Time.deltaTime.
+        float endAt = Time.realtimeSinceStartup + duration;
+        while (Time.realtimeSinceStartup < endAt)
+        {
+            float remaining = endAt - Time.realtimeSinceStartup;
+            if (progressSlider != null)
+                progressSlider.value = duration > 0 ? 1f - (remaining / duration) : 1f;
+            if (progressText != null)
+                progressText.text = $"{Mathf.CeilToInt(Mathf.Max(0f, remaining))}s";
+            yield return null;
+        }
+
+        if (distractorPanel != null) distractorPanel.SetActive(false);
+        ShowProgress(false);
+
+        Debug.Log("[MemoryExperimentManager] Distractor finished → starting questions.");
+        OnDistractorEnded?.Invoke();
+        StartTestPhase();
+    }
+
+    void StartTestPhase()
+    {
+        currentPhase = Phase.Test;
+        currentTrial = 0;
+
+        Debug.Log("[MemoryExperimentManager] StartTestPhase — invoking OnRecallStarted.");
+        OnRecallStarted?.Invoke();
+
+        // If DinerQuestionManager is in the scene, it owns the question flow
+        // (Firestore / ScriptableObject targets). Skip MemoryObjectTracker trials.
+        if (DinerQuestionManager.Instance != null)
+        {
+            ExperimentLogger.Log("questions_started",
+                "Recall started — DinerQuestionManager will drive questions");
+            Debug.Log("[MemoryExperimentManager] Handing questions to DinerQuestionManager. " +
+                      "If no panel appears, check question list + DinerQuestionPanelUI.");
+            return;
+        }
+
+        Debug.LogWarning("[MemoryExperimentManager] No DinerQuestionManager — using MemoryObjectTracker trials.");
+        ExperimentLogger.Log("questions_started", "Test trials started (MemoryObjectTracker)");
+        ShowNextTrial();
+    }
+
+    /// <summary>
+    /// Called by DinerQuestionManager when all recall questions are done.
+    /// </summary>
+    public void OnExperimentComplete()
+    {
+        if (currentPhase == Phase.Complete) return;
+        EnterComplete();
+    }
+
+    void ShowNextTrial()
+    {
+        if (currentTrial < 0 || currentTrial >= trials.Count)
+        {
+            EnterComplete();
+            return;
+        }
+
+        HideAllUI();
+        objectTracker.ApplyTrialChanges(trials[currentTrial]);
+        ShowQuestion(trials[currentTrial]);
     }
 
     void ShowQuestion(MemoryTrial t)
@@ -209,19 +512,16 @@ public class MemoryExperimentManager : MonoBehaviour
 
         if (progressSlider != null)
             progressSlider.value = trials.Count > 0 ? (float)currentTrial / trials.Count : 0f;
-
         if (progressText != null)
             progressText.text = $"Trial {currentTrial + 1}/{trials.Count}";
 
         if (choiceButtons == null) return;
 
         string[] choices = t.choices ?? Array.Empty<string>();
-
         for (int i = 0; i < choiceButtons.Length; i++)
         {
             Button btn = choiceButtons[i];
             if (btn == null) continue;
-
             btn.onClick.RemoveAllListeners();
 
             if (i < choices.Length)
@@ -229,7 +529,6 @@ public class MemoryExperimentManager : MonoBehaviour
                 btn.gameObject.SetActive(true);
                 var label = btn.GetComponentInChildren<TextMeshProUGUI>();
                 if (label != null) label.text = choices[i];
-
                 int idx = i;
                 btn.onClick.AddListener(() => OnChoiceSelected(idx, t));
             }
@@ -248,7 +547,6 @@ public class MemoryExperimentManager : MonoBehaviour
         acceptingInput = false;
         bool correct = choiceIndex == t.correctIndex;
         float rt = Time.time - t.onsetTime;
-
         if (correct) correctCount++;
 
         trialResults.Add(new Dictionary<string, object>
@@ -268,11 +566,8 @@ public class MemoryExperimentManager : MonoBehaviour
             new Dictionary<string, object>
             {
                 { "trialIndex", currentTrial },
-                { "questionType", t.type.ToString() },
                 { "correct", correct },
-                { "reactionTimeMs", (int)(rt * 1000) },
-                { "choice", choiceIndex },
-                { "correctIndex", t.correctIndex }
+                { "reactionTimeMs", (int)(rt * 1000) }
             });
 
         if (choiceButtons != null)
@@ -282,10 +577,10 @@ public class MemoryExperimentManager : MonoBehaviour
         }
 
         SetQuestionText(correct ? "Correct" : "Incorrect");
-        StartCoroutine(DelayThenNext(1.2f));
+        StartCoroutine(DelayThenNextTrial(1.2f));
     }
 
-    IEnumerator DelayThenNext(float delay)
+    IEnumerator DelayThenNextTrial(float delay)
     {
         float waited = 0f;
         while (waited < delay)
@@ -294,15 +589,120 @@ public class MemoryExperimentManager : MonoBehaviour
             waited += Time.deltaTime;
             yield return null;
         }
-        NextPhase();
+        currentTrial++;
+        ShowNextTrial();
     }
 
-    float GetPhaseDuration() => currentPhase switch
+    void EnterComplete()
     {
-        Phase.Study => studyDuration,
-        Phase.Distractor => distractorDuration,
-        _ => 0f
-    };
+        currentPhase = Phase.Complete;
+        HideAllUI();
+        if (endPanel != null) endPanel.SetActive(true);
+        SetQuestionText("Experiment complete. Data uploaded.");
+        OnExperimentFinished?.Invoke();
+        SaveFinalResults();
+    }
+
+    // ── Teleport (same approach as ExperimentManager) ──────────────────────
+
+    void TeleportPlayer(Transform destination)
+    {
+        if (destination == null) return;
+
+        if (playerTransform == null)
+        {
+            GameObject player = GameObject.FindWithTag("Player")
+                ?? GameObject.Find("VR Player")
+                ?? GameObject.Find("XR Origin")
+                ?? GameObject.Find("XR Origin (XR Rig)");
+            if (player != null) playerTransform = player.transform;
+        }
+
+        if (playerTransform == null)
+        {
+            Debug.LogWarning("[MemoryExperimentManager] No player transform for teleport.");
+            return;
+        }
+
+        // Disable locomotion so CharacterController / Rigidbody cannot fight the move
+        CharacterController cc = playerTransform.GetComponentInChildren<CharacterController>();
+        if (cc != null) cc.enabled = false;
+
+        Rigidbody rb = playerTransform.GetComponentInChildren<Rigidbody>();
+        if (rb != null)
+        {
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+            rb.useGravity = false;
+            rb.isKinematic = true;
+        }
+
+        Camera mainCam = Camera.main;
+        if (mainCam == null)
+            mainCam = playerTransform.GetComponentInChildren<Camera>();
+
+        // Match yaw to spawn (keep XR tracked pitch/roll)
+        if (mainCam != null)
+        {
+            float currentCamY = mainCam.transform.eulerAngles.y;
+            float targetY = destination.eulerAngles.y;
+            playerTransform.Rotate(0f, targetY - currentCamY, 0f, Space.World);
+        }
+        else
+        {
+            playerTransform.rotation = destination.rotation;
+        }
+
+        // XR-safe placement: put the ORIGIN on the floor at the spawn XZ,
+        // preserving the current camera height above the origin (room-scale tracking).
+        // Do NOT add a fake 1.6m eye height — that lifts the rig into the air and
+        // then gravity / CharacterController drops you (what you were seeing).
+        if (mainCam != null)
+        {
+            Vector3 camPos = mainCam.transform.position;
+            Vector3 originPos = playerTransform.position;
+
+            // Horizontal offset from origin to camera (so we stay under the head)
+            Vector3 flatOffset = camPos - originPos;
+            flatOffset.y = 0f;
+
+            Vector3 target = destination.position;
+            // Floor Y = spawn Y (LabRoom_SpawnPoint should sit on the floor)
+            float floorY = target.y;
+
+            playerTransform.position = new Vector3(
+                target.x - flatOffset.x,
+                floorY,
+                target.z - flatOffset.z
+            );
+        }
+        else
+        {
+            playerTransform.position = destination.position;
+        }
+
+        StartCoroutine(ReenableLocomotion(cc, rb));
+    }
+
+    IEnumerator ReenableLocomotion(CharacterController cc, Rigidbody rb)
+    {
+        // Wait a couple of physics frames so the pose settles before gravity returns
+        yield return null;
+        yield return new WaitForFixedUpdate();
+
+        if (cc != null) cc.enabled = true;
+        if (rb != null)
+        {
+            rb.isKinematic = false;
+            // Keep gravity OFF for XR locomotion providers that drive motion themselves.
+            // If you use a non-XR CharacterController walker, set this true.
+            rb.useGravity = false;
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+        }
+    }
+
+    // ── UI helpers ─────────────────────────────────────────────────────────
 
     void SetQuestionText(string msg)
     {
@@ -317,6 +717,14 @@ public class MemoryExperimentManager : MonoBehaviour
         if (progressText != null) progressText.gameObject.SetActive(on);
     }
 
+    void ShowStartUI(bool on)
+    {
+        if (startPanel != null)
+            startPanel.SetActive(on);
+        else if (startButton != null)
+            startButton.gameObject.SetActive(on);
+    }
+
     void HideAllUI()
     {
         if (questionText != null) questionText.gameObject.SetActive(false);
@@ -324,7 +732,7 @@ public class MemoryExperimentManager : MonoBehaviour
         if (progressText != null) progressText.gameObject.SetActive(false);
         if (distractorPanel != null) distractorPanel.SetActive(false);
         if (endPanel != null) endPanel.SetActive(false);
-
+        if (recallInstructionPanel != null) recallInstructionPanel.SetActive(false);
         if (choiceButtons != null)
         {
             foreach (var b in choiceButtons)
@@ -341,8 +749,20 @@ public class MemoryExperimentManager : MonoBehaviour
             if (trial != null)
                 trials.Add(trial);
         }
+
+        if (randomizeQuestions && trials.Count > 1)
+        {
+            for (int i = trials.Count - 1; i > 0; i--)
+            {
+                int j = UnityEngine.Random.Range(0, i + 1);
+                (trials[i], trials[j]) = (trials[j], trials[i]);
+            }
+        }
+
         Debug.Log($"[MemoryExperimentManager] Generated {trials.Count} trials.");
     }
+
+    // ── Firebase save ──────────────────────────────────────────────────────
 
     async void SaveFinalResults()
     {
@@ -364,7 +784,6 @@ public class MemoryExperimentManager : MonoBehaviour
             float durationSeconds = _experimentStartRealtime > 0f
                 ? Time.realtimeSinceStartup - _experimentStartRealtime
                 : 0f;
-
             string durationDisplay = FormatDuration(durationSeconds);
             DateTime completedAtUtc = DateTime.UtcNow;
 
@@ -374,6 +793,8 @@ public class MemoryExperimentManager : MonoBehaviour
                 {
                     { "studyDuration", studyDuration },
                     { "distractorDuration", distractorDuration },
+                    { "useDistractorTask", useDistractorTask },
+                    { "randomizeQuestions", randomizeQuestions },
                     { "numberOfTestTrials", numberOfTestTrials },
                     { "sessionId", sessionId }
                 }
@@ -392,8 +813,8 @@ public class MemoryExperimentManager : MonoBehaviour
                 { "vrId", vrId },
                 { "progressId", progressId },
                 { "sessionId", sessionId },
-                { "experimentName", "MemoryDinner" },
-                { "moduleName", "MemoryDinner" },
+                { "experimentName", "Memory" },
+                { "moduleName", "Memory" },
                 { "completionStatus", "Completed" },
                 { "duration", durationDisplay },
                 { "durationSeconds", durationSeconds },
@@ -402,6 +823,8 @@ public class MemoryExperimentManager : MonoBehaviour
                 { "timestamp", completedAtUtc.ToString("o") },
                 { "totalTrials", trials.Count },
                 { "correctCount", correctCount },
+                { "questionsAnswered", trialResults.Count },
+                { "questionsCorrect", correctCount },
                 { "accuracy", trials.Count > 0 ? (float)correctCount / trials.Count : 0f },
                 { "configurations", configurations },
                 { "experimentalResults", experimentalResults }
@@ -411,14 +834,12 @@ public class MemoryExperimentManager : MonoBehaviour
             Debug.Log($"[MemoryExperimentManager] Saved ({correctCount}/{trials.Count}, duration={durationDisplay})");
 
             ExperimentLogger.Log("experiment_completed",
-                $"Memory Dinner completed. Score: {correctCount}/{trials.Count}",
+                $"Memory completed. Score: {correctCount}/{trials.Count}",
                 new Dictionary<string, object>
                 {
                     { "totalTrials", trials.Count },
                     { "correctCount", correctCount },
-                    { "accuracy", trials.Count > 0 ? (float)correctCount / trials.Count : 0f },
-                    { "durationSeconds", durationSeconds },
-                    { "sessionId", sessionId }
+                    { "durationSeconds", durationSeconds }
                 });
 
             if (!string.IsNullOrEmpty(progressId))
@@ -434,7 +855,7 @@ public class MemoryExperimentManager : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Debug.LogError($"[MemoryExperimentManager] Failed to save results: {ex.Message}");
+            Debug.LogError($"[MemoryExperimentManager] Failed to save: {ex.Message}");
             ExperimentLogger.Log("error", $"Failed to save results: {ex.Message}");
         }
     }
@@ -442,7 +863,6 @@ public class MemoryExperimentManager : MonoBehaviour
     static string GetId(ExperimentConfig config, string field, string fallback)
     {
         if (config == null) return fallback;
-
         switch (field)
         {
             case "studentId": return string.IsNullOrEmpty(config.studentId) ? fallback : config.studentId;
@@ -459,29 +879,39 @@ public class MemoryExperimentManager : MonoBehaviour
     {
         if (totalSeconds < 0f) totalSeconds = 0f;
         int t = Mathf.FloorToInt(totalSeconds);
-        int m = t / 60;
-        int s = t % 60;
-        return $"{m}:{s:D2}";
+        return $"{t / 60}:{t % 60:D2}";
     }
 
     void OnGUI()
     {
 #if UNITY_EDITOR
-        GUILayout.BeginArea(new Rect(10, 10, 220, 160));
+        GUILayout.BeginArea(new Rect(10, 10, 260, 220));
         if (GUILayout.Button("DEBUG: Start Experiment"))
             StartExperiment();
-        if (GUILayout.Button("DEBUG: Skip Phase Timer"))
+        if (GUILayout.Button("DEBUG: Skip Study Timer (→ Lab)"))
         {
-            if (currentPhase == Phase.Study || currentPhase == Phase.Distractor)
+            if (currentPhase == Phase.Study && isTimerRunning)
+            {
                 phaseTimer = 0f;
+                isTimerRunning = false;
+                OnRoomTimeUp();
+            }
         }
-        if (GUILayout.Button("DEBUG: Next Trial / Phase"))
-            NextPhase();
+        if (GUILayout.Button("DEBUG: Next Trial"))
+        {
+            if (currentPhase == Phase.Test)
+            {
+                currentTrial++;
+                ShowNextTrial();
+            }
+        }
         if (GUILayout.Button("DEBUG: Jump to Complete"))
-            EnterPhase(Phase.Complete);
+            EnterComplete();
         GUILayout.Label($"Phase: {currentPhase}");
         GUILayout.Label($"Trial: {currentTrial + 1}/{trials.Count}");
-        GUILayout.Label($"Paused: {IsSessionPaused()}");
+        GUILayout.Label($"LabSpawn: {(labRoomSpawnPoint != null ? "OK" : "MISSING")}");
+        GUILayout.Label($"StartBtn: {(startButton != null ? "OK" : "MISSING")}");
+        GUILayout.Label($"Tracker: {(objectTracker != null ? "OK" : "MISSING")}");
         GUILayout.EndArea();
 #endif
     }

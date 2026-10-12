@@ -3,11 +3,11 @@ using UnityEngine.UI;
 using TMPro;
 using System.Collections;
 
+/// <summary>
+/// Timer HUD for Memory Dinner. Hooks MemoryExperimentManager (and ExperimentManager if present).
+/// </summary>
 public class TimerHUD : MonoBehaviour
 {
-    // ─────────────────────────────────────────
-    // INSPECTOR REFERENCES
-    // ─────────────────────────────────────────
     [Header("UI References")]
     public TextMeshProUGUI roomNameText;
     public TextMeshProUGUI timerText;
@@ -17,39 +17,78 @@ public class TimerHUD : MonoBehaviour
     public GameObject hudPanel;
 
     [Header("Color Settings")]
-    public Color normalColor = new Color(0.2f, 0.8f, 0.2f);   // green
-    public Color warningColor = new Color(1f, 0.6f, 0f);       // orange
-    public Color urgentColor = new Color(1f, 0.1f, 0.1f);      // red
+    public Color normalColor = new Color(0.2f, 0.8f, 0.2f);
+    public Color warningColor = new Color(1f, 0.6f, 0f);
+    public Color urgentColor = new Color(1f, 0.1f, 0.1f);
 
     [Header("Warning Thresholds")]
-    public float warningTime = 30f;   // turns orange below this
-    public float urgentTime = 10f;    // turns red and pulses below this
+    public float warningTime = 30f;
+    public float urgentTime = 10f;
 
-    // ─────────────────────────────────────────
-    // INTERNAL
-    // ─────────────────────────────────────────
     private float totalRoomTime = 60f;
     private bool isPulsing = false;
     private Coroutine pulseCoroutine;
+    private bool _subscribed;
 
-    // ─────────────────────────────────────────
-    // UNITY EVENTS
-    // ─────────────────────────────────────────
-    private void OnEnable()
+    private void Start()
     {
-        // Subscribe to ExperimentManager events
+        HideHUD();
+        StartCoroutine(SubscribeWhenReady());
+    }
+
+    private IEnumerator SubscribeWhenReady()
+    {
+        // Wait a few frames for managers to Awake
+        for (int i = 0; i < 30 && !_subscribed; i++)
+        {
+            TrySubscribe();
+            if (_subscribed) yield break;
+            yield return null;
+        }
+        // Keep trying a bit longer in case manager loads late
+        float t = 0f;
+        while (!_subscribed && t < 10f)
+        {
+            TrySubscribe();
+            if (_subscribed) yield break;
+            t += 0.25f;
+            yield return new WaitForSeconds(0.25f);
+        }
+    }
+
+    private void TrySubscribe()
+    {
+        if (MemoryExperimentManager.Instance != null)
+        {
+            MemoryExperimentManager.Instance.OnRoomStarted += OnRoomStarted;
+            MemoryExperimentManager.Instance.OnRoomEnded += OnRoomEnded;
+            MemoryExperimentManager.Instance.OnTimerTick += OnTimerTick;
+            MemoryExperimentManager.Instance.OnAllRoomsExplored += OnAllRoomsExplored;
+            _subscribed = true;
+            Debug.Log("[TimerHUD] Subscribed to MemoryExperimentManager.");
+            return;
+        }
+
         if (ExperimentManager.Instance != null)
         {
             ExperimentManager.Instance.OnRoomStarted += OnRoomStarted;
             ExperimentManager.Instance.OnRoomEnded += OnRoomEnded;
             ExperimentManager.Instance.OnTimerTick += OnTimerTick;
             ExperimentManager.Instance.OnAllRoomsExplored += OnAllRoomsExplored;
+            _subscribed = true;
+            Debug.Log("[TimerHUD] Subscribed to ExperimentManager.");
         }
     }
 
-    private void OnDisable()
+    private void OnDestroy()
     {
-        // Unsubscribe to prevent memory leaks
+        if (MemoryExperimentManager.Instance != null)
+        {
+            MemoryExperimentManager.Instance.OnRoomStarted -= OnRoomStarted;
+            MemoryExperimentManager.Instance.OnRoomEnded -= OnRoomEnded;
+            MemoryExperimentManager.Instance.OnTimerTick -= OnTimerTick;
+            MemoryExperimentManager.Instance.OnAllRoomsExplored -= OnAllRoomsExplored;
+        }
         if (ExperimentManager.Instance != null)
         {
             ExperimentManager.Instance.OnRoomStarted -= OnRoomStarted;
@@ -59,61 +98,52 @@ public class TimerHUD : MonoBehaviour
         }
     }
 
-    private void Start()
-    {
-        // Hide HUD at start
-        HideHUD();
-    }
-
-    // ─────────────────────────────────────────
-    // EVENT HANDLERS
-    // ─────────────────────────────────────────
     private void OnRoomStarted(string roomName, float duration)
     {
         totalRoomTime = duration;
+        if (roomNameText != null)
+            roomNameText.text = FormatRoomName(roomName);
 
-        // Update room name
-        roomNameText.text = FormatRoomName(roomName);
-
-        // Update room counter
-        if (ExperimentManager.Instance != null)
+        if (roomCounterText != null)
         {
-            int current = ExperimentManager.Instance.CurrentRoomIndex + 1;
-            int total = ExperimentManager.Instance.TotalRooms;
-            roomCounterText.text = $"Room {current} of {total}";
+            if (MemoryExperimentManager.Instance != null)
+            {
+                int current = MemoryExperimentManager.Instance.CurrentRoomIndex + 1;
+                int total = MemoryExperimentManager.Instance.TotalRooms;
+                roomCounterText.text = $"Room {current} of {total}";
+            }
+            else if (ExperimentManager.Instance != null)
+            {
+                int current = ExperimentManager.Instance.CurrentRoomIndex + 1;
+                int total = ExperimentManager.Instance.TotalRooms;
+                roomCounterText.text = $"Room {current} of {total}";
+            }
         }
 
-        // Reset slider
         if (timerSlider != null)
         {
             timerSlider.maxValue = duration;
             timerSlider.value = duration;
         }
 
-        // Reset color
         SetSliderColor(normalColor);
-
-        // Show HUD
         ShowHUD();
     }
 
     private void OnRoomEnded(string roomName)
     {
-        // Stop pulsing
         StopPulse();
         HideHUD();
     }
 
     private void OnTimerTick(float timeRemaining)
     {
-        // Update timer text
-        timerText.text = FormatTime(timeRemaining);
+        if (timerText != null)
+            timerText.text = FormatTime(timeRemaining);
 
-        // Update slider
         if (timerSlider != null)
             timerSlider.value = timeRemaining;
 
-        // Update color based on time remaining
         if (timeRemaining <= urgentTime)
         {
             SetSliderColor(urgentColor);
@@ -137,9 +167,6 @@ public class TimerHUD : MonoBehaviour
         HideHUD();
     }
 
-    // ─────────────────────────────────────────
-    // HUD VISIBILITY
-    // ─────────────────────────────────────────
     private void ShowHUD()
     {
         if (hudPanel != null)
@@ -150,37 +177,24 @@ public class TimerHUD : MonoBehaviour
     {
         if (hudPanel != null)
             hudPanel.SetActive(false);
-
         StopPulse();
     }
 
-    // ─────────────────────────────────────────
-    // PULSE EFFECT (urgent warning)
-    // ─────────────────────────────────────────
     private IEnumerator PulseHUD()
     {
         isPulsing = true;
-
         while (true)
         {
-            // Fade to semi-transparent
-            yield return StartCoroutine(
-                FadePanel(1f, 0.3f, 0.3f)
-            );
-            // Fade back to full
-            yield return StartCoroutine(
-                FadePanel(0.3f, 1f, 0.3f)
-            );
+            yield return StartCoroutine(FadePanel(1f, 0.3f, 0.3f));
+            yield return StartCoroutine(FadePanel(0.3f, 1f, 0.3f));
         }
     }
 
-    private IEnumerator FadePanel(float startAlpha,
-                                   float endAlpha,
-                                   float duration)
+    private IEnumerator FadePanel(float startAlpha, float endAlpha, float duration)
     {
+        if (hudPanel == null) yield break;
         CanvasGroup cg = hudPanel.GetComponent<CanvasGroup>();
         if (cg == null) cg = hudPanel.AddComponent<CanvasGroup>();
-
         float elapsed = 0f;
         while (elapsed < duration)
         {
@@ -198,10 +212,7 @@ public class TimerHUD : MonoBehaviour
             StopCoroutine(pulseCoroutine);
             pulseCoroutine = null;
         }
-
         isPulsing = false;
-
-        // Reset alpha
         if (hudPanel != null)
         {
             CanvasGroup cg = hudPanel.GetComponent<CanvasGroup>();
@@ -209,9 +220,6 @@ public class TimerHUD : MonoBehaviour
         }
     }
 
-    // ─────────────────────────────────────────
-    // HELPERS
-    // ─────────────────────────────────────────
     private string FormatTime(float seconds)
     {
         int mins = Mathf.FloorToInt(seconds / 60f);
@@ -221,19 +229,14 @@ public class TimerHUD : MonoBehaviour
 
     private string FormatRoomName(string roomName)
     {
-        // Converts "kitchen" → "Kitchen"
-        // Converts "living_room" → "Living Room"
-        return System.Globalization.CultureInfo
-               .CurrentCulture
-               .TextInfo
-               .ToTitleCase(roomName.Replace("_", " "));
+        return System.Globalization.CultureInfo.CurrentCulture.TextInfo
+            .ToTitleCase((roomName ?? "").Replace("_", " "));
     }
 
     private void SetSliderColor(Color color)
     {
         if (sliderFill != null)
             sliderFill.color = color;
-
         if (timerText != null)
             timerText.color = color;
     }
