@@ -607,7 +607,11 @@ public class MemoryExperimentManager : MonoBehaviour
 
     void TeleportPlayer(Transform destination)
     {
-        if (destination == null) return;
+        if (destination == null)
+        {
+            Debug.LogError("[MemoryExperimentManager] Teleport failed: destination is not assigned.");
+            return;
+        }
 
         if (playerTransform == null)
         {
@@ -615,65 +619,77 @@ public class MemoryExperimentManager : MonoBehaviour
                 ?? GameObject.Find("VR Player")
                 ?? GameObject.Find("XR Origin")
                 ?? GameObject.Find("XR Origin (XR Rig)");
-            if (player != null) playerTransform = player.transform;
+
+            if (player != null)
+                playerTransform = player.transform;
         }
 
         if (playerTransform == null)
         {
-            Debug.LogWarning("[MemoryExperimentManager] No player transform for teleport.");
+            Debug.LogError("[MemoryExperimentManager] Teleport failed: player rig not found.");
             return;
         }
 
-        // Disable locomotion so CharacterController / Rigidbody cannot fight the move
-        CharacterController cc = playerTransform.GetComponentInChildren<CharacterController>();
-        if (cc != null) cc.enabled = false;
+        CharacterController cc =
+            playerTransform.GetComponentInChildren<CharacterController>();
 
-        Rigidbody rb = playerTransform.GetComponentInChildren<Rigidbody>();
+        Rigidbody rb =
+            playerTransform.GetComponentInChildren<Rigidbody>();
+
+        bool controllerWasEnabled = cc != null && cc.enabled;
+        bool wasKinematic = rb != null && rb.isKinematic;
+        bool usedGravity = rb != null && rb.useGravity;
+
+        // Temporarily stop physics from interfering with the teleport.
+        if (cc != null)
+            cc.enabled = false;
+
         if (rb != null)
         {
             rb.linearVelocity = Vector3.zero;
             rb.angularVelocity = Vector3.zero;
-            rb.useGravity = false;
             rb.isKinematic = true;
         }
 
-        Camera mainCam = Camera.main;
-        if (mainCam == null)
-            mainCam = playerTransform.GetComponentInChildren<Camera>();
+        Camera vrCamera = Camera.main;
 
-        // Match yaw to spawn (keep XR tracked pitch/roll)
-        if (mainCam != null)
+        if (vrCamera == null)
+            vrCamera = playerTransform.GetComponentInChildren<Camera>();
+
+        // Align the player's horizontal facing direction with the spawn marker.
+        Vector3 targetForward =
+            Vector3.ProjectOnPlane(destination.forward, Vector3.up).normalized;
+
+        if (targetForward.sqrMagnitude > 0.001f)
         {
-            float currentCamY = mainCam.transform.eulerAngles.y;
-            float targetY = destination.eulerAngles.y;
-            playerTransform.Rotate(0f, targetY - currentCamY, 0f, Space.World);
+            if (vrCamera != null)
+            {
+                float cameraYaw = vrCamera.transform.eulerAngles.y;
+                float targetYaw = Quaternion.LookRotation(targetForward).eulerAngles.y;
+
+                playerTransform.Rotate(
+                    0f, targetYaw - cameraYaw, 0f, Space.World);
+            }
+            else
+            {
+                playerTransform.rotation =
+                    Quaternion.LookRotation(targetForward, Vector3.up);
+            }
         }
-        else
+
+        // Put the XR Origin directly at the spawn marker's floor position.
+        // Do not add a hard-coded 1.6 m height.
+        if (vrCamera != null)
         {
-            playerTransform.rotation = destination.rotation;
-        }
+            Vector3 cameraOffset =
+                vrCamera.transform.position - playerTransform.position;
 
-        // XR-safe placement: put the ORIGIN on the floor at the spawn XZ,
-        // preserving the current camera height above the origin (room-scale tracking).
-        // Do NOT add a fake 1.6m eye height — that lifts the rig into the air and
-        // then gravity / CharacterController drops you (what you were seeing).
-        if (mainCam != null)
-        {
-            Vector3 camPos = mainCam.transform.position;
-            Vector3 originPos = playerTransform.position;
-
-            // Horizontal offset from origin to camera (so we stay under the head)
-            Vector3 flatOffset = camPos - originPos;
-            flatOffset.y = 0f;
-
-            Vector3 target = destination.position;
-            // Floor Y = spawn Y (LabRoom_SpawnPoint should sit on the floor)
-            float floorY = target.y;
+            cameraOffset.y = 0f;
 
             playerTransform.position = new Vector3(
-                target.x - flatOffset.x,
-                floorY,
-                target.z - flatOffset.z
+                destination.position.x - cameraOffset.x,
+                destination.position.y,
+                destination.position.z - cameraOffset.z
             );
         }
         else
@@ -681,7 +697,36 @@ public class MemoryExperimentManager : MonoBehaviour
             playerTransform.position = destination.position;
         }
 
-        StartCoroutine(ReenableLocomotion(cc, rb));
+        Debug.Log(
+            $"[MemoryExperimentManager] Teleported to {destination.name}. " +
+            $"Spawn={destination.position}, Origin={playerTransform.position}, " +
+            $"Camera={(vrCamera != null ? vrCamera.transform.position.ToString() : "not found")}"
+        );
+
+        StartCoroutine(RestorePlayerAfterTeleport(
+            cc, controllerWasEnabled, rb, wasKinematic, usedGravity));
+    }
+
+    IEnumerator RestorePlayerAfterTeleport(
+        CharacterController cc,
+        bool controllerWasEnabled,
+        Rigidbody rb,
+        bool wasKinematic,
+        bool usedGravity)
+    {
+        yield return null;
+        yield return new WaitForFixedUpdate();
+
+        if (cc != null)
+            cc.enabled = controllerWasEnabled;
+
+        if (rb != null)
+        {
+            rb.isKinematic = wasKinematic;
+            rb.useGravity = usedGravity;
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+        }
     }
 
     IEnumerator ReenableLocomotion(CharacterController cc, Rigidbody rb)

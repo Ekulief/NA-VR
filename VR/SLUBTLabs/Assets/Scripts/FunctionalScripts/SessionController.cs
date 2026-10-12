@@ -88,7 +88,7 @@ public class SessionController : MonoBehaviour
         });
 
         Debug.Log($"[SessionController] Listening to experimentProgress/{progressDocumentId}");
-        ExperimentLogger.Log("session_listening", $"Started listening to progress document: {progressDocumentId}");
+      //  ExperimentLogger.Log("session_listening", $"Started listening to progress document: {progressDocumentId}");
     }
 
     public void StopListening()
@@ -140,7 +140,7 @@ public class SessionController : MonoBehaviour
             case SessionState.Idle:
                 PauseOverlay.Instance?.Hide();
                 SetMovementEnabled(true);
-                ExperimentLogger.Log("session_idle", "Session set to Idle");
+               // ExperimentLogger.Log("session_idle", "Session set to Idle");
                 break;
         }
 
@@ -156,7 +156,7 @@ public class SessionController : MonoBehaviour
         if (freezeTimeScaleWhenPaused)
             Time.timeScale = 0f;
 
-        ExperimentLogger.Log("session_paused", "Session paused");
+       // ExperimentLogger.Log("session_paused", "Session paused");
 
         OnPaused?.Invoke();
     }
@@ -170,7 +170,7 @@ public class SessionController : MonoBehaviour
         if (freezeTimeScaleWhenPaused)
             Time.timeScale = 1f;
 
-        ExperimentLogger.Log("session_resumed", "Session running / resumed");
+       // ExperimentLogger.Log("session_resumed", "Session running / resumed");
 
         OnResumed?.Invoke();
     }
@@ -182,7 +182,7 @@ public class SessionController : MonoBehaviour
         FreezeExperimentSystems(false);
         Time.timeScale = 1f;
 
-        ExperimentLogger.Log("session_ended", "Session ended");
+      //  ExperimentLogger.Log("session_ended", "Session ended");
 
         OnSessionEnded?.Invoke();
 
@@ -201,7 +201,7 @@ public class SessionController : MonoBehaviour
             yield break;
         }
 
-        Debug.LogWarning("[SessionController] No ExperimentLoader — add your hub teleport here.");
+       // Debug.LogWarning("[SessionController] No ExperimentLoader — add your hub teleport here.");
     }
 
     /// <summary>

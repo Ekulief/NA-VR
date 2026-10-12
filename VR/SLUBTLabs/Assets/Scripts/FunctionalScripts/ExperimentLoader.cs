@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using Firebase.Firestore;
-using Firebase.Extensions;
+using Unity.XR.CoreUtils;
 
 /// <summary>
 /// SLUBT Labs — Dynamic Experiment Loader
@@ -44,6 +44,9 @@ public class ExperimentLoader : MonoBehaviour
     [Tooltip("The Firestore document ID of this VR headset in the vrDevices collection.")]
     public string vrDeviceDocumentId = "";
 
+    [Header("Teleport Stabilization")]
+    [Tooltip("Time to wait before re-enabling the CharacterController.")]
+    public float controllerReenableDelay = 0.25f;
     private bool _isLoading = false;
     private Scene _loadedScene;
     private bool _experimentSceneLoaded = false;
@@ -170,96 +173,96 @@ public class ExperimentLoader : MonoBehaviour
     /// </summary>
     private void TeleportPlayerToTransform(Transform targetTransform)
     {
-        if (xrOrigin == null || targetTransform == null) return;
-
-        Camera mainCam = Camera.main;
-        if (mainCam == null)
-            mainCam = xrOrigin.GetComponentInChildren<Camera>();
-
-        // Stop CharacterController / Rigidbody from fighting the teleport (causes the "fall")
-        CharacterController cc = xrOrigin.GetComponentInChildren<CharacterController>();
-        if (cc != null) cc.enabled = false;
-
-        Rigidbody rb = xrOrigin.GetComponentInChildren<Rigidbody>();
-        if (rb != null)
+        if (xrOrigin == null || targetTransform == null)
         {
-            rb.linearVelocity = Vector3.zero;
-            rb.angularVelocity = Vector3.zero;
-            rb.useGravity = false;
-            rb.isKinematic = true;
+            Debug.LogError("[ExperimentLoader] XR Origin or target is missing.");
+            return;
         }
 
-        if (mainCam != null)
+        XROrigin origin = xrOrigin.GetComponent<XROrigin>();
+
+        if (origin == null)
         {
-            float currentCamYAngle = mainCam.transform.eulerAngles.y;
-            float targetYAngle = targetTransform.eulerAngles.y;
-            xrOrigin.transform.Rotate(0f, targetYAngle - currentCamYAngle, 0f, Space.World);
-
-            Vector3 cameraPosition = mainCam.transform.position;
-            Vector3 originPosition = xrOrigin.transform.position;
-            Vector3 cameraOffsetHorizontal = cameraPosition - originPosition;
-            cameraOffsetHorizontal.y = 0f;
-
-            Vector3 finalPosition = targetTransform.position - cameraOffsetHorizontal;
-
-            if (useFixedSpawnHeight)
-            {
-                // LEGACY: lifts origin so camera sits at fixedSpawnHeight above spawn.
-                // This is what caused mid-air spawn + fall with room-scale XR. Keep OFF.
-                Transform cameraOffset = xrOrigin.transform.Find("Camera Offset");
-                float localCamY = cameraOffset != null
-                    ? cameraOffset.localPosition.y
-                    : mainCam.transform.localPosition.y;
-                finalPosition.y = targetTransform.position.y + fixedSpawnHeight - localCamY;
-                Debug.LogWarning("[ExperimentLoader] useFixedSpawnHeight is ON — origin raised by ~" +
-                                 fixedSpawnHeight + "m. Prefer OFF + Spawn Point on the floor.");
-            }
-            else
-            {
-                // Room-scale: origin on the floor; headset tracking provides eye height.
-                float floorY = targetTransform.position.y;
-
-                if (snapToFloor)
-                {
-                    Vector3 rayOrigin = targetTransform.position + Vector3.up * 0.5f;
-                    if (Physics.Raycast(rayOrigin, Vector3.down, out RaycastHit hit, floorSnapDistance + 0.5f))
-                    {
-                        floorY = hit.point.y;
-                        Debug.Log($"[ExperimentLoader] Floor snap hit '{hit.collider.name}' at Y={floorY:F3}");
-                    }
-                }
-
-                finalPosition.y = floorY;
-            }
-
-            xrOrigin.transform.position = finalPosition;
-            Debug.Log($"[ExperimentLoader] Teleported XR Origin to {finalPosition} " +
-                      $"(spawn='{targetTransform.name}', fixedHeight={useFixedSpawnHeight})");
-        }
-        else
-        {
-            xrOrigin.transform.position = targetTransform.position;
-            xrOrigin.transform.rotation = targetTransform.rotation;
+            Debug.LogError("[ExperimentLoader] XROrigin component not found.");
+            return;
         }
 
-        // Re-enable CC next frame so it doesn't instantly apply gravity while mid-air
-        StartCoroutine(ReenableLocomotion(cc, rb));
+        Camera vrCam = origin.Camera;
+
+        if (vrCam == null)
+            vrCam = xrOrigin.GetComponentInChildren<Camera>();
+
+        if (vrCam == null)
+        {
+            Debug.LogError("[ExperimentLoader] VR camera not found.");
+            return;
+        }
+
+        // Temporarily disable the CharacterController to avoid collision
+        // interference while repositioning the XR Origin.
+        CharacterController cc =
+            xrOrigin.GetComponentInChildren<CharacterController>();
+
+        bool controllerWasEnabled = cc != null && cc.enabled;
+
+        if (cc != null)
+            cc.enabled = false;
+
+        // Match the spawn point's horizontal facing direction.
+        Vector3 forward = Vector3.ProjectOnPlane(
+            targetTransform.forward, Vector3.up).normalized;
+
+        if (forward.sqrMagnitude > 0.001f)
+            origin.MatchOriginUpCameraForward(Vector3.up, forward);
+
+        // Move the camera to the exact target world position,
+        // regardless of its previous position or height.
+        origin.MoveCameraToWorldLocation(targetTransform.position);
+
+        // Restore the controller after the teleport has settled.
+        StartCoroutine(RestoreCharacterController(
+            cc, controllerWasEnabled));
+
+        Debug.Log(
+            $"[ExperimentLoader] Camera teleported to target. " +
+            $"Target={targetTransform.position}, " +
+            $"Camera={vrCam.transform.position}");
     }
 
-    private IEnumerator ReenableLocomotion(CharacterController cc, Rigidbody rb)
+    private IEnumerator RestoreCharacterController(
+        CharacterController cc, bool wasEnabled)
     {
-        yield return null;
-        yield return new WaitForFixedUpdate();
+        // Wait briefly for XR tracking and transforms to settle.
+        yield return new WaitForSecondsRealtime(0.3f);
 
-        if (cc != null) cc.enabled = true;
+        if (cc != null)
+            cc.enabled = wasEnabled;
+    }
+
+    private IEnumerator RestorePlayerPhysics(
+        CharacterController cc,
+        Rigidbody rb,
+        bool wasKinematic,
+        bool usedGravity)
+    {
+        // Let the XR rig and tracking settle before restoring collision.
+        yield return new WaitForSecondsRealtime(
+            Mathf.Max(0.1f, controllerReenableDelay));
+
         if (rb != null)
         {
-            rb.isKinematic = false;
-            // XR locomotion usually drives motion; leave gravity off to avoid a second drop
-            rb.useGravity = false;
             rb.linearVelocity = Vector3.zero;
             rb.angularVelocity = Vector3.zero;
+            rb.useGravity = usedGravity;
+            rb.isKinematic = wasKinematic;
         }
+
+        if (cc != null)
+        {
+            cc.enabled = true;
+        }
+
+        Debug.Log("[ExperimentLoader] Player physics restored after teleport.");
     }
 
     private async void UpdateDeviceStatus(string status, string experimentSceneName)
