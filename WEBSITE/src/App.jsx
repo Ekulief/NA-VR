@@ -13,6 +13,7 @@ import StudentExperimentRun from "./pages/student/StudentExperimentRun";
 import InstructorHome from "./pages/instructor/InstructorHome";
 import InstructorCourseExperiments from "./pages/instructor/InstructorCourseExperiments";
 import InstructorExperimentBuilder from "./pages/instructor/InstructorExperimentBuilder";
+import InstructorLiveExperiments from "./pages/instructor/InstructorLiveExperiments";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 
 function App() {
@@ -154,7 +155,17 @@ function App() {
             )
           }
         />
-
+        
+        <Route
+          path="/instructor/course/:blockId/live"
+          element={
+            user ? (
+              <InstructorLiveExperiments />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
         <Route
           path="*"
           element={<Navigate to={user ? "/" : "/login"} replace />}

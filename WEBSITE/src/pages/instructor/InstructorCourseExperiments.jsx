@@ -1155,7 +1155,8 @@ export default function InstructorCourseExperiments() {
                   >
                     <button
                       onClick={() =>
-                        navigate(`/instructor/experiment/${experiment.id}`)
+                        navigate(`/instructor/course/${blockId}/live`)
+                        //navigate(`/instructor/experiment/${experiment.id}`)
                       }
                       title="View Experiment"
                       className="
