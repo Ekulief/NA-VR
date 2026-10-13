@@ -1,78 +1,32 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { doc, getDoc, onSnapshot } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  collection,
+  query,
+  where,
+  addDoc,
+  updateDoc,
+  onSnapshot,
+  serverTimestamp,
+  orderBy,
+  getDocs,
+} from "firebase/firestore";
 
 import { db } from "../../config/firebase-config";
 import { useAuth } from "../../context/AuthContext";
 
-import { ArrowLeft, Box, Square, Download } from "lucide-react";
-
-const VR_IDENTIFIER_OPTIONS = ["VR-01", "VR-02", "VR-03", "VR-04"];
-
-const formatValue = (value, unit = "") => {
-  if (value === null || value === undefined || value === "") {
-    return "--";
-  }
-
-  if (typeof value === "number" && unit === "s") {
-    return `${value.toFixed(1)}s`;
-  }
-
-  return `${value}${unit}`;
-};
-
-const formatYesNo = (value) => {
-  if (value === true) return "Yes";
-  if (value === false) return "No";
-  return "--";
-};
-
-const MODULE_METRICS = {
-  Attentional_Blindness: [
-    { key: "trialPhase", label: "Trial Phase" },
-    { key: "elapsedSeconds", label: "Time Elapsed", unit: "s" },
-    { key: "noticedChange", label: "Noticed Change", format: formatYesNo },
-    { key: "responseTimeSeconds", label: "Response Time", unit: "s" },
-  ],
-
-  Depth_Perception: [
-    { key: "estimatedHeightMeters", label: "Estimated Height", unit: "m" },
-    { key: "actualHeightMeters", label: "Actual Height", unit: "m" },
-    { key: "stepCount", label: "Adjustments Made" },
-    {
-      key: "responseSubmitted",
-      label: "Response Submitted",
-      format: formatYesNo,
-    },
-  ],
-
-  Depth_Perception2: [
-    { key: "estimatedDistanceMeters", label: "Estimated Distance", unit: "m" },
-    { key: "actualDistanceMeters", label: "Actual Distance", unit: "m" },
-    {
-      key: "responseSubmitted",
-      label: "Response Submitted",
-      format: formatYesNo,
-    },
-  ],
-
-  Odd_Item_Detection: [
-    { key: "searchTimeSeconds", label: "Search Time", unit: "s" },
-    { key: "itemSelected", label: "Item Selected" },
-    { key: "correct", label: "Correct", format: formatYesNo },
-    { key: "rating", label: "Rating" },
-  ],
-
-  Memory2: [
-    { key: "currentRoom", label: "Current Room" },
-    { key: "targetsFound", label: "Targets Found" },
-    { key: "recallAccuracy", label: "Recall Accuracy", unit: "%" },
-    { key: "responseTimeSeconds", label: "Response Time", unit: "s" },
-  ],
-};
-
-const DEFAULT_METRIC_FIELDS = [{ key: "result", label: "Result" }];
+import {
+  ArrowLeft,
+  Box,
+  Play,
+  Pause,
+  Square,
+  Download,
+  Loader2,
+} from "lucide-react";
 
 export default function StudentExperimentRun() {
   const navigate = useNavigate();
@@ -83,160 +37,277 @@ export default function StudentExperimentRun() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [vrIdentifier, setVrIdentifier] = useState("");
+  // Progress document
+  const [progress, setProgress] = useState(null); // { id, ...data }
+  const [progressLoading, setProgressLoading] = useState(false);
+
+  // Logs
+  const [logs, setLogs] = useState([]);
+
+  // Local UI helpers
   const [connecting, setConnecting] = useState(false);
-  const [vrConnected, setVrConnected] = useState(false);
-
-  const [sessionState, setSessionState] = useState("idle");
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-
-  const [sessionData, setSessionData] = useState(null);
-
   const timerRef = useRef(null);
-  const connectTimeoutRef = useRef(null);
 
+  // ---------- Load experiment ----------
   useEffect(() => {
-    const getExperiment = async () => {
+    const loadExperiment = async () => {
       try {
         setLoading(true);
         setError("");
 
         const experimentRef = doc(db, "experiment", experimentId);
+        const snap = await getDoc(experimentRef);
 
-        const experimentSnap = await getDoc(experimentRef);
-
-        if (!experimentSnap.exists()) {
+        if (!snap.exists()) {
           setError("Experiment not found.");
           return;
         }
 
-        setExperiment({
-          id: experimentSnap.id,
-          ...experimentSnap.data(),
-        });
-      } catch (error) {
-        console.error("Error getting experiment:", error);
-
+        setExperiment({ id: snap.id, ...snap.data() });
+      } catch (err) {
+        console.error(err);
         setError("Unable to load the experiment.");
       } finally {
         setLoading(false);
       }
     };
 
-    if (experimentId) {
-      getExperiment();
-    }
+    if (experimentId) loadExperiment();
   }, [experimentId]);
 
+  // ---------- Check for existing progress & listen ----------
   useEffect(() => {
-    if (!experimentId || !user?.uid) {
-      return;
-    }
+    if (!experimentId || !user?.uid) return;
 
-    const sessionRef = doc(db, "session", `${experimentId}_${user.uid}`);
+    const q = query(
+      collection(db, "experimentProgress"),
+      where("experimentId", "==", experimentId),
+      where("studentId", "==", user.uid)
+    );
 
     const unsubscribe = onSnapshot(
-      sessionRef,
+      q,
       (snapshot) => {
-        setSessionData(snapshot.exists() ? snapshot.data().data || {} : null);
+        if (snapshot.empty) {
+          setProgress(null);
+          return;
+        }
+
+        // Take the most recent one if multiple exist
+        const docs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+        // Prefer non-ended, otherwise the latest
+        const active = docs.find((d) => d.sessionControl !== "ended") || docs[0];
+        setProgress(active);
       },
-      (error) => {
-        console.error("Error listening to session data:", error);
-      },
+      (err) => {
+        console.error("Error listening to progress:", err);
+      }
     );
 
     return () => unsubscribe();
   }, [experimentId, user?.uid]);
 
+  // ---------- Listen to logs for current progress ----------
   useEffect(() => {
-    return () => {
+    if (!progress?.id) {
+      setLogs([]);
+      return;
+    }
+
+    const q = query(
+      collection(db, "logs"),
+      where("progressId", "==", progress.id)
+      // orderBy("timestamp", "asc") // enable if you have the index
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const items = snapshot.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+        }));
+
+        // Sort client-side by timestamp (handles string ISO timestamps)
+        items.sort((a, b) => {
+          const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+          const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+          return ta - tb;
+        });
+
+        setLogs(items);
+      },
+      (err) => {
+        console.error("Error listening to logs:", err);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [progress?.id]);
+
+  // ---------- Timer (runs only when sessionControl === "running") ----------
+  useEffect(() => {
+    if (progress?.sessionControl === "running") {
+      timerRef.current = setInterval(() => {
+        setElapsedSeconds((prev) => prev + 1);
+      }, 1000);
+    } else {
       if (timerRef.current) {
         clearInterval(timerRef.current);
+        timerRef.current = null;
       }
+    }
 
-      if (connectTimeoutRef.current) {
-        clearTimeout(connectTimeoutRef.current);
-      }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, []);
+  }, [progress?.sessionControl]);
 
+  // Reset timer when a new progress is created
+  useEffect(() => {
+    if (progress?.sessionControl === "idle") {
+      setElapsedSeconds(0);
+    }
+  }, [progress?.id]);
+
+  // ---------- Helpers ----------
   const formatTime = (totalSeconds) => {
-    const minutes = Math.floor(totalSeconds / 60)
+    const m = Math.floor(totalSeconds / 60)
       .toString()
       .padStart(2, "0");
-
-    const seconds = (totalSeconds % 60).toString().padStart(2, "0");
-
-    return `${minutes}:${seconds}`;
+    const s = (totalSeconds % 60).toString().padStart(2, "0");
+    return `${m}:${s}`;
   };
 
-  const handleConnectDevice = () => {
-    if (vrConnected || connecting) {
-      return;
+  const formatLogTime = (ts) => {
+    if (!ts) return "";
+    try {
+      return new Date(ts).toLocaleTimeString();
+    } catch {
+      return ts;
     }
+  };
 
-    if (!vrIdentifier) {
-      alert("Please select a VR identifier.");
-      return;
-    }
+  // ---------- Actions ----------
+ const handleConnectVR = async () => {
+  if (!experiment || !user?.uid || connecting || progress) return;
 
+  const confirmed = window.confirm(
+    `Connect to VR headset "${experiment.vrId || "Unknown"}"?\n\nThis will create a new session for this experiment.`
+  );
+  if (!confirmed) return;
+
+  try {
     setConnecting(true);
 
-    connectTimeoutRef.current = setTimeout(() => {
-      setConnecting(false);
-      setVrConnected(true);
-    }, 900);
+   // Find the group this student belongs to
+  let groupId = null;
+
+  try {
+  const groupsQuery = query(
+    collection(db, "group"),
+    where("blockId", "==", blockId),
+    where("studentIds", "array-contains", user.uid)
+  );
+
+  const groupsSnap = await getDocs(groupsQuery);
+
+  if (!groupsSnap.empty) {
+    // Take the first matching group
+    groupId = groupsSnap.docs[0].id;
+  }
+} catch (err) {
+  console.error("Error finding student group:", err);
+}
+
+    // 2. Create the experimentProgress document
+    const progressData = {
+      blockId: blockId || null,
+      experimentId,
+      studentId: user.uid,
+      groupId,                          // ← now correctly resolved
+      vrId: experiment.vrId || null,
+      sessionControl: "idle",
+      completionStatus: "In Progress",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+
+    const docRef = await addDoc(
+      collection(db, "experimentProgress"),
+      progressData
+    );
+
+    console.log("Created progress:", docRef.id, "with groupId:", groupId);
+  } catch (err) {
+    console.error("Failed to create progress:", err);
+    alert("Unable to connect VR device. Please try again.");
+  } finally {
+    setConnecting(false);
+  }
+};
+
+  const updateSessionControl = async (newControl) => {
+    if (!progress?.id) return;
+
+    try {
+      const ref = doc(db, "experimentProgress", progress.id);
+
+      const updates = {
+        sessionControl: newControl,
+        updatedAt: serverTimestamp(),
+      };
+
+      if (newControl === "ended") {
+        updates.completionStatus = "Completed";
+        updates.completionAt = new Date().toISOString();
+      }
+
+      await updateDoc(ref, updates);
+    } catch (err) {
+      console.error("Failed to update sessionControl:", err);
+      alert("Unable to update session. Please try again.");
+    }
   };
 
-  const handleStartSession = () => {
-    if (!vrConnected || sessionState === "running") {
-      return;
-    }
-
-    setSessionState("running");
-    setElapsedSeconds(0);
-
-    timerRef.current = setInterval(() => {
-      setElapsedSeconds((previous) => previous + 1);
-    }, 1000);
-  };
-
-  const handleStopSession = () => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-
-    setSessionState("completed");
+  const handlePlay = () => updateSessionControl("running");
+  const handlePause = () => updateSessionControl("paused");
+  const handleEnd = async () => {
+    const confirmed = window.confirm(
+      "End this experiment session? This cannot be undone."
+    );
+    if (!confirmed) return;
+    await updateSessionControl("ended");
   };
 
   const handleDownloadResults = () => {
     const payload = {
       experimentName: experiment?.experimentName || "Untitled Experiment",
-      vrIdentifier,
+      vrId: experiment?.vrId,
+      progressId: progress?.id,
       durationSeconds: elapsedSeconds,
       duration: formatTime(elapsedSeconds),
-      metrics: sessionData || {},
-      completedAt: new Date().toISOString(),
+      sessionControl: progress?.sessionControl,
+      completionStatus: progress?.completionStatus,
+      logs: logs,
+      completedAt: progress?.completionAt || new Date().toISOString(),
     };
 
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: "application/json",
     });
-
     const url = URL.createObjectURL(blob);
-
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${payload.experimentName.replace(/\s+/g, "_")}_results.json`;
-
+    link.download = `${(payload.experimentName || "results").replace(/\s+/g, "_")}_results.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-
     URL.revokeObjectURL(url);
   };
 
+  // ---------- Render states ----------
   if (loading) {
     return (
       <div className="font-google min-h-screen flex items-center justify-center">
@@ -253,267 +324,223 @@ export default function StudentExperimentRun() {
     );
   }
 
-  const isRunning = sessionState === "running";
-  const isCompleted = sessionState === "completed";
+  const sessionControl = progress?.sessionControl || null;
+  const isIdle = sessionControl === "idle";
+  const isRunning = sessionControl === "running";
+  const isPaused = sessionControl === "paused";
+  const isEnded = sessionControl === "ended";
+  const isConnected = !!progress;
 
-  const statusLabel = isRunning ? "Running" : isCompleted ? "Completed" : "Ready";
+  const statusLabel = isEnded
+    ? "Completed"
+    : isRunning
+      ? "Running"
+      : isPaused
+        ? "Paused"
+        : isIdle
+          ? "Ready"
+          : "Not Connected";
 
-  const statusStyle = isCompleted
+  const statusStyle = isEnded
     ? "bg-indigo-100 text-indigo-700"
-    : "bg-green-100 text-green-700";
-
-  const metricFields =
-    MODULE_METRICS[experiment.moduleId] || DEFAULT_METRIC_FIELDS;
+    : isRunning
+      ? "bg-green-100 text-green-700"
+      : isPaused
+        ? "bg-yellow-100 text-yellow-700"
+        : "bg-gray-100 text-gray-600";
 
   return (
     <div className="font-google min-h-screen bg-white text-black">
       <main className="pt-20 px-5 pb-10 max-w-6xl mx-auto">
+        {/* Back */}
         <button
           onClick={() =>
             navigate(`/student/course/${blockId}/experiment/${experimentId}`)
           }
-          className="
-            flex
-            items-center
-            gap-2
-            text-gray-600
-            hover:text-black
-            transition
-            mb-4
-          "
+          className="flex items-center gap-2 text-gray-600 hover:text-black transition mb-4"
         >
           <ArrowLeft size={20} />
-
           <span className="text-lg">Back</span>
         </button>
 
-        <div className="flex items-start justify-between gap-4">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-4 mb-2">
           <h1 className="text-2xl font-medium">
             {experiment.experimentName || "Untitled Experiment"}
           </h1>
-
           <span
-            className={`
-              px-3
-              py-1
-              rounded-full
-              text-sm
-              whitespace-nowrap
-              ${statusStyle}
-            `}
+            className={`px-3 py-1 rounded-full text-sm whitespace-nowrap ${statusStyle}`}
           >
             {statusLabel}
           </span>
         </div>
 
-        <p className="text-gray-500 mb-6">
-          {experiment.description ||
+        <p className="text-gray-500 mb-1">
+          {experiment.moduleDescription ||
             experiment.participantInstructions ||
             experiment.instructions ||
             "Run this experiment in VR."}
         </p>
 
+        {experiment.vrId && (
+          <p className="text-sm text-gray-400 mb-6">
+            VR Headset: <span className="font-medium">{experiment.vrId}</span>
+          </p>
+        )}
+
         <div className="grid lg:grid-cols-3 gap-6 mb-6 items-stretch">
+          {/* Left column – controls + timer */}
           <div className="flex flex-col gap-6">
+            {/* Session Control */}
             <section className="border border-gray-300 rounded-xl p-5">
               <h2 className="text-lg font-medium mb-4">Session Control</h2>
 
-              <label className="block text-sm text-gray-600 mb-1">
-                VR Identifier
-              </label>
-
-              <select
-                value={vrIdentifier}
-                onChange={(e) => setVrIdentifier(e.target.value)}
-                disabled={vrConnected || connecting}
-                className="
-                  w-full
-                  bg-gray-100
-                  border
-                  border-gray-300
-                  rounded-lg
-                  px-3
-                  py-2
-                  mb-4
-                  outline-none
-                  focus:ring-2
-                  focus:ring-indigo-500
-                  disabled:text-gray-500
-                "
-              >
-                <option value="">Select VR identifier</option>
-
-                {VR_IDENTIFIER_OPTIONS.map((identifier) => (
-                  <option key={identifier} value={identifier}>
-                    {identifier}
-                  </option>
-                ))}
-              </select>
-
-              {!vrConnected ? (
+              {!isConnected ? (
                 <button
-                  onClick={handleConnectDevice}
+                  onClick={handleConnectVR}
                   disabled={connecting}
-                  className="
-                    w-full
-                    rounded-lg
-                    py-3
-                    text-center
-                    border
-                    border-gray-300
-                    hover:bg-gray-50
-                    transition
-                    disabled:opacity-60
-                    disabled:cursor-wait
-                  "
+                  className="w-full rounded-lg py-3 text-center border border-gray-300 hover:bg-gray-50 transition disabled:opacity-60 disabled:cursor-wait flex items-center justify-center gap-2"
                 >
-                  {connecting ? "Connecting..." : "Connect VR Device"}
+                  {connecting ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" />
+                      Connecting...
+                    </>
+                  ) : (
+                    "Connect VR Device"
+                  )}
                 </button>
               ) : (
-                <button
-                  onClick={handleStartSession}
-                  disabled={isRunning}
-                  title={
-                    isRunning
-                      ? "Session is running"
-                      : "Start a new session with this device"
-                  }
-                  className={`
-                    w-full
-                    rounded-lg
-                    py-3
-                    text-center
-                    border
-                    border-green-600
-                    text-green-700
-                    transition
-                    ${isRunning ? "bg-green-50 cursor-default" : "bg-white hover:bg-green-50"}
-                  `}
-                >
-                  VR Device Connected
-                </button>
-              )}
+                <div className="flex flex-col gap-3">
+                  {/* Play / Resume */}
+                  {(isIdle || isPaused) && (
+                    <button
+                      onClick={handlePlay}
+                      className="w-full rounded-lg py-3 flex items-center justify-center gap-2 bg-green-700 hover:bg-green-600 text-white transition"
+                    >
+                      <Play size={18} fill="currentColor" />
+                      <span>{isPaused ? "Resume" : "Play"}</span>
+                    </button>
+                  )}
 
-              {isRunning && (
-                <button
-                  onClick={handleStopSession}
-                  className="
-                    w-full
-                    mt-3
-                    rounded-lg
-                    py-3
-                    flex
-                    items-center
-                    justify-center
-                    gap-2
-                    bg-red-700
-                    hover:bg-red-600
-                    text-white
-                    transition
-                  "
-                >
-                  <Square size={14} fill="currentColor" />
+                  {/* Pause */}
+                  {isRunning && (
+                    <button
+                      onClick={handlePause}
+                      className="w-full rounded-lg py-3 flex items-center justify-center gap-2 border border-yellow-600 text-yellow-700 hover:bg-yellow-50 transition"
+                    >
+                      <Pause size={18} />
+                      <span>Pause</span>
+                    </button>
+                  )}
 
-                  <span>Stop Session</span>
-                </button>
+                  {/* End / Disconnect */}
+                  {!isEnded && (
+                    <button
+                      onClick={handleEnd}
+                      className="w-full rounded-lg py-3 flex items-center justify-center gap-2 bg-red-700 hover:bg-red-600 text-white transition"
+                    >
+                      <Square size={16} fill="currentColor" />
+                      <span>End / Disconnect</span>
+                    </button>
+                  )}
+
+                  {isEnded && (
+                    <p className="text-center text-sm text-gray-500 py-2">
+                      Session completed
+                    </p>
+                  )}
+                </div>
               )}
             </section>
 
+            {/* Timer */}
             <section className="border border-gray-300 rounded-xl p-5">
               <h2 className="text-lg font-medium mb-4">Session Timer</h2>
-
               <p className="text-4xl font-medium text-center tabular-nums">
                 {formatTime(elapsedSeconds)}
               </p>
+              {isPaused && (
+                <p className="text-center text-sm text-yellow-600 mt-2">
+                  Paused
+                </p>
+              )}
             </section>
           </div>
 
+          {/* Right – VR Preview placeholder */}
           <div className="lg:col-span-2">
             <section className="border border-gray-300 rounded-xl p-5 h-full flex flex-col">
               <h2 className="text-lg font-medium mb-4">VR Preview</h2>
-
-              <div
-                className="
-                  flex-1
-                  min-h-[260px]
-                  bg-gray-200
-                  rounded-lg
-                  flex
-                  flex-col
-                  items-center
-                  justify-center
-                  text-gray-500
-                "
-              >
+              <div className="flex-1 min-h-[260px] bg-gray-200 rounded-lg flex flex-col items-center justify-center text-gray-500">
                 <Box size={40} className="mb-3" />
-
                 <p>VR environment preview</p>
-
                 <p className="text-sm">
-                  {isRunning ? "Waiting for VR feed..." : "Awaiting session start"}
+                  {isRunning
+                    ? "Session running..."
+                    : isPaused
+                      ? "Session paused"
+                      : isEnded
+                        ? "Session ended"
+                        : isConnected
+                          ? "Ready to start"
+                          : "Connect VR device to begin"}
                 </p>
               </div>
             </section>
           </div>
         </div>
 
+        {/* Live Logs */}
         <section className="border border-gray-300 rounded-xl p-5 mb-6">
-          <h2 className="text-lg font-medium mb-4">Live Metrics</h2>
+          <h2 className="text-lg font-medium mb-4">
+            Live Logs
+            {logs.length > 0 && (
+              <span className="ml-2 text-sm font-normal text-gray-400">
+                ({logs.length})
+              </span>
+            )}
+          </h2>
 
-          <div className="flex flex-col">
-            {metricFields.map((field, index) => {
-              const rawValue = sessionData ? sessionData[field.key] : null;
-
-              const displayValue = field.format
-                ? field.format(rawValue)
-                : formatValue(rawValue, field.unit);
-
-              return (
+          {!isConnected ? (
+            <p className="text-gray-500 text-sm">
+              Connect a VR device to start receiving logs.
+            </p>
+          ) : logs.length === 0 ? (
+            <p className="text-gray-500 text-sm">
+              Waiting for logs from the VR headset...
+            </p>
+          ) : (
+            <div className="max-h-80 overflow-y-auto space-y-2">
+              {logs.map((log) => (
                 <div
-                  key={field.key}
-                  className={`
-                    flex
-                    items-center
-                    justify-between
-                    py-3
-                    ${index > 0 ? "border-t border-gray-200" : ""}
-                  `}
+                  key={log.id}
+                  className="flex gap-3 py-2 border-b border-gray-100 last:border-0 text-sm"
                 >
-                  <span className="text-gray-500">{field.label}</span>
-
-                  <span className="text-gray-700 font-medium">
-                    {displayValue}
+                  <span className="text-gray-400 whitespace-nowrap tabular-nums">
+                    {formatLogTime(log.timestamp)}
+                  </span>
+                  <span className="text-indigo-600 font-medium whitespace-nowrap">
+                    {log.eventType || "event"}
+                  </span>
+                  <span className="text-gray-700 flex-1">
+                    {log.message || "—"}
                   </span>
                 </div>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          )}
         </section>
 
-        {isCompleted && (
+        {/* Export (only when ended) */}
+        {isEnded && (
           <section className="border border-gray-300 rounded-xl p-5">
             <h2 className="text-lg font-medium mb-4">Export Data</h2>
-
             <button
               onClick={handleDownloadResults}
-              className="
-                w-full
-                sm:w-auto
-                flex
-                items-center
-                justify-center
-                gap-2
-                border
-                border-gray-300
-                hover:bg-gray-50
-                rounded-lg
-                px-5
-                py-2.5
-                transition
-              "
+              className="w-full sm:w-auto flex items-center justify-center gap-2 border border-gray-300 hover:bg-gray-50 rounded-lg px-5 py-2.5 transition"
             >
               <Download size={18} />
-
               <span>Download Results</span>
             </button>
           </section>

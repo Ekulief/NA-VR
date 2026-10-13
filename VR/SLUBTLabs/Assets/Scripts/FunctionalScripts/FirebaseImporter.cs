@@ -1,7 +1,6 @@
 using Firebase.Firestore;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -13,34 +12,29 @@ public class FirestoreImporter : MonoBehaviour
     [Header("Deletion Settings")]
     public bool runOnStart = false;
 
-    // Keep false for the first test.
-    public bool actuallyDelete = false;
-
-    [Tooltip("Uses the device's local date.")]
-    public bool useLocalDate = true;
-
     private async void Start()
     {
         if (runOnStart)
-            await DeleteLogsFromYesterdayAndToday();
+            await DeleteLogsFromLastWeekUntilToday();
     }
 
-    [ContextMenu("Delete Logs From Yesterday And Today")]
+    [ContextMenu("Delete Logs From Last Week Until Today")]
     public async void DeleteLogsMenu()
     {
-        await DeleteLogsFromYesterdayAndToday();
+        await DeleteLogsFromLastWeekUntilToday();
     }
 
-    public async Task DeleteLogsFromYesterdayAndToday()
+    public async Task DeleteLogsFromLastWeekUntilToday()
     {
         FirebaseFirestore db = FirebaseFirestore.DefaultInstance;
 
-        // Past 7 days, including the current time.
+        // Past 7 days up to now (UTC)
         DateTime endUtc = DateTime.UtcNow;
         DateTime startUtc = endUtc.AddDays(-7);
 
-        Timestamp startTimestamp = Timestamp.FromDateTime(startUtc);
-        Timestamp endTimestamp = Timestamp.FromDateTime(endUtc);
+        // Your logs store timestamp as ISO strings, not Firestore Timestamp
+        string startIso = startUtc.ToString("o"); // e.g. 2026-10-06T...
+        string endIso = endUtc.ToString("o");
 
         Debug.Log(
             $"[LogCleaner] Searching logs from {startUtc:yyyy-MM-dd HH:mm} UTC " +
@@ -49,31 +43,22 @@ public class FirestoreImporter : MonoBehaviour
         try
         {
             QuerySnapshot snapshot = await db.Collection(collectionName)
-                .WhereGreaterThanOrEqualTo("timestamp", startTimestamp)
-                .WhereLessThanOrEqualTo("timestamp", endTimestamp)
+                .WhereGreaterThanOrEqualTo("timestamp", startIso)
+                .WhereLessThanOrEqualTo("timestamp", endIso)
                 .GetSnapshotAsync();
 
-            List<DocumentReference> documentsToDelete =
-                new List<DocumentReference>();
+            List<DocumentReference> documentsToDelete = new List<DocumentReference>();
 
             foreach (DocumentSnapshot document in snapshot.Documents)
             {
                 documentsToDelete.Add(document.Reference);
             }
 
-            Debug.Log(
-                $"[LogCleaner] Found {documentsToDelete.Count} matching documents.");
-
-            if (!actuallyDelete)
-            {
-                Debug.LogWarning(
-                    "[LogCleaner] DRY RUN: nothing deleted. " +
-                    "Set actuallyDelete = true to proceed.");
-                return;
-            }
+            Debug.Log($"[LogCleaner] Found {documentsToDelete.Count} matching documents. Deleting...");
 
             int deleted = 0;
 
+            // Firestore batch limit is 500
             for (int i = 0; i < documentsToDelete.Count; i += 500)
             {
                 WriteBatch batch = db.StartBatch();
@@ -88,8 +73,7 @@ public class FirestoreImporter : MonoBehaviour
                 deleted += batchEnd - i;
             }
 
-            Debug.Log(
-                $"[LogCleaner] Successfully deleted {deleted} log documents.");
+            Debug.Log($"[LogCleaner] Successfully deleted {deleted} log documents.");
         }
         catch (Exception ex)
         {
