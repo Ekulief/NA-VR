@@ -11,7 +11,6 @@ import {
   updateDoc,
   onSnapshot,
   serverTimestamp,
-  orderBy,
   getDocs,
 } from "firebase/firestore";
 
@@ -38,8 +37,10 @@ export default function StudentExperimentRun() {
   const [error, setError] = useState("");
 
   // Progress document
-  const [progress, setProgress] = useState(null); // { id, ...data }
-  const [progressLoading, setProgressLoading] = useState(false);
+  const [progress, setProgress] = useState(null);
+
+  // Result document (from experimentResults)
+  const [result, setResult] = useState(null);
 
   // Logs
   const [logs, setLogs] = useState([]);
@@ -94,10 +95,9 @@ export default function StudentExperimentRun() {
           return;
         }
 
-        // Take the most recent one if multiple exist
         const docs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-        // Prefer non-ended, otherwise the latest
-        const active = docs.find((d) => d.sessionControl !== "ended") || docs[0];
+        const active =
+          docs.find((d) => d.sessionControl !== "ended") || docs[0];
         setProgress(active);
       },
       (err) => {
@@ -107,6 +107,44 @@ export default function StudentExperimentRun() {
 
     return () => unsubscribe();
   }, [experimentId, user?.uid]);
+
+  // ---------- Listen to experimentResults for this progress ----------
+  useEffect(() => {
+    if (!progress?.id) {
+      setResult(null);
+      return;
+    }
+
+    const q = query(
+      collection(db, "experimentResults"),
+      where("progressId", "==", progress.id)
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        if (snapshot.empty) {
+          setResult(null);
+          return;
+        }
+
+        // Take the most recent result if multiple exist
+        const docs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+        docs.sort((a, b) => {
+          const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+          const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+          return tb - ta;
+        });
+
+        setResult(docs[0]);
+      },
+      (err) => {
+        console.error("Error listening to experimentResults:", err);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [progress?.id]);
 
   // ---------- Listen to logs for current progress ----------
   useEffect(() => {
@@ -118,7 +156,6 @@ export default function StudentExperimentRun() {
     const q = query(
       collection(db, "logs"),
       where("progressId", "==", progress.id)
-      // orderBy("timestamp", "asc") // enable if you have the index
     );
 
     const unsubscribe = onSnapshot(
@@ -129,7 +166,6 @@ export default function StudentExperimentRun() {
           ...d.data(),
         }));
 
-        // Sort client-side by timestamp (handles string ISO timestamps)
         items.sort((a, b) => {
           const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
           const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
@@ -148,6 +184,15 @@ export default function StudentExperimentRun() {
 
   // ---------- Timer (runs only when sessionControl === "running") ----------
   useEffect(() => {
+    // Stop local timer once we have an official result duration
+    if (result?.durationSeconds != null) {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      return;
+    }
+
     if (progress?.sessionControl === "running") {
       timerRef.current = setInterval(() => {
         setElapsedSeconds((prev) => prev + 1);
@@ -162,7 +207,7 @@ export default function StudentExperimentRun() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [progress?.sessionControl]);
+  }, [progress?.sessionControl, result?.durationSeconds]);
 
   // Reset timer when a new progress is created
   useEffect(() => {
@@ -173,10 +218,11 @@ export default function StudentExperimentRun() {
 
   // ---------- Helpers ----------
   const formatTime = (totalSeconds) => {
-    const m = Math.floor(totalSeconds / 60)
+    const seconds = Math.max(0, Math.round(Number(totalSeconds) || 0));
+    const m = Math.floor(seconds / 60)
       .toString()
       .padStart(2, "0");
-    const s = (totalSeconds % 60).toString().padStart(2, "0");
+    const s = (seconds % 60).toString().padStart(2, "0");
     return `${m}:${s}`;
   };
 
@@ -189,64 +235,68 @@ export default function StudentExperimentRun() {
     }
   };
 
+  // Prefer official result duration when available
+  const displaySeconds =
+    result?.durationSeconds != null
+      ? result.durationSeconds
+      : elapsedSeconds;
+
   // ---------- Actions ----------
- const handleConnectVR = async () => {
-  if (!experiment || !user?.uid || connecting || progress) return;
+  const handleConnectVR = async () => {
+    if (!experiment || !user?.uid || connecting || progress) return;
 
-  const confirmed = window.confirm(
-    `Connect to VR headset "${experiment.vrId || "Unknown"}"?\n\nThis will create a new session for this experiment.`
-  );
-  if (!confirmed) return;
-
-  try {
-    setConnecting(true);
-
-   // Find the group this student belongs to
-  let groupId = null;
-
-  try {
-  const groupsQuery = query(
-    collection(db, "group"),
-    where("blockId", "==", blockId),
-    where("studentIds", "array-contains", user.uid)
-  );
-
-  const groupsSnap = await getDocs(groupsQuery);
-
-  if (!groupsSnap.empty) {
-    // Take the first matching group
-    groupId = groupsSnap.docs[0].id;
-  }
-} catch (err) {
-  console.error("Error finding student group:", err);
-}
-
-    // 2. Create the experimentProgress document
-    const progressData = {
-      blockId: blockId || null,
-      experimentId,
-      studentId: user.uid,
-      groupId,                          // ← now correctly resolved
-      vrId: experiment.vrId || null,
-      sessionControl: "idle",
-      completionStatus: "In Progress",
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    };
-
-    const docRef = await addDoc(
-      collection(db, "experimentProgress"),
-      progressData
+    const confirmed = window.confirm(
+      `Connect to VR headset "${experiment.vrId || "Unknown"}"?\n\nThis will create a new session for this experiment.`
     );
+    if (!confirmed) return;
 
-    console.log("Created progress:", docRef.id, "with groupId:", groupId);
-  } catch (err) {
-    console.error("Failed to create progress:", err);
-    alert("Unable to connect VR device. Please try again.");
-  } finally {
-    setConnecting(false);
-  }
-};
+    try {
+      setConnecting(true);
+
+      // Find the group this student belongs to
+      let groupId = null;
+
+      try {
+        const groupsQuery = query(
+          collection(db, "group"),
+          where("blockId", "==", blockId),
+          where("studentIds", "array-contains", user.uid)
+        );
+
+        const groupsSnap = await getDocs(groupsQuery);
+
+        if (!groupsSnap.empty) {
+          groupId = groupsSnap.docs[0].id;
+        }
+      } catch (err) {
+        console.error("Error finding student group:", err);
+      }
+
+      const progressData = {
+        blockId: blockId || null,
+        experimentId,
+        studentId: user.uid,
+        groupId,
+        vrId: experiment.vrId || null,
+        sessionControl: "idle",
+        completionStatus: "In Progress",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+
+      const docRef = await addDoc(
+        collection(db, "experimentProgress"),
+        progressData
+      );
+
+      console.log("Created progress:", docRef.id, "with groupId:", groupId);
+    } catch (err) {
+      console.error("Failed to create progress:", err);
+      alert("Unable to connect VR device. Please try again.");
+    } finally {
+      setConnecting(false);
+    }
+  };
 
   const updateSessionControl = async (newControl) => {
     if (!progress?.id) return;
@@ -286,12 +336,26 @@ export default function StudentExperimentRun() {
       experimentName: experiment?.experimentName || "Untitled Experiment",
       vrId: experiment?.vrId,
       progressId: progress?.id,
-      durationSeconds: elapsedSeconds,
-      duration: formatTime(elapsedSeconds),
+      durationSeconds:
+        result?.durationSeconds != null
+          ? result.durationSeconds
+          : elapsedSeconds,
+      duration:
+        result?.duration ||
+        formatTime(
+          result?.durationSeconds != null
+            ? result.durationSeconds
+            : elapsedSeconds
+        ),
       sessionControl: progress?.sessionControl,
       completionStatus: progress?.completionStatus,
+      experimentalResults: result?.experimentalResults || null,
       logs: logs,
-      completedAt: progress?.completionAt || new Date().toISOString(),
+      startedAt: result?.startedAt || null,
+      completedAt:
+        result?.timestamp ||
+        progress?.completionAt ||
+        new Date().toISOString(),
     };
 
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -300,7 +364,10 @@ export default function StudentExperimentRun() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${(payload.experimentName || "results").replace(/\s+/g, "_")}_results.json`;
+    link.download = `${(payload.experimentName || "results").replace(
+      /\s+/g,
+      "_"
+    )}_results.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -412,7 +479,6 @@ export default function StudentExperimentRun() {
                 </button>
               ) : (
                 <div className="flex flex-col gap-3">
-                  {/* Play / Resume */}
                   {(isIdle || isPaused) && (
                     <button
                       onClick={handlePlay}
@@ -423,7 +489,6 @@ export default function StudentExperimentRun() {
                     </button>
                   )}
 
-                  {/* Pause */}
                   {isRunning && (
                     <button
                       onClick={handlePause}
@@ -434,7 +499,6 @@ export default function StudentExperimentRun() {
                     </button>
                   )}
 
-                  {/* End / Disconnect */}
                   {!isEnded && (
                     <button
                       onClick={handleEnd}
@@ -458,13 +522,17 @@ export default function StudentExperimentRun() {
             <section className="border border-gray-300 rounded-xl p-5">
               <h2 className="text-lg font-medium mb-4">Session Timer</h2>
               <p className="text-4xl font-medium text-center tabular-nums">
-                {formatTime(elapsedSeconds)}
+                {formatTime(displaySeconds)}
               </p>
-              {isPaused && (
+              {result?.durationSeconds != null ? (
+                <p className="text-center text-sm text-indigo-600 mt-2">
+                  Final duration from results
+                </p>
+              ) : isPaused ? (
                 <p className="text-center text-sm text-yellow-600 mt-2">
                   Paused
                 </p>
-              )}
+              ) : null}
             </section>
           </div>
 
