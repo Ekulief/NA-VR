@@ -59,6 +59,19 @@ const CONFIGURATION_ORDER = {
     "targets",
   ],
 
+  Memory: [
+    "memory_BriefingText",
+    "memory_DistractorInstructionText",
+    "memory_DistractorTaskDuration",
+    "memory_RandomizeQuestions",
+    "memory_RecallInstructionText",
+    "memory_RoomInstructionText",
+    "memory_TimePerRoomSeconds",
+    "memory_TransitionFadeDuration",
+    "memory_UseDistractorTask",
+    "targets",
+  ],
+
   Odd_Item_Detection: [
     "globalInstructionDelay",
     "oddItem_ExcellentThresholdSeconds",
@@ -98,6 +111,11 @@ const ENVIRONMENT_OPTIONS = [
     moduleId: "Memory2",
     name: "Sternberg Memory Scanning",
     description: "House and a diner setting",
+  },
+  {
+    moduleId: "Memory",
+    name: "Sternberg Memory Scanning (Diner)",
+    description: "A diner setting",
   },
 ];
 
@@ -182,11 +200,12 @@ export default function InstructorExperimentBuilder() {
     }
 
     try {
-      const moduleSnap = await getDoc(
-        doc(db, "experimentModule", selectedModuleId),
-      );
+      let moduleSnap;
+      let moduleDocumentId = selectedModuleId;
 
-      if (!moduleSnap.exists()) {
+      moduleSnap = await getDoc(doc(db, "experimentModule", selectedModuleId));
+
+      if (!moduleSnap || !moduleSnap.exists()) {
         console.error(`Experiment module "${selectedModuleId}" was not found.`);
 
         return null;
@@ -195,7 +214,7 @@ export default function InstructorExperimentBuilder() {
       const data = moduleSnap.data();
 
       return {
-        id: moduleSnap.id,
+        id: moduleDocumentId,
         moduleName: data.moduleName || "",
         description: data.description || "",
         sceneId: data.sceneId || "",
@@ -320,9 +339,12 @@ export default function InstructorExperimentBuilder() {
             item.moduleId === savedModuleId || item.name === savedEnvironment,
         );
 
-        if (!option && savedModuleId === "Memory2") {
+        if (
+          !option &&
+          (savedModuleId === "Memory2" || savedModuleId === "Memory")
+        ) {
           option = ENVIRONMENT_OPTIONS.find(
-            (item) => item.moduleId === "Memory2",
+            (item) => item.moduleId === savedModuleId,
           );
         }
 
@@ -507,7 +529,7 @@ export default function InstructorExperimentBuilder() {
   };
 
   const validateMemoryQuestions = () => {
-    if (moduleId !== "Memory2") {
+    if (moduleId !== "Memory2" && moduleId !== "Memory") {
       return true;
     }
 
@@ -1653,7 +1675,10 @@ export default function InstructorExperimentBuilder() {
         : ancestors;
 
     if (Array.isArray(value)) {
-      if (moduleId === "Memory2" && key === "targets") {
+      if (
+        (moduleId === "Memory2" || moduleId === "Memory") &&
+        key === "targets"
+      ) {
         return renderMemoryTargets(value, path);
       }
 
