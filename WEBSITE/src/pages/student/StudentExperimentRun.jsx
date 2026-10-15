@@ -25,6 +25,9 @@ import {
   Square,
   Download,
   Loader2,
+  X,
+  FileText,
+  CheckCircle2,
 } from "lucide-react";
 
 export default function StudentExperimentRun() {
@@ -49,6 +52,27 @@ export default function StudentExperimentRun() {
   const [connecting, setConnecting] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const timerRef = useRef(null);
+
+  // ---------- Preview state ----------
+  const [showPreview, setShowPreview] = useState(false);
+
+  // Map moduleId → Unity preview scene name
+  const previewSceneMap = {
+    Depth_Perception: "DepthPerception_Preview",
+    Odd_Item_Detection: "OddItem_Preview",
+    Attentional_Blindness: "AttentionalBlindness_Preview",
+    Memory2: "MemoryHouse_Preview",
+    Distance_Perception: "DistancePerception_Preview",
+    Memory: "MemoryDiner_Preview"
+    // Add more experiments here later
+  };
+
+  // Get the correct preview scene name from the experiment
+  const getPreviewSceneName = () => {
+    if (!experiment) return null;
+    const key = experiment.moduleId || experiment.sceneId;
+    return previewSceneMap[key] || null;
+  };
 
   // ---------- Load experiment ----------
   useEffect(() => {
@@ -128,7 +152,6 @@ export default function StudentExperimentRun() {
           return;
         }
 
-        // Take the most recent result if multiple exist
         const docs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
         docs.sort((a, b) => {
           const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
@@ -182,9 +205,8 @@ export default function StudentExperimentRun() {
     return () => unsubscribe();
   }, [progress?.id]);
 
-  // ---------- Timer (runs only when sessionControl === "running") ----------
+  // ---------- Timer ----------
   useEffect(() => {
-    // Stop local timer once we have an official result duration
     if (result?.durationSeconds != null) {
       if (timerRef.current) {
         clearInterval(timerRef.current);
@@ -209,7 +231,6 @@ export default function StudentExperimentRun() {
     };
   }, [progress?.sessionControl, result?.durationSeconds]);
 
-  // Reset timer when a new progress is created
   useEffect(() => {
     if (progress?.sessionControl === "idle") {
       setElapsedSeconds(0);
@@ -235,7 +256,6 @@ export default function StudentExperimentRun() {
     }
   };
 
-  // Prefer official result duration when available
   const displaySeconds =
     result?.durationSeconds != null
       ? result.durationSeconds
@@ -253,7 +273,6 @@ export default function StudentExperimentRun() {
     try {
       setConnecting(true);
 
-      // Find the group this student belongs to
       let groupId = null;
 
       try {
@@ -349,10 +368,12 @@ export default function StudentExperimentRun() {
         ),
       sessionControl: progress?.sessionControl,
       completionStatus: progress?.completionStatus,
+      configurations: result?.configurations || null,
       experimentalResults: result?.experimentalResults || null,
       logs: logs,
       startedAt: result?.startedAt || null,
       completedAt:
+        result?.completedAt ||
         result?.timestamp ||
         progress?.completionAt ||
         new Date().toISOString(),
@@ -372,6 +393,48 @@ export default function StudentExperimentRun() {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  };
+
+  // ---------- Render helpers for dynamic config/results blocks ----------
+  const renderDynamicDataNode = (data) => {
+    if (data === null || data === undefined) return <span className="text-gray-400">—</span>;
+
+    if (Array.isArray(data)) {
+      if (data.length === 0) return <span className="text-gray-400">Empty list</span>;
+      
+      // If it's an array of objects, render them as clean sub-cards or rows
+      return (
+        <div className="space-y-3 w-full">
+          {data.map((item, idx) => (
+            <div key={idx} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">
+                Item #{idx + 1}
+              </span>
+              {renderDynamicDataNode(item)}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    if (typeof data === "object") {
+      return (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+          {Object.entries(data).map(([key, value]) => (
+            <div key={key} className="bg-white border border-gray-200 rounded-lg p-3 flex flex-col justify-between">
+              <span className="text-xs font-medium text-gray-500 capitalize mb-1">
+                {key.replace(/([A-Z])/g, " $1")}
+              </span>
+              <div className="text-sm font-medium text-gray-900 break-words">
+                {typeof value === "object" ? renderDynamicDataNode(value) : String(value)}
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    return <span>{String(data)}</span>;
   };
 
   // ---------- Render states ----------
@@ -416,9 +479,11 @@ export default function StudentExperimentRun() {
         ? "bg-yellow-100 text-yellow-700"
         : "bg-gray-100 text-gray-600";
 
+  const previewSceneName = getPreviewSceneName();
+
   return (
     <div className="font-google min-h-screen bg-white text-black">
-      <main className="pt-20 px-5 pb-10 max-w-6xl mx-auto">
+      <main className="pt-20 px-5 pb-10 max-w-7xl mx-auto">
         {/* Back */}
         <button
           onClick={() =>
@@ -455,9 +520,10 @@ export default function StudentExperimentRun() {
           </p>
         )}
 
-        <div className="grid lg:grid-cols-3 gap-6 mb-6 items-stretch">
-          {/* Left column – controls + timer */}
-          <div className="flex flex-col gap-6">
+        {/* Expanded 12-column grid layout with a larger preview */}
+        <div className="grid lg:grid-cols-12 gap-6 mb-6 items-stretch">
+          {/* Left column – controls + timer (Span 4) */}
+          <div className="lg:col-span-4 flex flex-col gap-6">
             {/* Session Control */}
             <section className="border border-gray-300 rounded-xl p-5">
               <h2 className="text-lg font-medium mb-4">Session Control</h2>
@@ -536,28 +602,112 @@ export default function StudentExperimentRun() {
             </section>
           </div>
 
-          {/* Right – VR Preview placeholder */}
-          <div className="lg:col-span-2">
+          {/* Right – VR Preview (Span 8 - Much Bigger View) */}
+          <div className="lg:col-span-8">
             <section className="border border-gray-300 rounded-xl p-5 h-full flex flex-col">
-              <h2 className="text-lg font-medium mb-4">VR Preview</h2>
-              <div className="flex-1 min-h-[260px] bg-gray-200 rounded-lg flex flex-col items-center justify-center text-gray-500">
-                <Box size={40} className="mb-3" />
-                <p>VR environment preview</p>
-                <p className="text-sm">
-                  {isRunning
-                    ? "Session running..."
-                    : isPaused
-                      ? "Session paused"
-                      : isEnded
-                        ? "Session ended"
-                        : isConnected
-                          ? "Ready to start"
-                          : "Connect VR device to begin"}
-                </p>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-medium">VR Preview</h2>
+                {showPreview && (
+                  <button
+                    onClick={() => setShowPreview(false)}
+                    className="text-gray-500 hover:text-black transition"
+                  >
+                    <X size={20} />
+                  </button>
+                )}
+              </div>
+
+              <div className="flex-1 min-h-[500px] bg-gray-100 rounded-lg overflow-hidden relative">
+                {!showPreview ? (
+                  <button
+                    onClick={() => setShowPreview(true)}
+                    disabled={!previewSceneName}
+                    className="w-full h-full flex flex-col items-center justify-center text-gray-500 hover:bg-gray-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Box size={48} className="mb-3" />
+                    <p className="font-medium text-lg">
+                      {previewSceneName
+                        ? "Click to Preview Environment"
+                        : "Preview not available"}
+                    </p>
+                    <p className="text-sm mt-1">
+                      {previewSceneName
+                        ? experiment.experimentName || "3D Scene"
+                        : "No preview scene mapped for this experiment"}
+                    </p>
+                  </button>
+                ) : (
+                  <iframe
+                    src={`/previews/all-experiments/index.html?scene=${previewSceneName}`}
+                    className="w-full h-full border-0"
+                    allow="fullscreen"
+                    title="Experiment Preview"
+                    onError={(e) => e.preventDefault()}
+                  />
+                )}
               </div>
             </section>
           </div>
         </div>
+
+        {/* Experiment Results & Configurations Section */}
+        {result && (
+          <section className="border border-gray-300 rounded-xl p-5 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-medium flex items-center gap-2">
+                <CheckCircle2 size={20} className="text-indigo-600" />
+                <span>Captured Experiment Results</span>
+              </h2>
+              {result.duration && (
+                <span className="text-sm bg-gray-100 px-3 py-1 rounded-full text-gray-600">
+                  Duration: {result.duration}
+                </span>
+              )}
+            </div>
+
+            <div className="space-y-6">
+              {/* Configurations block (if available) */}
+              {result.configurations && (
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                    Configurations
+                  </h3>
+                  {renderDynamicDataNode(result.configurations)}
+                </div>
+              )}
+
+              {/* Experimental Results block (if available) */}
+              {result.experimentalResults && (
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                    Experimental Results & Metrics
+                  </h3>
+                  {renderDynamicDataNode(result.experimentalResults)}
+                </div>
+              )}
+
+              {/* Fallback general keys if custom structures aren't matched */}
+              {Object.keys(result).filter(
+                (k) =>
+                  !["id", "progressId", "experimentId", "experimentName", "blockId", "groupId", "userId", "studentId", "configurations", "experimentalResults", "logs", "timestamp", "startedAt", "completedAt", "duration", "durationSeconds", "completionStatus"].includes(k)
+              ).length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                    Additional Parameters
+                  </h3>
+                  {renderDynamicDataNode(
+                    Object.fromEntries(
+                      Object.entries(result).filter(
+                        ([k]) =>
+                          !["id", "progressId", "experimentId", "experimentName", "blockId", "groupId", "userId", "studentId", "configurations", "experimentalResults", "logs", "timestamp", "startedAt", "completedAt", "duration", "durationSeconds", "completionStatus"].includes(k)
+                      )
+                    )
+                  )}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
 
         {/* Live Logs */}
         <section className="border border-gray-300 rounded-xl p-5 mb-6">

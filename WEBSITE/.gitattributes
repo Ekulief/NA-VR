@@ -1,0 +1,6 @@
+*.gz filter=lfs diff=lfs merge=lfs -text
+*.wasm filter=lfs diff=lfs merge=lfs -text
+public/previews/all-experiments/Build/PreviewBuilds.data.gz filter=lfs diff=lfs merge=lfs -text
+public/previews/**/*.data.gz filter=lfs diff=lfs merge=lfs -text
+public/previews/**/*.data filter=lfs diff=lfs merge=lfs -text
+public/previews/**/*.gz filter=lfs diff=lfs merge=lfs -text
