@@ -75,9 +75,7 @@ public class GazeReturnHome : MonoBehaviour
         isHovering = false;
         timer = 0f;
 
-        var reticle = Object.FindAnyObjectByType<CardboardReticlePointer>();
-        if (reticle != null)
-            reticle.gameObject.SetActive(false);
+
 
         GameObject camRig = GameObject.Find(xrOriginName);
         if (camRig == null)
@@ -102,14 +100,7 @@ public class GazeReturnHome : MonoBehaviour
     {
         SceneManager.sceneLoaded -= OnSceneLoaded;
 
-        // Re-enable reticle first
-        var reticle = Object.FindAnyObjectByType<CardboardReticlePointer>(FindObjectsInactive.Include);
-        if (reticle != null)
-        {
-            reticle.gameObject.SetActive(true);
-            reticle.SendMessage("OnPointerExit", null, SendMessageOptions.DontRequireReceiver);
-        }
-
+       
         // Wait one frame before repositioning so XR tracking has settled
         StartCoroutine(RepositionAfterFrame());
     }
@@ -133,9 +124,7 @@ public class GazeReturnHome : MonoBehaviour
             yield break;
         }
 
-        Cardboard6DoF dynamicTracker = camRig.GetComponent<Cardboard6DoF>();
-        if (dynamicTracker != null)
-            dynamicTracker.Recalibrate();
+    
 
         // Wait another frame after recalibrate so tracking drift clears
         yield return null;
