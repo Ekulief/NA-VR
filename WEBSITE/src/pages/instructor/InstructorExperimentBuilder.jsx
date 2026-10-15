@@ -27,6 +27,7 @@ const CONFIGURATION_ORDER = {
     "ab_NoticedText",
     "ab_PostFadePauseSeconds",
     "ab_UseRandomFadeTarget",
+    "ab_SpecificFadeTarget",
     "globalInstructionDelay",
   ],
 
@@ -80,9 +81,11 @@ const CONFIGURATION_ORDER = {
     "oddItem_RatingExcellent",
     "oddItem_RatingGood",
     "oddItem_RatingKeepPracticing",
+    "oddItem_RandomizeTarget",
     "oddItem_RaycastDistance",
     "oddItem_SearchTimeLimitSeconds",
     "oddItem_WrongItemFeedback",
+    "oddItem_SelectedTarget",
   ],
 };
 
@@ -183,7 +186,8 @@ export default function InstructorExperimentBuilder() {
 
   const [groups, setGroups] = useState([]);
   const [selectedGroups, setSelectedGroups] = useState([]);
-
+  const [vrDevices, setVrDevices] = useState([]);
+  const [selectedVrId, setSelectedVrId] = useState("");
   const [allowStudentExperiments, setAllowStudentExperiments] = useState(false);
 
   const [saving, setSaving] = useState(false);
@@ -252,6 +256,23 @@ export default function InstructorExperimentBuilder() {
       setModuleLoading(false);
     }
   };
+  useEffect(() => {
+  const getVrDevices = async () => {
+    try {
+      const snapshot = await getDocs(collection(db, "vrDevices"));
+      const list = snapshot.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
+      }));
+      list.sort((a, b) => (a.vrId || a.id).localeCompare(b.vrId || b.id));
+      setVrDevices(list);
+    } catch (error) {
+      console.error("Error loading VR devices:", error);
+    }
+  };
+  getVrDevices();
+}, []);
+
 
   useEffect(() => {
     const getGroups = async () => {
@@ -290,7 +311,14 @@ export default function InstructorExperimentBuilder() {
 
     return () => clearTimeout(timeout);
   }, [newTargetIndex, configuration.targets]);
-
+const toggleVrDevice = (deviceId) => {
+  setSelectedVrDevices((prev) => {
+    if (prev.includes(deviceId)) {
+      return prev.filter((id) => id !== deviceId);
+    }
+    return [...prev, deviceId];
+  });
+};
   useEffect(() => {
     const getExperiment = async () => {
       if (!experimentId) {
@@ -298,7 +326,7 @@ export default function InstructorExperimentBuilder() {
         setModuleLoading(false);
         return;
       }
-
+      setSelectedVrId(data.vrId || "");
       try {
         setLoading(true);
 
@@ -557,22 +585,38 @@ export default function InstructorExperimentBuilder() {
     });
   };
 
-  const handleSaveExperiment = async (event) => {
-    event.preventDefault();
+const handleSaveExperiment = async (event) => {
+  event.preventDefault();
 
-    if (!experimentName.trim()) {
-      alert("Please enter an experiment name.");
+  if (!experimentName.trim()) {
+    alert("Please enter an experiment name.");
+    return;
+  }
+
+  if (!moduleId) {
+    alert("Please select an environment / module.");
+    return;
+  }
+
+  if (moduleId === "Attentional_Blindness") {
+    const isRandom = configuration.ab_UseRandomFadeTarget === true;
+    if (!isRandom && !configuration.ab_SpecificFadeTarget) {
+      alert("Please select a Fade Target (or enable Use Random Fade Target).");
       return;
     }
+  }
 
-    if (!moduleId) {
-      alert("Please select an environment / module.");
-      return;
-    }
+ if (moduleId === "Odd_Item_Detection") {
+  const isRandom = configuration.oddItem_RandomizeTarget === true;
+  if (!isRandom && !configuration.oddItem_SelectedTarget) {
+    alert("Please select a Target (or enable Randomize Target).");
+    return;
+  }
+}
 
-    if (!validateMemoryQuestions()) {
-      return;
-    }
+  if (!validateMemoryQuestions()) {
+    return;
+  }
 
     setSaving(true);
 
@@ -584,6 +628,7 @@ export default function InstructorExperimentBuilder() {
         environment: environment || "",
         moduleId: moduleId || "",
         moduleName: moduleName || "",
+        vrId: selectedVrId || "",
         sceneId: sceneId || "",
         moduleDescription: moduleDescription || "",
         configuration: configuration || {},
@@ -802,7 +847,7 @@ export default function InstructorExperimentBuilder() {
           </div>
         </section>
 
-        {/* Experiment Details / Basic Info (Placed directly below selection) */}
+        {/* Experiment Details */}
         <section className="bg-white border border-gray-200 rounded-xl p-6 mb-6 shadow-sm">
           <h2 className="text-lg font-medium mb-4">Experiment Information</h2>
           <div className="space-y-4">
@@ -841,7 +886,7 @@ export default function InstructorExperimentBuilder() {
               <div>
                 <h2 className="text-lg font-medium">VR Environment Preview</h2>
                 <p className="text-sm text-gray-500">
-                  Click inside the preview window to activate mouse look (pointer lock).
+                  Click inside the preview window, To exit, press Esc key twice
                 </p>
               </div>
               {showPreview && (
@@ -889,6 +934,7 @@ export default function InstructorExperimentBuilder() {
               {getOrderedConfigurationKeys().map((key) => {
                 const value = configuration[key];
 
+                // Memory targets
                 if (key === "targets" && Array.isArray(value)) {
                   return (
                     <div key={key} className="md:col-span-2 space-y-4 pt-4 border-t border-gray-200">
@@ -961,6 +1007,89 @@ export default function InstructorExperimentBuilder() {
                   );
                 }
 
+                // Never show the available lists
+                if (key === "ab_FurnitureList" || key === "oddItem_AvailableTargets"||  key === "oddItem_TargetDisplayName") {
+                  return null;
+                }
+
+                // Attentional Blindness - Selected Fade Target (Dropdown)
+                if (key === "ab_SpecificFadeTarget") {
+                  const isRandom = configuration.ab_UseRandomFadeTarget === true;
+                  const furniture = Array.isArray(configuration.ab_FurnitureList)
+                    ? configuration.ab_FurnitureList
+                    : [];
+
+                  return (
+                    <div key={key}>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Selected Fade Target
+                      </label>
+                      <select
+                        value={value ?? ""}
+                        disabled={isRandom}
+                        onChange={(e) => updateConfigValue([key], e.target.value)}
+                        className={`w-full rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 ${
+                          isRandom
+                            ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                            : "bg-white"
+                        }`}
+                      >
+                        <option value="">— Select a target —</option>
+                        {furniture.map((item) => (
+                          <option key={item} value={item}>
+                            {item}
+                          </option>
+                        ))}
+                      </select>
+                      {isRandom && (
+                        <p className="mt-1 text-xs text-gray-500">
+                          Disabled while “Use Random Fade Target” is enabled.
+                        </p>
+                      )}
+                    </div>
+                  );
+                }
+
+                // Odd Item Detection - Selected Target (Dropdown)
+// Odd Item Detection - Selected Target (Dropdown)
+if (key === "oddItem_SelectedTarget") {
+  const isRandom = configuration.oddItem_RandomizeTarget === true;
+  const available = Array.isArray(configuration.oddItem_AvailableTargets)
+    ? configuration.oddItem_AvailableTargets
+    : [];
+
+  return (
+    <div key={key}>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        Selected Target
+      </label>
+      <select
+        value={value ?? ""}
+        disabled={isRandom}
+        onChange={(e) => updateConfigValue([key], e.target.value)}
+        className={`w-full rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 ${
+          isRandom
+            ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+            : "bg-white"
+        }`}
+      >
+        <option value="">— Select a target —</option>
+        {available.map((item) => (
+          <option key={item} value={item}>
+            {item}  
+          </option>
+        ))}
+      </select>
+      {isRandom && (
+        <p className="mt-1 text-xs text-gray-500">
+          Disabled while “Randomize Target” is enabled.
+        </p>
+      )}
+    </div>
+  );
+}
+
+                // Boolean
                 if (typeof value === "boolean") {
                   return (
                     <div key={key} className="flex items-center gap-3">
@@ -978,6 +1107,7 @@ export default function InstructorExperimentBuilder() {
                   );
                 }
 
+                // Long text
                 if (isLongTextKey(key)) {
                   return (
                     <div key={key} className="md:col-span-2">
@@ -994,6 +1124,7 @@ export default function InstructorExperimentBuilder() {
                   );
                 }
 
+                // Default
                 return (
                   <div key={key}>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1047,7 +1178,30 @@ export default function InstructorExperimentBuilder() {
             </div>
           </section>
         )}
+{/* VR Device Assignment */}
+<section className="bg-white border border-gray-200 rounded-xl p-6 mb-6 shadow-sm">
+  <h2 className="text-lg font-medium mb-3">Assign VR Device</h2>
+  <p className="text-sm text-gray-500 mb-3">
+    Select the physical headset this experiment will run on.
+  </p>
 
+  <select
+    value={selectedVrId}
+    onChange={(e) => setSelectedVrId(e.target.value)}
+    className="w-full max-w-xs rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 bg-white"
+  >
+    <option value="">— Select a VR device —</option>
+    {vrDevices.map((device) => {
+      const label = device.vrId || device.id;
+      const status = device.Status || device.status || "";
+      return (
+        <option key={device.id} value={device.vrId || device.id}>
+          {label}{status ? ` (${status})` : ""}
+        </option>
+      );
+    })}
+  </select>
+  </section>
         {/* Permissions */}
         <section className="bg-white border border-gray-200 rounded-xl p-6 mb-8 shadow-sm">
           <h2 className="text-lg font-medium mb-3">Permissions</h2>
@@ -1064,7 +1218,7 @@ export default function InstructorExperimentBuilder() {
           </label>
         </section>
 
-        {/* Bottom Publish / Save Action Bar */}
+        {/* Bottom Save Bar */}
         <div className="sticky bottom-5 z-10 flex items-center justify-end gap-3 bg-white/95 backdrop-blur border border-gray-200 p-4 rounded-xl shadow-lg">
           <button
             type="button"

@@ -37,7 +37,8 @@ public class ExperimentConfig : ScriptableObject
     public string ab_NoticedText = "You noticed the furniture item fading —\nyour attention was broadly distributed.";
     [TextArea(2, 3)]
     public string ab_NotNoticedText = "You did not notice the fading item.\nThis is the inattentional blindness effect.";
-
+    public List<string> ab_FurnitureList = new();
+    public string ab_SpecificFadeTarget = "";
     // ── Odd Item Detection ───────────────────────────────────────────────────
     [Header("Odd Item Detection")]
     public string oddItem_TargetDisplayName = "the odd item";
@@ -48,9 +49,9 @@ public class ExperimentConfig : ScriptableObject
     public float oddItem_RaycastDistance = 10f;
 
     [Header("Odd Item Detection — Targets")]
-    public List<string> oddItem_AvailableTargets = new List<string>();  // master list from module
-    public string oddItem_SelectedTarget = "";                          // chosen for this run (empty = use random or index)
-    public bool oddItem_RandomizeTarget = false;                        // if true → pick random every run
+    public List<string> oddItem_AvailableTargets = new List<string>(); 
+    public string oddItem_SelectedTarget = "";                          
+    public bool oddItem_RandomizeTarget = false;                        
 
     [Header("Odd Item Detection — Time Ratings")]
     public float oddItem_ExcellentThresholdSeconds = 10f;

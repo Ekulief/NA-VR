@@ -108,28 +108,48 @@ public class AttentionalBlindnessManager : MonoBehaviour
 
         float delay = config != null ? config.globalInstructionDelay : 1.5f;
         yield return new WaitForSeconds(delay);
-
-        if (config != null)
+        if (config != null && config.ab_FurnitureList != null && config.ab_FurnitureList.Count > 0)
         {
-            fadeDelay = config.ab_FadeDelaySeconds;
-            fadeDuration = config.ab_FadeDurationSeconds;
-            useRandomFadeTarget = config.ab_UseRandomFadeTarget;
-            Debug.Log("[AttentionalBlindness] Applied parameters from Firestore config.");
+            furnitureItems.Clear();
+            foreach (string name in config.ab_FurnitureList)
+            {
+                Transform parent = GameObject.Find("Vanishing Furniture")?.transform;
+                GameObject go = null;
+
+                if (parent != null)
+                    go = parent.Find(name)?.gameObject;         
+
+                if (go == null)
+                    go = GameObject.Find(name);               
+
+                if (go != null)
+                    furnitureItems.Add(go);
+                else
+                    Debug.LogWarning($"[AttentionalBlindness] Could not find furniture: '{name}'");
+            }
         }
 
+        _actualCount = furnitureItems.Count;
+
+        // Select target
         if (useRandomFadeTarget)
         {
-            if (furnitureItems.Count == 0)
-            {
-                Debug.LogError("[AttentionalBlindness] furnitureItems list is empty!");
-                ExperimentLogger.Log("error", "furnitureItems list is empty");
-                yield break;
-            }
             _fadeTarget = furnitureItems[UnityEngine.Random.Range(0, furnitureItems.Count)];
         }
         else
         {
-            _fadeTarget = specificFadeTarget;
+            // Prefer the name coming from Firebase
+            string targetName = config?.ab_SpecificFadeTarget;
+            if (!string.IsNullOrEmpty(targetName))
+            {
+                _fadeTarget = furnitureItems.Find(f => f.name == targetName);
+                if (_fadeTarget == null)
+                    Debug.LogError($"Specific fade target '{targetName}' not found in the list");
+            }
+            else
+            {
+                _fadeTarget = specificFadeTarget; // Inspector fallback
+            }
         }
 
         if (_fadeTarget == null)
@@ -149,7 +169,6 @@ public class AttentionalBlindnessManager : MonoBehaviour
                 { "useRandom", useRandomFadeTarget }
             });
 
-        CacheRenderers(_fadeTarget);
 
         if (instructionText != null)
         {
@@ -311,6 +330,11 @@ public class AttentionalBlindnessManager : MonoBehaviour
 
     private IEnumerator FadeOut()
     {
+        if (_fadeTarget == null) yield break;
+
+        // Convert materials to transparent only when we actually start fading
+        CacheRenderers(_fadeTarget);
+
         float elapsed = 0f;
         while (elapsed < fadeDuration)
         {

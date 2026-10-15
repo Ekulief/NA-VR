@@ -80,84 +80,113 @@
         <div id="unity-build-title">SLUBTLabs</div>
       </div>
     </div>
-    <script>
-      var canvas = document.querySelector("#unity-canvas");
+<script>
+  var canvas = document.querySelector("#unity-canvas");
 
-      // Parse the ?scene= query parameter from the iframe URL
-      const urlParams = new URLSearchParams(window.location.search);
-      const targetScene = urlParams.get('scene') || "";
+  // Parse the ?scene= query parameter from the iframe URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const targetScene = urlParams.get('scene') || "";
 
-      function unityShowBanner(msg, type) {
-        var warningBanner = document.querySelector("#unity-warning");
-        function updateBannerVisibility() {
-          warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
-        }
-        var div = document.createElement('div');
-        div.innerHTML = msg;
-        warningBanner.appendChild(div);
-        if (type == 'error') div.style = 'background: red; padding: 10px;';
-        else {
-          if (type == 'warning') div.style = 'background: yellow; padding: 10px;';
-          setTimeout(function() {
-            warningBanner.removeChild(div);
-            updateBannerVisibility();
-          }, 5000);
-        }
+  function unityShowBanner(msg, type) {
+    var warningBanner = document.querySelector("#unity-warning");
+    function updateBannerVisibility() {
+      warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
+    }
+    var div = document.createElement('div');
+    div.innerHTML = msg;
+    warningBanner.appendChild(div);
+    if (type == 'error') div.style = 'background: red; padding: 10px;';
+    else {
+      if (type == 'warning') div.style = 'background: yellow; padding: 10px;';
+      setTimeout(function() {
+        warningBanner.removeChild(div);
         updateBannerVisibility();
-      }
+      }, 5000);
+    }
+    updateBannerVisibility();
+  }
 
-      var buildUrl = "Build";
-      var loaderUrl = buildUrl + "/PreviewBuilds.loader.js";
-      var config = {
-        arguments: [],
-        dataUrl: buildUrl + "/PreviewBuilds.data.gz",
-        frameworkUrl: buildUrl + "/PreviewBuilds.framework.js.gz",
-        codeUrl: buildUrl + "/PreviewBuilds.wasm.gz",
-        streamingAssetsUrl: "StreamingAssets",
-        companyName: "SLUBT",
-        productName: "SLUBTLabs",
-        productVersion: "0.1.0",
-        showBanner: unityShowBanner,
+  var buildUrl = "Build";
+  var loaderUrl = buildUrl + "/PreviewBuilds.loader.js";
+  var config = {
+    arguments: [],
+    dataUrl: buildUrl + "/PreviewBuilds.data.gz",
+    frameworkUrl: buildUrl + "/PreviewBuilds.framework.js.gz",
+    codeUrl: buildUrl + "/PreviewBuilds.wasm.gz",
+    streamingAssetsUrl: "StreamingAssets",
+    companyName: "SLUBT",
+    productName: "SLUBTLabs",
+    productVersion: "0.1.0",
+    showBanner: unityShowBanner,
+  };
+
+  if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+    var meta = document.createElement('meta');
+    meta.name = 'viewport';
+    meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';
+    document.getElementsByTagName('head')[0].appendChild(meta);
+    document.querySelector("#unity-container").className = "unity-mobile";
+    canvas.className = "unity-mobile";
+  } else {
+    canvas.style.width = "100%";
+    canvas.style.height = "100%";
+  }
+
+  // Prevent the annoying alert when pointer lock is rejected
+  window.addEventListener('error', function (e) {
+    if (e.message && e.message.includes('Pointer lock')) {
+      e.preventDefault();
+      console.warn('Pointer lock temporarily blocked by browser (normal after Esc). Click the canvas again.');
+      return true;
+    }
+  });
+
+  // Also silence unhandled promise rejections related to pointer lock
+  window.addEventListener('unhandledrejection', function (e) {
+    if (e.reason && String(e.reason).includes('Pointer lock')) {
+      e.preventDefault();
+      console.warn('Pointer lock temporarily blocked by browser (normal after Esc). Click the canvas again.');
+    }
+  });
+
+  var script = document.createElement("script");
+  script.src = loaderUrl;
+  script.onload = () => {
+    createUnityInstance(canvas, config, (progress) => {
+      document.querySelector("#custom-progress-bar-full").style.width = 100 * progress + "%";
+    }).then((unityInstance) => {
+      // Fade out and hide the custom loader
+      var loader = document.querySelector("#custom-loader");
+      loader.style.opacity = "0";
+      setTimeout(() => { loader.style.display = "none"; }, 300);
+
+      document.querySelector("#unity-fullscreen-button").onclick = () => {
+        unityInstance.SetFullscreen(1);
       };
 
-      if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-        var meta = document.createElement('meta');
-        meta.name = 'viewport';
-        meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';
-        document.getElementsByTagName('head')[0].appendChild(meta);
-        document.querySelector("#unity-container").className = "unity-mobile";
-        canvas.className = "unity-mobile";
-      } else {
-        canvas.style.width = "960px";
-        canvas.style.height = "600px";
+      // Send message to Unity to switch to the target scene
+      if (targetScene) {
+        console.log("Sending scene name to Unity via SendMessage:", targetScene);
+        unityInstance.SendMessage("SceneLoaderController", "LoadSceneByName", targetScene);
       }
 
-      var script = document.createElement("script");
-      script.src = loaderUrl;
-      script.onload = () => {
-        createUnityInstance(canvas, config, (progress) => {
-          document.querySelector("#custom-progress-bar-full").style.width = 100 * progress + "%";
-        }).then((unityInstance) => {
-          // Fade out and hide the custom loader
-          var loader = document.querySelector("#custom-loader");
-          loader.style.opacity = "0";
-          setTimeout(() => { loader.style.display = "none"; }, 300);
+      // Helpful: click the canvas to re-engage mouse look after Esc
+      canvas.addEventListener('click', function () {
+        // Unity will request pointer lock on the next click – this is allowed
+        console.log("Canvas clicked – pointer lock can be re-acquired");
+      });
 
-          document.querySelector("#unity-fullscreen-button").onclick = () => {
-            unityInstance.SetFullscreen(1);
-          };
+    }).catch((message) => {
+      // Only show real fatal errors, ignore pointer-lock ones
+      if (message && String(message).includes('Pointer lock')) {
+        console.warn("Pointer lock error (ignored):", message);
+        return;
+      }
+      alert(message);
+    });
+  };
 
-          // Send message to Unity to switch to the target scene
-          if (targetScene) {
-            console.log("Sending scene name to Unity via SendMessage:", targetScene);
-            unityInstance.SendMessage("SceneLoaderController", "LoadSceneByName", targetScene);
-          }
-        }).catch((message) => {
-          alert(message);
-        });
-      };
-
-      document.body.appendChild(script);
-    </script>
+  document.body.appendChild(script);
+</script>
   </body>
 </html>

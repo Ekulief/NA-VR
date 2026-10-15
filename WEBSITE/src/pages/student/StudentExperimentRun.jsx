@@ -607,6 +607,9 @@ export default function StudentExperimentRun() {
             <section className="border border-gray-300 rounded-xl p-5 h-full flex flex-col">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-medium">VR Preview</h2>
+                                <p className="text-sm text-gray-500">
+                  Click inside the preview window, To exit, press Esc key twice
+                </p>
                 {showPreview && (
                   <button
                     onClick={() => setShowPreview(false)}

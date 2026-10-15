@@ -196,30 +196,11 @@ public class OddItemManager : MonoBehaviour
 
         //ExperimentLogger.Log("instructions_shown", "Odd Item instructions displayed to student");
     }
-
     private GameObject ResolveTargetPrefab()
     {
         ExperimentConfig cfg = config != null ? config : ExperimentConfigLoader.Current;
 
-        // 1. Explicit selection from Firestore
-        if (cfg != null && !string.IsNullOrEmpty(cfg.oddItem_SelectedTarget))
-        {
-            GameObject match = oddItemPrefabs.Find(p =>
-                p != null &&
-                p.name.Equals(cfg.oddItem_SelectedTarget, StringComparison.OrdinalIgnoreCase));
-
-            if (match != null)
-            {
-                Debug.Log($"[OddItemDetection] Using selected target from config: {match.name}");
-                return match;
-            }
-
-            Debug.LogWarning(
-                $"[OddItemDetection] Selected target '{cfg.oddItem_SelectedTarget}' " +
-                "not found in oddItemPrefabs. Falling back...");
-        }
-
-        // 2. Randomize
+        // 1. Randomize has highest priority
         if (cfg != null && cfg.oddItem_RandomizeTarget)
         {
             List<GameObject> pool = oddItemPrefabs;
@@ -239,14 +220,32 @@ public class OddItemManager : MonoBehaviour
                 return random;
             }
 
-            Debug.LogWarning("[OddItemDetection] Randomize enabled but pool is empty. Falling back to index.");
+            Debug.LogWarning("[OddItemDetection] Randomize enabled but pool is empty. Falling back...");
+        }
+
+        // 2. Explicit selection from Firestore
+        if (cfg != null && !string.IsNullOrEmpty(cfg.oddItem_SelectedTarget))
+        {
+            GameObject match = oddItemPrefabs.Find(p =>
+                p != null &&
+                p.name.Equals(cfg.oddItem_SelectedTarget, StringComparison.OrdinalIgnoreCase));
+
+            if (match != null)
+            {
+                Debug.Log($"[OddItemDetection] Using selected target from config: {match.name}");
+                return match;
+            }
+
+            Debug.LogWarning(
+                $"[OddItemDetection] Selected target '{cfg.oddItem_SelectedTarget}' " +
+                "not found in oddItemPrefabs. Falling back...");
         }
 
         // 3. Fallback to inspector index
         int index = Mathf.Clamp(selectedOddItemIndex, 0, oddItemPrefabs.Count - 1);
+        Debug.Log($"[OddItemDetection] Using fallback index {index}: {oddItemPrefabs[index].name}");
         return oddItemPrefabs[index];
     }
-
     private Transform FindRightController()
     {
         string[] names = { "Ray Interactor", "RayInteractor", "Right Controller", "Right Hand" };
