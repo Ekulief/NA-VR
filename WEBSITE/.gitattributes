@@ -8,3 +8,9 @@ WEBSITE/public/**/*.data* filter=lfs diff=lfs merge=lfs -text
 WEBSITE/public/**/*.wasm* filter=lfs diff=lfs merge=lfs -text
 WEBSITE/public/**/*.framework.js* filter=lfs diff=lfs merge=lfs -text
 WEBSITE/public/**/*.symbols.json* filter=lfs diff=lfs merge=lfs -text
+WEBSITE/public/Build/*.data* filter=lfs diff=lfs merge=lfs -text
+WEBSITE/public/Build/*.wasm* filter=lfs diff=lfs merge=lfs -text
+WEBSITE/public/Build/*.framework.js* filter=lfs diff=lfs merge=lfs -text
+/public/Build/*.data* filter=lfs diff=lfs merge=lfs -text
+/public/Build/*.wasm* filter=lfs diff=lfs merge=lfs -text
+/public/Build/*.framework.js* filter=lfs diff=lfs merge=lfs -text
