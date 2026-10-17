@@ -31,13 +31,11 @@ const CONFIGURATION_ORDER = {
     "globalInstructionDelay",
   ],
 
-  Depth_Perception: [
-    "depth_ActualHeightMeters",
-    "depth_InstructionText",
-    "depth_MaxHeightMeters",
-    "depth_StepAmount",
-    "globalInstructionDelay",
-  ],
+Depth_Perception: [
+  "depth_ActualHeightMeters",
+  "depth_InstructionText",
+  "globalInstructionDelay",
+],
 
   Distance_Perception: [
     "distance_ActualDistanceMeters",
@@ -1007,10 +1005,18 @@ const handleSaveExperiment = async (event) => {
                   );
                 }
 
-                // Never show the available lists
-                if (key === "ab_FurnitureList" || key === "oddItem_AvailableTargets"||  key === "oddItem_TargetDisplayName") {
-                  return null;
-                }
+               if (
+  key === "ab_FurnitureList" ||
+  key === "oddItem_AvailableTargets" ||
+  key === "oddItem_TargetDisplayName" ||
+  key === "depth_StepAmount" ||
+  key === "depth_MaxHeightMeters" ||
+  key === "distance_MinDistanceMeters" ||
+  key === "distance_MaxDistanceMeters" ||
+  key === "globalInstructionDelay"
+) {
+  return null;
+}
 
                 // Attentional Blindness - Selected Fade Target (Dropdown)
                 if (key === "ab_SpecificFadeTarget") {
@@ -1123,7 +1129,70 @@ if (key === "oddItem_SelectedTarget") {
                     </div>
                   );
                 }
+                // ----- Never show Min / Max (they are fixed limits only) -----
+if (
+  key === "distance_MinDistanceMeters" ||
+  key === "distance_MaxDistanceMeters"
+) {
+  return null;
+}
 
+if (key === "distance_ActualDistanceMeters") {
+  const min = Number(configuration.distance_MinDistanceMeters) || 0;
+  const max = Number(configuration.distance_MaxDistanceMeters) || 999;
+
+  return (
+    <div key={key}>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        {formatConfigLabel(key)}
+      </label>
+      <input
+        type="number"
+        value={value ?? ""}
+        min={min}
+        max={max}
+        onChange={(e) => {
+          let num = Number(e.target.value);
+          if (isNaN(num)) num = min;
+          num = Math.min(Math.max(num, min), max); // clamp
+          updateConfigValue([key], num);
+        }}
+        className="w-full rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+      />
+      <p className="mt-1 text-xs text-gray-500">
+        Must be between {min} m and {max} m
+      </p>
+    </div>
+  );
+}
+
+if (key === "depth_ActualHeightMeters") {
+  const max = Number(configuration.depth_MaxHeightMeters) || 100;
+
+  return (
+    <div key={key}>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        {formatConfigLabel(key)}
+      </label>
+      <input
+        type="number"
+        value={value ?? ""}
+        min={0}
+        max={max}
+        onChange={(e) => {
+          let num = Number(e.target.value);
+          if (isNaN(num)) num = 0;
+          num = Math.min(Math.max(num, 0), max);
+          updateConfigValue([key], num);
+        }}
+        className="w-full rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+      />
+      <p className="mt-1 text-xs text-gray-500">
+        Must be between 0 m and {max} m
+      </p>
+    </div>
+  );
+}
                 // Default
                 return (
                   <div key={key}>

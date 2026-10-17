@@ -95,14 +95,13 @@ public class DepthPerceptionUI : MonoBehaviour
 
         if (config != null)
         {
-            _maxHeightMetres = config.depth_MaxHeightMetres;
-            _stepAmount = config.depth_StepAmount;
-            _actualHeight = config.depth_ActualHeightMetres;
+            _maxHeightMetres = config.depth_MaxHeightMeters;
+            _stepAmount = 1f;   
+            _actualHeight = config.depth_ActualHeightMeters;
             Debug.Log("[DepthPerception] Applied config parameters.");
         }
         else
         {
-            Debug.LogWarning("[DepthPerception] No config — using fallbacks.");
             _maxHeightMetres = 100f;
             _stepAmount = 1f;
             _actualHeight = 15f;

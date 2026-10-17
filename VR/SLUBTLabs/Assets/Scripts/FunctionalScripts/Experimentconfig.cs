@@ -62,19 +62,19 @@ public class ExperimentConfig : ScriptableObject
 
     // ── Depth Perception ──────────────────────────────────────────────────────
     [Header("Depth Perception")]
-    public float depth_MaxHeightMetres = 100f;
+    public float depth_MaxHeightMeters = 100f;
     public float depth_StepAmount = 1f;
     [TextArea(2, 4)]
     public string depth_InstructionText = "You are standing on top of a building.\nHow high up do you think you are?\n\nUse the +/- buttons or slider to input your estimate.";
-    public float depth_ActualHeightMetres = 50f;
+    public float depth_ActualHeightMeters = 50f;
 
     // ── Depth Perception 2 (Horizontal Distance) ─────────────────────────────
-    [Header("Depth Perception 2 — Car Subject Distance Bounds")]
-    public float depth_MinDistanceMeters = 0f;
-    public float depth_MaxDistanceMeters = 115f;
-    public float depth_ActualDistanceMeters = 50f;
+    [Header("Distance Perception — Car Subject Distance Bounds")]
+    public float distance_MinDistanceMeters = 10f;
+    public float distance_MaxDistanceMeters = 115f;
+    public float distance_ActualDistanceMeters = 20f; 
     [TextArea(2, 4)]
-    public string depth_InstructionText2 = "Observe the car ahead and estimate its horizontal distance in meters.";
+    public string distance_InstructionText2 = "Observe the car ahead and estimate its horizontal distance in meters.";
 
     // ── Reaction Time ─────────────────────────────────────────────────────────
     [Header("Reaction Time")]
@@ -156,8 +156,8 @@ public class ExperimentConfig : ScriptableObject
             DocumentSnapshot depthSnapshot = await depthRef.GetSnapshotAsync();
             if (depthSnapshot.Exists) ApplyDepthPerceptionValues(depthSnapshot);
 
-            // 4. Depth Perception 2
-            DocumentReference depth2Ref = db.Collection("experimentModule").Document("Depth_Perception2");
+            // 4. Distance Perception
+            DocumentReference depth2Ref = db.Collection("experimentModule").Document("Distance_Perception");
             DocumentSnapshot depth2Snapshot = await depth2Ref.GetSnapshotAsync();
             if (depth2Snapshot.Exists) ApplyDepthPerception2Values(depth2Snapshot);
 
@@ -192,16 +192,16 @@ public class ExperimentConfig : ScriptableObject
         globalInstructionDelay = GetFloat("globalInstructionDelay", globalInstructionDelay);
 
         // Depth (Height)
-        depth_MaxHeightMetres = GetFloat("depth_MaxHeightMetres", depth_MaxHeightMetres);
-        depth_ActualHeightMetres = GetFloat("depth_ActualHeightMetres", depth_ActualHeightMetres);
+        depth_MaxHeightMeters = GetFloat("depth_MaxHeightMeters", depth_MaxHeightMeters);
+        depth_ActualHeightMeters = GetFloat("depth_ActualHeightMeters", depth_ActualHeightMeters);
         depth_StepAmount = GetFloat("depth_StepAmount", depth_StepAmount);
         depth_InstructionText = GetString("depth_InstructionText", depth_InstructionText);
 
         // Depth 2 / Distance Perception
-        depth_MinDistanceMeters = Mathf.Clamp(GetFloat("distance_MinDistanceMeters", GetFloat("depth_MinDistanceMeters", depth_MinDistanceMeters)), 0f, 115f);
-        depth_MaxDistanceMeters = Mathf.Clamp(GetFloat("distance_MaxDistanceMeters", GetFloat("depth_MaxDistanceMeters", depth_MaxDistanceMeters)), 0f, 115f);
-        depth_ActualDistanceMeters = Mathf.Clamp(GetFloat("distance_ActualDistanceMeters", GetFloat("depth_ActualDistanceMeters", depth_ActualDistanceMeters)), depth_MinDistanceMeters, depth_MaxDistanceMeters);
-        depth_InstructionText2 = GetString("distance_InstructionText", GetString("depth_InstructionText2", depth_InstructionText2));
+        distance_MinDistanceMeters = Mathf.Clamp(GetFloat("distance_MinDistanceMeters", GetFloat("distance_MinDistanceMeters", distance_MinDistanceMeters)), 0f, 115f);
+        distance_MaxDistanceMeters = Mathf.Clamp(GetFloat("distance_MaxDistanceMeters", GetFloat("distance_MaxDistanceMeters", distance_MaxDistanceMeters)), 0f, 115f);
+        distance_ActualDistanceMeters = Mathf.Clamp(GetFloat("distance_ActualDistanceMeters", GetFloat("distance_ActualDistanceMeters", distance_ActualDistanceMeters)), distance_MinDistanceMeters, distance_MaxDistanceMeters);
+        distance_InstructionText2 = GetString("distance_InstructionText", GetString("distance_InstructionText2", distance_InstructionText2));
 
         // Attentional Blindness
         ab_FadeDelaySeconds = GetFloat("ab_FadeDelaySeconds", ab_FadeDelaySeconds);

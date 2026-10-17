@@ -96,10 +96,9 @@ public class DistancePerceptionUI : MonoBehaviour
 
         if (config != null)
         {
-            _minDistanceMetres = config.depth_MinDistanceMeters;
-            _maxDistanceMetres = config.depth_MaxDistanceMeters;
-            _stepAmount = Mathf.Max(0.1f, config.depth_StepAmount);
-            _actualDistance = config.depth_ActualDistanceMeters;
+            _minDistanceMetres = config.distance_MinDistanceMeters;
+            _maxDistanceMetres = config.distance_MaxDistanceMeters;
+            _actualDistance = config.distance_ActualDistanceMeters;
             Debug.Log("[DistancePerception] Applied config parameters.");
         }
         else
@@ -121,7 +120,7 @@ public class DistancePerceptionUI : MonoBehaviour
 
         if (instructionText != null)
         {
-            string loadedInstruction = config != null ? config.depth_InstructionText2 : null;
+            string loadedInstruction = config != null ? config.distance_InstructionText2 : null;
             instructionText.text = !string.IsNullOrEmpty(loadedInstruction)
                 ? loadedInstruction
                 : "<b>Horizontal Distance Perception Test</b>\n\nObserve the target object ahead and estimate its horizontal distance in meters.\n\nPress <b>Start Test</b> when ready.";
@@ -230,7 +229,7 @@ public class DistancePerceptionUI : MonoBehaviour
                     { "maxDistanceMeters", _maxDistanceMetres },
                     { "stepAmount", _stepAmount },
                     { "actualDistanceMeters", _actualDistance },
-                    { "instructionText", config != null ? config.depth_InstructionText2 ?? "" : "" }
+                    { "instructionText", config != null ? config.distance_InstructionText2 ?? "" : "" }
                 }
             };
 
