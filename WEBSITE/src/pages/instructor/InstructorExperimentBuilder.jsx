@@ -32,11 +32,12 @@ const CONFIGURATION_ORDER = {
   ],
 
 Depth_Perception: [
-  "depth_ActualHeightMeters",
-  "depth_InstructionText",
-  "globalInstructionDelay",
-],
-
+    "depth_ActualHeightMeters",
+    "depth_MaxHeightMeters",
+    "depth_MinHeightMeters",
+    "depth_InstructionText",
+    "globalInstructionDelay",
+  ],
   Distance_Perception: [
     "distance_ActualDistanceMeters",
     "distance_InstructionText",
@@ -877,7 +878,7 @@ const handleSaveExperiment = async (event) => {
           </div>
         </section>
 
-        {/* VR Environment Preview */}
+{/* VR Environment Preview */}
         {moduleId && (
           <section className="bg-white border border-gray-200 rounded-xl p-6 mb-6 shadow-sm">
             <div className="flex items-center justify-between mb-4">
@@ -921,9 +922,12 @@ const handleSaveExperiment = async (event) => {
                 />
               )}
             </div>
+
+            <p className="text-sm text-gray-500 mt-3">
+              (Note: Preview shows only the base environment and not configured variables)
+            </p>
           </section>
         )}
-
         {/* Configuration Parameters */}
         {moduleId && Object.keys(configuration).length > 0 && (
           <section className="bg-white border border-gray-200 rounded-xl p-6 mb-6 shadow-sm">
@@ -1011,6 +1015,7 @@ const handleSaveExperiment = async (event) => {
   key === "oddItem_TargetDisplayName" ||
   key === "depth_StepAmount" ||
   key === "depth_MaxHeightMeters" ||
+  key === "depth_MinHeightMeters" ||
   key === "distance_MinDistanceMeters" ||
   key === "distance_MaxDistanceMeters" ||
   key === "globalInstructionDelay"
@@ -1166,8 +1171,9 @@ if (key === "distance_ActualDistanceMeters") {
   );
 }
 
-if (key === "depth_ActualHeightMeters") {
-  const max = Number(configuration.depth_MaxHeightMeters) || 100;
+if (key === "depth_ActualHeightMeters" || key === "depth_MinHeightMeters") {
+  const min = key === "depth_ActualHeightMeters" ? Number(configuration.depth_MinHeightMeters) || 10 : 0;
+  const max = Number(configuration.depth_MaxHeightMeters) || 28;
 
   return (
     <div key={key}>
@@ -1177,18 +1183,18 @@ if (key === "depth_ActualHeightMeters") {
       <input
         type="number"
         value={value ?? ""}
-        min={0}
+        min={min}
         max={max}
         onChange={(e) => {
           let num = Number(e.target.value);
-          if (isNaN(num)) num = 0;
-          num = Math.min(Math.max(num, 0), max);
+          if (isNaN(num)) num = min;
+          num = Math.min(Math.max(num, min), max);
           updateConfigValue([key], num);
         }}
         className="w-full rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
       />
       <p className="mt-1 text-xs text-gray-500">
-        Must be between 0 m and {max} m
+        Must be between {min} m and {max} m
       </p>
     </div>
   );

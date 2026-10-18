@@ -61,12 +61,14 @@ public class ExperimentConfig : ScriptableObject
     public string oddItem_RatingKeepPracticing = "Keep Practicing";
 
     // ── Depth Perception ──────────────────────────────────────────────────────
+    // ── Depth Perception ──────────────────────────────────────────────────────
     [Header("Depth Perception")]
-    public float depth_MaxHeightMeters = 100f;
+    public float depth_MinHeightMeters = 10f; // Added field
+    public float depth_MaxHeightMeters = 28f;
     public float depth_StepAmount = 1f;
     [TextArea(2, 4)]
-    public string depth_InstructionText = "You are standing on top of a building.\nHow high up do you think you are?\n\nUse the +/- buttons or slider to input your estimate.";
-    public float depth_ActualHeightMeters = 50f;
+    public string depth_InstructionText = "<b>Depth Perception Test</b>\n\nObserve the target building structure and estimate its height in meters.\n\nPress <b>Start Test</b> when ready.";
+    public float depth_ActualHeightMeters = 20f;
 
     // ── Depth Perception 2 (Horizontal Distance) ─────────────────────────────
     [Header("Distance Perception — Car Subject Distance Bounds")]
@@ -192,6 +194,7 @@ public class ExperimentConfig : ScriptableObject
         globalInstructionDelay = GetFloat("globalInstructionDelay", globalInstructionDelay);
 
         // Depth (Height)
+        depth_MinHeightMeters = GetFloat("depth_MinHeightMeters", depth_MinHeightMeters); 
         depth_MaxHeightMeters = GetFloat("depth_MaxHeightMeters", depth_MaxHeightMeters);
         depth_ActualHeightMeters = GetFloat("depth_ActualHeightMeters", depth_ActualHeightMeters);
         depth_StepAmount = GetFloat("depth_StepAmount", depth_StepAmount);
