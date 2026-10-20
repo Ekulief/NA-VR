@@ -207,6 +207,7 @@ public class ExperimentConfig : ScriptableObject
         distance_InstructionText2 = GetString("distance_InstructionText", GetString("distance_InstructionText2", distance_InstructionText2));
 
         // Attentional Blindness
+        // Attentional Blindness
         ab_FadeDelaySeconds = GetFloat("ab_FadeDelaySeconds", ab_FadeDelaySeconds);
         ab_FadeDurationSeconds = GetFloat("ab_FadeDurationSeconds", ab_FadeDurationSeconds);
         ab_PostFadePauseSeconds = GetFloat("ab_PostFadePauseSeconds", ab_PostFadePauseSeconds);
@@ -215,6 +216,26 @@ public class ExperimentConfig : ScriptableObject
         ab_AwarenessQuestionText = GetString("ab_AwarenessQuestionText", ab_AwarenessQuestionText);
         ab_NoticedText = GetString("ab_NoticedText", ab_NoticedText);
         ab_NotNoticedText = GetString("ab_NotNoticedText", ab_NotNoticedText);
+
+        ab_SpecificFadeTarget = GetString("ab_SpecificFadeTarget", ab_SpecificFadeTarget);
+
+        if (configMap.TryGetValue("ab_FurnitureList", out object furnitureObj))
+        {
+            ab_FurnitureList.Clear();
+            if (furnitureObj is List<object> list)
+            {
+                foreach (object item in list)
+                {
+                    if (item != null)
+                        ab_FurnitureList.Add(item.ToString());
+                }
+            }
+            else if (furnitureObj is string[] arr)
+            {
+                ab_FurnitureList.AddRange(arr);
+            }
+            Debug.Log($"[ExperimentConfig] Parsed ab_FurnitureList ({ab_FurnitureList.Count}): {string.Join(", ", ab_FurnitureList)}");
+        }
 
         // Odd Item
         oddItem_SearchTimeLimitSeconds = GetFloat("oddItem_SearchTimeLimitSeconds", oddItem_SearchTimeLimitSeconds);

@@ -2,13 +2,17 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 using Firebase.Firestore;
 using Unity.XR.CoreUtils;
+using UnityEngine.XR.Management;
 
 /// <summary>
 /// SLUBT Labs — Dynamic Experiment Loader
-/// Loads experiment scenes additively, teleports XR Origin to "Spawn Point",
-/// updates vrDevices status in Firebase.
+/// - Proper loading screen with logo (no blue/green flash)
+/// - Additive scene loading
+/// - Teleports XR Origin to "Spawn Point"
+/// - Updates Firebase vrDevices status
 /// </summary>
 public class ExperimentLoader : MonoBehaviour
 {
@@ -16,45 +20,85 @@ public class ExperimentLoader : MonoBehaviour
     public GameObject xrOrigin;
 
     [Header("Spawn Position Settings")]
-    [Tooltip("If true, raises the XR Origin so the camera sits at fixedSpawnHeight above the Spawn Point. " +
-             "Leave OFF for room-scale XR (Spawn Point = feet/floor). ON is what caused the mid-air spawn + fall.")]
+    [Tooltip("Leave OFF for room-scale (Spawn Point = feet). ON was causing mid-air spawn.")]
     public bool useFixedSpawnHeight = false;
-
-    [Tooltip("Only used when useFixedSpawnHeight is true. Eye height in meters (~1.6).")]
     public float fixedSpawnHeight = 1.6f;
-
-    [Tooltip("If true, raycasts down from the spawn to find the floor collider and places the origin there.")]
     public bool snapToFloor = true;
-
-    [Tooltip("How far downward to search for a floor when snapToFloor is enabled.")]
     public float floorSnapDistance = 3f;
 
     [Header("Main Scene Visibility")]
     public GameObject[] mainSceneObjects;
 
-    [Header("Transition")]
+    [Header("Transition / Loading Screen")]
     public CanvasGroup fadeCanvas;
-    [Tooltip("Fade duration in seconds.")]
-    public float fadeDuration = 0.4f;
+    [Tooltip("Optional logo that appears while the screen is black")]
+    public Image logoImage;
+    [Tooltip("Optional loading text")]
+    public TMPro.TextMeshProUGUI loadingText;
+    public float fadeDuration = 0.5f;
 
     [Header("Firebase")]
-    [Tooltip("Assign your ExperimentConfig asset here.")]
     public ExperimentConfig config;
-
-    [Tooltip("The Firestore document ID of this VR headset in the vrDevices collection.")]
     public string vrDeviceDocumentId = "";
 
     [Header("Teleport Stabilization")]
-    [Tooltip("Time to wait before re-enabling the CharacterController.")]
     public float controllerReenableDelay = 0.25f;
+
     private bool _isLoading = false;
     private Scene _loadedScene;
     private bool _experimentSceneLoaded = false;
     private string _currentSceneName = "";
     private FirebaseFirestore _db;
 
-    private void Start()
+    // ────────────────────────────────────────────────
+    //  INITIAL BOOT – kill the blue/green flash
+    // ────────────────────────────────────────────────
+    private void Awake()
     {
+        // Force the loading screen ON from the very first frame
+        if (fadeCanvas != null)
+        {
+            fadeCanvas.gameObject.SetActive(true);
+            fadeCanvas.alpha = 1f;
+            fadeCanvas.blocksRaycasts = true;
+            fadeCanvas.interactable = false;
+        }
+
+        if (logoImage != null) logoImage.enabled = true;
+        if (loadingText != null)
+        {
+            loadingText.enabled = true;
+            loadingText.text = "Loading…";
+        }
+    }
+
+    private IEnumerator Start()
+    {
+        // In the Unity Editor, if no XR device is active, don't wait forever for XR init
+#if UNITY_EDITOR
+        float xrWaitTime = 0f;
+        while (xrWaitTime < 3f && (XRGeneralSettings.Instance == null ||
+                                  XRGeneralSettings.Instance.Manager == null ||
+                                  !XRGeneralSettings.Instance.Manager.isInitializationComplete))
+        {
+            xrWaitTime += Time.unscaledDeltaTime;
+            yield return null;
+        }
+#else
+    // In a real build, wait properly for the headset
+    yield return new WaitUntil(() =>
+        XRGeneralSettings.Instance != null &&
+        XRGeneralSettings.Instance.Manager != null &&
+        XRGeneralSettings.Instance.Manager.isInitializationComplete);
+#endif
+
+        // Initial boot delay
+        yield return new WaitForSecondsRealtime(1.5f);
+
+        // Fade out the initial loading screen to reveal your hub
+        yield return StartCoroutine(Fade(1f, 0f));
+
+        // Firebase
         if (FirebaseManager.IsInitialized)
             _db = FirebaseFirestore.DefaultInstance;
         else
@@ -68,38 +112,71 @@ public class ExperimentLoader : MonoBehaviour
         Debug.Log("[ExperimentLoader] Firebase ready.");
     }
 
+    // ────────────────────────────────────────────────
+    //  PUBLIC API
+    // ────────────────────────────────────────────────
     public void LoadScene(string sceneName)
     {
         if (_isLoading) return;
         if (string.IsNullOrEmpty(sceneName))
         {
-            Debug.LogError("[SLUBT Labs] Cannot load scene: The passed scene name is empty!");
+            Debug.LogError("[SLUBT Labs] Scene name is empty!");
             return;
         }
         StartCoroutine(LoadExperimentScene(sceneName));
     }
 
+    public void ReturnToHub()
+    {
+        if (!_experimentSceneLoaded) return;
+
+        GameObject respawnObject = GameObject.Find("Respawn");
+        if (respawnObject == null)
+            Debug.LogError("[SLUBT Labs] CRITICAL: 'Respawn' not found in Main VR Scene!");
+
+        StartCoroutine(UnloadExperimentScene(respawnObject));
+    }
+
+    // Keep the old signature so existing buttons still work
+    public void ReturnToHub(Vector3 unused) => ReturnToHub();
+
+    // ────────────────────────────────────────────────
+    //  LOAD EXPERIMENT
+    // ────────────────────────────────────────────────
     private IEnumerator LoadExperimentScene(string sceneName)
     {
         _isLoading = true;
         _currentSceneName = sceneName;
 
-        if (fadeCanvas != null)
-            yield return StartCoroutine(Fade(0f, 1f));
+        // 1. Fade to black + show logo
+        if (loadingText != null) loadingText.text = "Loading Experiment…";
+        yield return StartCoroutine(Fade(0f, 1f));
 
+        // 2. Load additively
         AsyncOperation load = SceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Additive);
+        load.allowSceneActivation = false;
+
+        while (load.progress < 0.9f)
+            yield return null;
+
+        // Extra safety for XR
+        yield return new WaitForSecondsRealtime(0.1f);
+        load.allowSceneActivation = true;
+
         yield return new WaitUntil(() => load.isDone);
 
         _loadedScene = SceneManager.GetSceneByName(sceneName);
         _experimentSceneLoaded = true;
         SceneManager.SetActiveScene(_loadedScene);
+
         SetMainSceneVisible(false);
 
+        // 3. Find Spawn Point & teleport
         GameObject spawnPoint = FindSpawnPointInScene(_loadedScene);
         if (spawnPoint == null)
         {
-            Debug.LogError($"[SLUBT Labs] No GameObject named 'Spawn Point' found in '{sceneName}'. " +
-                           "Create an empty GameObject called 'Spawn Point' on the FLOOR where the player should appear.");
+            Debug.LogError($"[SLUBT Labs] No 'Spawn Point' found in '{sceneName}'. " +
+                           "Create an empty GameObject named exactly 'Spawn Point' on the floor.");
             _isLoading = false;
             yield break;
         }
@@ -107,38 +184,30 @@ public class ExperimentLoader : MonoBehaviour
         if (xrOrigin != null)
             TeleportPlayerToTransform(spawnPoint.transform);
         else
-            Debug.LogWarning("[SLUBT Labs] xrOrigin is not assigned on Experiment Loader. Player won't be repositioned.");
+            Debug.LogWarning("[SLUBT Labs] xrOrigin not assigned.");
 
         UpdateDeviceStatus("In Use", sceneName);
 
-        if (fadeCanvas != null)
-            yield return StartCoroutine(Fade(1f, 0f));
+        // After the scene is activated and player is teleported:
+        yield return null;
+        yield return null;
 
-        _isLoading = false;
+        // Add this extra wait:
+        yield return new WaitForSecondsRealtime(0.8f);  
+
+        // Then fade out
+        yield return StartCoroutine(Fade(1f, 0f));
     }
 
-    public void ReturnToHub(Vector3 hubSpawnPosition)
-    {
-        ReturnToHub();
-    }
-
-    public void ReturnToHub()
-    {
-        if (!_experimentSceneLoaded) return;
-        Scene hubScene = SceneManager.GetSceneAt(0);
-        SceneManager.SetActiveScene(hubScene);
-        GameObject respawnObject = GameObject.Find("Respawn");
-        if (respawnObject == null)
-            Debug.LogError("[SLUBT Labs] CRITICAL ERROR: Could not locate 'Respawn' in Main VR Scene!");
-        StartCoroutine(UnloadExperimentScene(respawnObject));
-    }
-
+    // ────────────────────────────────────────────────
+    //  RETURN TO HUB
+    // ────────────────────────────────────────────────
     private IEnumerator UnloadExperimentScene(GameObject respawnObject)
     {
         _isLoading = true;
 
-        if (fadeCanvas != null)
-            yield return StartCoroutine(Fade(0f, 1f));
+        if (loadingText != null) loadingText.text = "Returning…";
+        yield return StartCoroutine(Fade(0f, 1f));
 
         Scene mainScene = SceneManager.GetSceneAt(0);
         SceneManager.SetActiveScene(mainScene);
@@ -150,6 +219,7 @@ public class ExperimentLoader : MonoBehaviour
 
         _experimentSceneLoaded = false;
         _currentSceneName = "";
+
         yield return null;
 
         if (xrOrigin != null && respawnObject != null)
@@ -160,27 +230,22 @@ public class ExperimentLoader : MonoBehaviour
 
         UpdateDeviceStatus("Available", "");
 
-        if (fadeCanvas != null)
-            yield return StartCoroutine(Fade(1f, 0f));
-
+        yield return StartCoroutine(Fade(1f, 0f));
         _isLoading = false;
     }
 
-    /// <summary>
-    /// Places XR Origin so the player stands at the target.
-    /// Default (useFixedSpawnHeight = false): origin Y = spawn Y (spawn must be on the floor).
-    /// Optional snapToFloor raycasts down to the collider under the spawn.
-    /// </summary>
+    // ────────────────────────────────────────────────
+    //  TELEPORT
+    // ────────────────────────────────────────────────
     private void TeleportPlayerToTransform(Transform targetTransform)
     {
         if (xrOrigin == null || targetTransform == null)
         {
-            Debug.LogError("[ExperimentLoader] XR Origin or target is missing.");
+            Debug.LogError("[ExperimentLoader] XR Origin or target missing.");
             return;
         }
 
         XROrigin origin = xrOrigin.GetComponent<XROrigin>();
-
         if (origin == null)
         {
             Debug.LogError("[ExperimentLoader] XROrigin component not found.");
@@ -188,7 +253,6 @@ public class ExperimentLoader : MonoBehaviour
         }
 
         Camera vrCam = origin.Camera;
-
         if (vrCam == null)
             vrCam = xrOrigin.GetComponentInChildren<Camera>();
 
@@ -198,107 +262,69 @@ public class ExperimentLoader : MonoBehaviour
             return;
         }
 
-        // Temporarily disable the CharacterController to avoid collision
-        // interference while repositioning the XR Origin.
-        CharacterController cc =
-            xrOrigin.GetComponentInChildren<CharacterController>();
-
+        CharacterController cc = xrOrigin.GetComponentInChildren<CharacterController>();
         bool controllerWasEnabled = cc != null && cc.enabled;
+        if (cc != null) cc.enabled = false;
 
-        if (cc != null)
-            cc.enabled = false;
-
-        // Match the spawn point's horizontal facing direction.
-        Vector3 forward = Vector3.ProjectOnPlane(
-            targetTransform.forward, Vector3.up).normalized;
-
+        // Face the same direction as the Spawn Point
+        Vector3 forward = Vector3.ProjectOnPlane(targetTransform.forward, Vector3.up).normalized;
         if (forward.sqrMagnitude > 0.001f)
             origin.MatchOriginUpCameraForward(Vector3.up, forward);
 
-        // Move the camera to the exact target world position,
-        // regardless of its previous position or height.
+        // Move camera exactly to the Spawn Point
         origin.MoveCameraToWorldLocation(targetTransform.position);
 
-        // Restore the controller after the teleport has settled.
-        StartCoroutine(RestoreCharacterController(
-            cc, controllerWasEnabled));
+        StartCoroutine(RestoreCharacterController(cc, controllerWasEnabled));
 
-        Debug.Log(
-            $"[ExperimentLoader] Camera teleported to target. " +
-            $"Target={targetTransform.position}, " +
-            $"Camera={vrCam.transform.position}");
+        Debug.Log($"[ExperimentLoader] Teleported. Target={targetTransform.position}, Camera={vrCam.transform.position}");
     }
 
-    private IEnumerator RestoreCharacterController(
-        CharacterController cc, bool wasEnabled)
+    private IEnumerator RestoreCharacterController(CharacterController cc, bool wasEnabled)
     {
-        // Wait briefly for XR tracking and transforms to settle.
-        yield return new WaitForSecondsRealtime(0.3f);
-
-        if (cc != null)
-            cc.enabled = wasEnabled;
+        yield return new WaitForSecondsRealtime(Mathf.Max(0.25f, controllerReenableDelay));
+        if (cc != null) cc.enabled = wasEnabled;
     }
 
-    private IEnumerator RestorePlayerPhysics(
-        CharacterController cc,
-        Rigidbody rb,
-        bool wasKinematic,
-        bool usedGravity)
-    {
-        // Let the XR rig and tracking settle before restoring collision.
-        yield return new WaitForSecondsRealtime(
-            Mathf.Max(0.1f, controllerReenableDelay));
-
-        if (rb != null)
-        {
-            rb.linearVelocity = Vector3.zero;
-            rb.angularVelocity = Vector3.zero;
-            rb.useGravity = usedGravity;
-            rb.isKinematic = wasKinematic;
-        }
-
-        if (cc != null)
-        {
-            cc.enabled = true;
-        }
-
-        Debug.Log("[ExperimentLoader] Player physics restored after teleport.");
-    }
-
+    // ────────────────────────────────────────────────
+    //  FIREBASE
+    // ────────────────────────────────────────────────
     private async void UpdateDeviceStatus(string status, string experimentSceneName)
     {
         if (_db == null || string.IsNullOrEmpty(vrDeviceDocumentId))
         {
-            Debug.LogWarning("[ExperimentLoader] Firebase not ready or vrDeviceDocumentId not set — skipping status update.");
+            Debug.LogWarning("[ExperimentLoader] Firebase not ready or document ID missing.");
             return;
         }
 
         string studentId = config != null ? config.studentId : "";
         string groupId = config != null ? config.groupId : "";
 
-        Dictionary<string, object> update = new()
+        var update = new Dictionary<string, object>
         {
             { "Status", status },
             { "currentExperimentId", experimentSceneName },
             { "currentUserId", studentId },
             { "currentGroupId", groupId },
-            { "currentSessionStart", FieldValue.ServerTimestamp },
+            { "currentSessionStart", FieldValue.ServerTimestamp }
         };
 
-        var docRef = _db.Collection("vrDevices").Document(vrDeviceDocumentId);
         try
         {
-            await docRef.UpdateAsync(update);
-            Debug.Log($"[ExperimentLoader] vrDevices status updated to '{status}'.");
+            await _db.Collection("vrDevices").Document(vrDeviceDocumentId).UpdateAsync(update);
+            Debug.Log($"[ExperimentLoader] Status → {status}");
         }
         catch (System.Exception e)
         {
-            Debug.LogWarning($"[ExperimentLoader] Non-critical Firebase error: {e.Message}");
+            Debug.LogWarning($"[ExperimentLoader] Firebase error (non-critical): {e.Message}");
         }
     }
 
+    // ────────────────────────────────────────────────
+    //  HELPERS
+    // ────────────────────────────────────────────────
     private void SetMainSceneVisible(bool visible)
     {
+        if (mainSceneObjects == null) return;
         foreach (GameObject obj in mainSceneObjects)
             if (obj != null) obj.SetActive(visible);
     }
@@ -307,11 +333,9 @@ public class ExperimentLoader : MonoBehaviour
     {
         foreach (GameObject root in scene.GetRootGameObjects())
         {
-            if (root.name == "Spawn Point")
-                return root;
+            if (root.name == "Spawn Point") return root;
             Transform found = root.transform.Find("Spawn Point");
-            if (found != null)
-                return found.gameObject;
+            if (found != null) return found.gameObject;
         }
         return null;
     }
@@ -319,16 +343,30 @@ public class ExperimentLoader : MonoBehaviour
     private IEnumerator Fade(float from, float to)
     {
         if (fadeCanvas == null) yield break;
+
         fadeCanvas.gameObject.SetActive(true);
+        fadeCanvas.blocksRaycasts = true;
+
+        // Show logo while black
+        if (logoImage != null) logoImage.enabled = true;
+        if (loadingText != null) loadingText.enabled = true;
+
         float elapsed = 0f;
         while (elapsed < fadeDuration)
         {
-            elapsed += Time.deltaTime;
+            elapsed += Time.unscaledDeltaTime;
             fadeCanvas.alpha = Mathf.Lerp(from, to, elapsed / fadeDuration);
             yield return null;
         }
+
         fadeCanvas.alpha = to;
-        if (to <= 0f)
+
+        if (to <= 0.01f)
+        {
+            fadeCanvas.blocksRaycasts = false;
             fadeCanvas.gameObject.SetActive(false);
+            if (logoImage != null) logoImage.enabled = false;
+            if (loadingText != null) loadingText.enabled = false;
+        }
     }
 }
