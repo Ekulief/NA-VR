@@ -41,32 +41,26 @@ public class FeedbackDisplay : MonoBehaviour
         // Canvas
         _canvasObj = new GameObject("FeedbackOverlayCanvas");
         DontDestroyOnLoad(_canvasObj);
-
         Canvas canvas = _canvasObj.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceCamera;
         canvas.worldCamera = Camera.main;
         canvas.planeDistance = 0.5f;
         canvas.sortingOrder = 999;
-
         _canvasObj.AddComponent<CanvasScaler>();
         _canvasObj.AddComponent<GraphicRaycaster>();
 
-        // Top of screen panel - no background
+        // Panel - Widened horizontally (0.1f to 0.9f) and kept lower on screen
         GameObject panelObj = new GameObject("FeedbackPanel");
         panelObj.transform.SetParent(_canvasObj.transform, false);
-
         RectTransform panelRt = panelObj.AddComponent<RectTransform>();
-        panelRt.anchorMin = new Vector2(0.2f, 0.78f);
-        panelRt.anchorMax = new Vector2(0.8f, 0.95f);
+        panelRt.anchorMin = new Vector2(0.1f, 0.40f);
+        panelRt.anchorMax = new Vector2(0.9f, 0.65f);
         panelRt.offsetMin = Vector2.zero;
         panelRt.offsetMax = Vector2.zero;
-
-        // No background image
 
         // Text
         GameObject textObj = new GameObject("FeedbackText");
         textObj.transform.SetParent(panelObj.transform, false);
-
         RectTransform textRt = textObj.AddComponent<RectTransform>();
         textRt.anchorMin = Vector2.zero;
         textRt.anchorMax = Vector2.one;
@@ -76,13 +70,16 @@ public class FeedbackDisplay : MonoBehaviour
         _text = textObj.AddComponent<TextMeshProUGUI>();
         _text.fontSize = fontSize;
         _text.alignment = TextAlignmentOptions.Center;
-        _text.textWrappingMode = TextWrappingModes.NoWrap;
+
+        _text.textWrappingMode = TextWrappingModes.Normal;
+
         _text.color = Color.white;
         _text.text = "";
 
         // Start hidden
         _canvasObj.SetActive(false);
-    }
+    
+}
 
     // ── Public API ────────────────────────────────────────────────────────────
     public void ShowFeedback(string message, Color textColor, float duration = -1f)

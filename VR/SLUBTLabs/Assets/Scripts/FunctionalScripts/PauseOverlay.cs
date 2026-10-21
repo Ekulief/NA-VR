@@ -12,13 +12,17 @@ public class PauseOverlay : MonoBehaviour
     public Color dimColor = new Color(0f, 0f, 0f, 0.85f);
     public Color titleColor = Color.white;
 
-    private const float DISTANCE = 1.2f;        
+    private const float DISTANCE = 1.2f;
     private static readonly Vector2 PANEL_SIZE = new Vector2(2.6f, 1.8f);
 
     private GameObject _canvasObj;
     private Canvas _canvas;
     private bool _ready;
     private Transform _followTarget;
+    private Transform _cameraTransform;
+    private bool _isPaused = false;
+    private Vector3 _lockedPosition;
+    private Quaternion _lockedRotation;
 
     private void Awake()
     {
@@ -58,6 +62,7 @@ public class PauseOverlay : MonoBehaviour
 
         var scaler = _canvasObj.AddComponent<CanvasScaler>();
         scaler.dynamicPixelsPerUnit = 10f;
+
         _canvasObj.AddComponent<GraphicRaycaster>();
 
         // Background
@@ -68,7 +73,6 @@ public class PauseOverlay : MonoBehaviour
         dimRt.anchorMax = Vector2.one;
         dimRt.offsetMin = Vector2.zero;
         dimRt.offsetMax = Vector2.zero;
-
         Image dimImg = dim.AddComponent<Image>();
         dimImg.color = dimColor;
         dimImg.raycastTarget = true;
@@ -99,16 +103,28 @@ public class PauseOverlay : MonoBehaviour
 
     private void LateUpdate()
     {
+        // If paused, forcefully lock the camera position so head movement cannot wander
+        if (_isPaused && _cameraTransform != null)
+        {
+            _cameraTransform.position = _lockedPosition;
+            _cameraTransform.rotation = _lockedRotation;
+        }
+
         if (!_ready || _canvasObj == null || !_canvasObj.activeSelf) return;
 
         if (_followTarget == null)
         {
-            // Prefer XR camera if available
             var xrCam = GameObject.Find("Main Camera") ?? GameObject.Find("CenterEyeAnchor");
             if (xrCam != null)
+            {
                 _followTarget = xrCam.transform;
+                _cameraTransform = xrCam.transform;
+            }
             else if (Camera.main != null)
+            {
                 _followTarget = Camera.main.transform;
+                _cameraTransform = Camera.main.transform;
+            }
         }
 
         if (_followTarget == null) return;
@@ -121,19 +137,28 @@ public class PauseOverlay : MonoBehaviour
 
     public void Show()
     {
-        if (!_ready || _canvasObj == null)
+        if (!_ready || _canvasObj == null) return;
+
+        var xrCam = GameObject.Find("Main Camera") ?? GameObject.Find("CenterEyeAnchor");
+        if (xrCam != null) _cameraTransform = xrCam.transform;
+        else if (Camera.main != null) _cameraTransform = Camera.main.transform;
+
+        if (_cameraTransform != null)
         {
-            Debug.LogWarning("[PauseOverlay] Show called before ready.");
-            return;
+            // Lock the exact pose right when paused
+            _lockedPosition = _cameraTransform.position;
+            _lockedRotation = _cameraTransform.rotation;
         }
 
-        _followTarget = null; // force re-find
+        _isPaused = true;
+        _followTarget = null;
         _canvasObj.SetActive(true);
-        Debug.Log("[PauseOverlay] Shown at distance " + DISTANCE);
+        Debug.Log("[PauseOverlay] Paused & Head Locked");
     }
 
     public void Hide()
     {
+        _isPaused = false;
         if (_canvasObj != null)
             _canvasObj.SetActive(false);
     }
