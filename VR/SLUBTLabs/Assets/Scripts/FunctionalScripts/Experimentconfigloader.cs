@@ -262,9 +262,8 @@ public class ExperimentConfigLoader : MonoBehaviour
         if (!string.IsNullOrEmpty(sceneId))
         {
             string cleanTarget = Clean(sceneId);
-            if (string.Equals(cleanCurrent, cleanTarget, StringComparison.OrdinalIgnoreCase) ||
-                cleanCurrent.IndexOf(cleanTarget, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                cleanTarget.IndexOf(cleanCurrent, StringComparison.OrdinalIgnoreCase) >= 0)
+            // Use exact match instead of IndexOf to prevent 'Memory Scene' from matching 'Memory Scene 2'
+            if (string.Equals(cleanCurrent, cleanTarget, StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
@@ -273,9 +272,7 @@ public class ExperimentConfigLoader : MonoBehaviour
         if (!string.IsNullOrEmpty(moduleId))
         {
             string cleanModule = Clean(moduleId);
-            if (string.Equals(cleanCurrent, cleanModule, StringComparison.OrdinalIgnoreCase) ||
-                cleanCurrent.IndexOf(cleanModule, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                cleanModule.IndexOf(cleanCurrent, StringComparison.OrdinalIgnoreCase) >= 0)
+            if (string.Equals(cleanCurrent, cleanModule, StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }

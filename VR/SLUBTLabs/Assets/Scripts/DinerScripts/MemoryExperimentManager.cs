@@ -60,7 +60,7 @@ public class MemoryExperimentManager : MonoBehaviour
     public float studyDuration = 90f;
     public float distractorDuration = 30f;
     public float transitionFadeDuration = 0.5f;
-    public int numberOfTestTrials = 12;
+    public int numberOfTestTrials = 6;
     public bool useDistractorTask = true;
     public bool randomizeQuestions = true;
 
@@ -138,7 +138,7 @@ public class MemoryExperimentManager : MonoBehaviour
         else
         {
             Debug.LogWarning("[MemoryExperimentManager] beginQuestioningButton is not assigned. " +
-                             "Drag StartQuestioningButton onto Begin Questioning Button.");
+                           "Drag StartQuestioningButton onto Begin Questioning Button.");
         }
 
         // Hide recall panel until lab
@@ -150,6 +150,9 @@ public class MemoryExperimentManager : MonoBehaviour
 
     void OnDestroy()
     {
+        if (DinerQuestionManager.Instance != null)
+            DinerQuestionManager.Instance.OnAnswerSubmitted -= OnDinerAnswered;
+
         if (startButton != null)
             startButton.onClick.RemoveListener(StartExperiment);
         if (beginQuestioningButton != null)
@@ -181,12 +184,18 @@ public class MemoryExperimentManager : MonoBehaviour
 
         var c = ExperimentConfigLoader.Current;
 
+        // Uses memory_ properties to pull exclusively from the "Memory" document
         studyDuration = c.memory_TimePerRoomSeconds > 0f ? c.memory_TimePerRoomSeconds : studyDuration;
         distractorDuration = c.memory_DistractorTaskDuration > 0f ? c.memory_DistractorTaskDuration : distractorDuration;
         if (c.memory_TransitionFadeDuration > 0f)
             transitionFadeDuration = c.memory_TransitionFadeDuration;
         useDistractorTask = c.memory_UseDistractorTask;
         randomizeQuestions = c.memory_RandomizeQuestions;
+
+        if (c.memory_Targets != null && c.memory_Targets.Count > 0)
+        {
+            numberOfTestTrials = c.memory_Targets.Count;
+        }
 
         BriefingText = c.memory_BriefingText;
         RoomInstructionText = c.memory_RoomInstructionText;
@@ -203,9 +212,8 @@ public class MemoryExperimentManager : MonoBehaviour
             recallInstructionTextUI.text = RecallInstructionText;
 
         _configApplied = true;
-        Debug.Log($"[MemoryExperimentManager] Applied config. study={studyDuration}s distractor={distractorDuration}s labSpawn={(labRoomSpawnPoint != null)}");
+        Debug.Log($"[MemoryExperimentManager] Applied Memory config. study={studyDuration}s distractor={distractorDuration}s trials={numberOfTestTrials} labSpawn={(labRoomSpawnPoint != null)}");
     }
-
     void ApplyFallbackTexts()
     {
         if (string.IsNullOrEmpty(BriefingText))
@@ -252,6 +260,7 @@ public class MemoryExperimentManager : MonoBehaviour
         ShowStartUI(false);
 
         objectTracker.CaptureOriginalLayout();
+
         GenerateTrials();
 
         if (trials.Count == 0)
@@ -360,7 +369,7 @@ public class MemoryExperimentManager : MonoBehaviour
         else
         {
             Debug.LogWarning("[MemoryExperimentManager] labRoomSpawnPoint is NOT assigned. " +
-                             "Drag LabRoom_SpawnPoint onto the Lab Room Spawn Point field.");
+                           "Drag LabRoom_SpawnPoint onto the Lab Room Spawn Point field.");
         }
 
         yield return new WaitForSeconds(0.5f);
@@ -465,14 +474,15 @@ public class MemoryExperimentManager : MonoBehaviour
         Debug.Log("[MemoryExperimentManager] StartTestPhase — invoking OnRecallStarted.");
         OnRecallStarted?.Invoke();
 
-        // If DinerQuestionManager is in the scene, it owns the question flow
-        // (Firestore / ScriptableObject targets). Skip MemoryObjectTracker trials.
+        // If DinerQuestionManager is present, subscribe to its answers so trialResults gets populated!
         if (DinerQuestionManager.Instance != null)
         {
+            // Unsubscribe first to avoid duplicate bindings, then subscribe
+            DinerQuestionManager.Instance.OnAnswerSubmitted -= OnDinerAnswered;
+            DinerQuestionManager.Instance.OnAnswerSubmitted += OnDinerAnswered;
+
             ExperimentLogger.Log("questions_started",
                 "Recall started — DinerQuestionManager will drive questions");
-            Debug.Log("[MemoryExperimentManager] Handing questions to DinerQuestionManager. " +
-                      "If no panel appears, check question list + DinerQuestionPanelUI.");
             return;
         }
 
@@ -480,7 +490,31 @@ public class MemoryExperimentManager : MonoBehaviour
         ExperimentLogger.Log("questions_started", "Test trials started (MemoryObjectTracker)");
         ShowNextTrial();
     }
+    private void OnDinerAnswered(QuestionEntry entry, string answer, bool correct, float rtMs)
+    {
+        correctCount = correct ? correctCount + 1 : correctCount;
 
+        trialResults.Add(new Dictionary<string, object>
+        {
+            { "trialIndex", trialResults.Count },
+            { "questionType", entry.questionType.ToString() },
+            { "question", entry.questionText ?? "" },
+            { "correct", correct },
+            { "reactionTimeMs", (int)rtMs },
+            { "choice", answer ?? "" },
+            { "correctAnswer", entry.correctAnswer ?? "" },
+            { "sessionId", sessionId }
+        });
+
+        ExperimentLogger.Log("trial_answered",
+            $"Trial {trialResults.Count}: {(correct ? "Correct" : "Incorrect")} (RT: {rtMs:F0}ms)",
+            new Dictionary<string, object>
+            {
+                { "trialIndex", trialResults.Count - 1 },
+                { "correct", correct },
+                { "reactionTimeMs", (int)rtMs }
+            });
+    }
     /// <summary>
     /// Called by DinerQuestionManager when all recall questions are done.
     /// </summary>
@@ -905,9 +939,10 @@ public class MemoryExperimentManager : MonoBehaviour
         }
     }
 
-    static string GetId(ExperimentConfig config, string field, string fallback)
+    private static string GetId(ExperimentConfig config, string field, string fallback)
     {
         if (config == null) return fallback;
+
         switch (field)
         {
             case "studentId": return string.IsNullOrEmpty(config.studentId) ? fallback : config.studentId;
@@ -920,44 +955,25 @@ public class MemoryExperimentManager : MonoBehaviour
         }
     }
 
-    static string FormatDuration(float totalSeconds)
+    private static string FormatDuration(float totalSeconds)
     {
         if (totalSeconds < 0f) totalSeconds = 0f;
         int t = Mathf.FloorToInt(totalSeconds);
-        return $"{t / 60}:{t % 60:D2}";
+        int m = t / 60;
+        int s = t % 60;
+        return $"{m}:{s:D2}";
     }
 
-    void OnGUI()
+    private void OnGUI()
     {
 #if UNITY_EDITOR
-        GUILayout.BeginArea(new Rect(10, 10, 260, 220));
+        if (GUILayout.Button("DEBUG: Skip Room Timer"))
+        {
+            if (isTimerRunning)
+                phaseTimer = 0f;
+        }
         if (GUILayout.Button("DEBUG: Start Experiment"))
             StartExperiment();
-        if (GUILayout.Button("DEBUG: Skip Study Timer (→ Lab)"))
-        {
-            if (currentPhase == Phase.Study && isTimerRunning)
-            {
-                phaseTimer = 0f;
-                isTimerRunning = false;
-                OnRoomTimeUp();
-            }
-        }
-        if (GUILayout.Button("DEBUG: Next Trial"))
-        {
-            if (currentPhase == Phase.Test)
-            {
-                currentTrial++;
-                ShowNextTrial();
-            }
-        }
-        if (GUILayout.Button("DEBUG: Jump to Complete"))
-            EnterComplete();
-        GUILayout.Label($"Phase: {currentPhase}");
-        GUILayout.Label($"Trial: {currentTrial + 1}/{trials.Count}");
-        GUILayout.Label($"LabSpawn: {(labRoomSpawnPoint != null ? "OK" : "MISSING")}");
-        GUILayout.Label($"StartBtn: {(startButton != null ? "OK" : "MISSING")}");
-        GUILayout.Label($"Tracker: {(objectTracker != null ? "OK" : "MISSING")}");
-        GUILayout.EndArea();
 #endif
     }
 }

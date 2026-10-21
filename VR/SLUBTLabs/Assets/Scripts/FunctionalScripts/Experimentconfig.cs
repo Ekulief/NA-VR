@@ -39,6 +39,7 @@ public class ExperimentConfig : ScriptableObject
     public string ab_NotNoticedText = "You did not notice the fading item.\nThis is the inattentional blindness effect.";
     public List<string> ab_FurnitureList = new();
     public string ab_SpecificFadeTarget = "";
+
     // ── Odd Item Detection ───────────────────────────────────────────────────
     [Header("Odd Item Detection")]
     public string oddItem_TargetDisplayName = "the odd item";
@@ -49,9 +50,9 @@ public class ExperimentConfig : ScriptableObject
     public float oddItem_RaycastDistance = 10f;
 
     [Header("Odd Item Detection — Targets")]
-    public List<string> oddItem_AvailableTargets = new List<string>(); 
-    public string oddItem_SelectedTarget = "";                          
-    public bool oddItem_RandomizeTarget = false;                        
+    public List<string> oddItem_AvailableTargets = new List<string>();
+    public string oddItem_SelectedTarget = "";
+    public bool oddItem_RandomizeTarget = false;
 
     [Header("Odd Item Detection — Time Ratings")]
     public float oddItem_ExcellentThresholdSeconds = 10f;
@@ -61,9 +62,8 @@ public class ExperimentConfig : ScriptableObject
     public string oddItem_RatingKeepPracticing = "Keep Practicing";
 
     // ── Depth Perception ──────────────────────────────────────────────────────
-    // ── Depth Perception ──────────────────────────────────────────────────────
     [Header("Depth Perception")]
-    public float depth_MinHeightMeters = 10f; // Added field
+    public float depth_MinHeightMeters = 10f;
     public float depth_MaxHeightMeters = 28f;
     public float depth_StepAmount = 1f;
     [TextArea(2, 4)]
@@ -74,7 +74,7 @@ public class ExperimentConfig : ScriptableObject
     [Header("Distance Perception — Car Subject Distance Bounds")]
     public float distance_MinDistanceMeters = 10f;
     public float distance_MaxDistanceMeters = 115f;
-    public float distance_ActualDistanceMeters = 20f; 
+    public float distance_ActualDistanceMeters = 20f;
     [TextArea(2, 4)]
     public string distance_InstructionText2 = "Observe the car ahead and estimate its horizontal distance in meters.";
 
@@ -95,8 +95,8 @@ public class ExperimentConfig : ScriptableObject
     public float shelf_RandomPositionOffset = 0.04f;
     public float shelf_RandomRotationOffset = 15f;
 
-    // ── Memory Experiment ─────────────────────────────────────────────────────
-    [Header("Memory Experiment")]
+    // ── Memory (Document: "Memory") ───────────────────────────────────────────
+    [Header("Memory Experiment (Doc: Memory)")]
     public float memory_TimePerRoomSeconds = 60f;
     public float memory_TransitionFadeDuration = 0.5f;
     public float memory_DistractorTaskDuration = 30f;
@@ -106,24 +106,26 @@ public class ExperimentConfig : ScriptableObject
     [Header("Memory – Remote Targets (from Firestore)")]
     public List<MemoryTargetEntry> memory_Targets = new List<MemoryTargetEntry>();
 
-    [TextArea(2, 4)]
-    public string memory_BriefingText =
-        "<b>Memory Experiment</b>\n\n" +
-        "You will explore several rooms.\n" +
-        "Pay close attention to the objects and details in each room.\n\n" +
-        "Press <b>Start</b> when you are ready.";
-    [TextArea(2, 4)]
-    public string memory_RoomInstructionText =
-        "Explore this room carefully.\n" +
-        "Try to remember as many objects and details as you can.";
-    [TextArea(2, 4)]
-    public string memory_DistractorInstructionText =
-        "Before we continue, please count backwards from 100 by 3s.\n\n" +
-        "Say each number <b>aloud</b>.";
-    [TextArea(2, 4)]
-    public string memory_RecallInstructionText =
-        "Now you will be asked questions about the rooms you explored.\n\n" +
-        "Answer as accurately as you can.";
+    [TextArea(2, 4)] public string memory_BriefingText = "<b>Memory Experiment</b>\n\nYou will explore several rooms.\nPay close attention to the objects and details in each room.\n\nPress <b>Start</b> when you are ready.";
+    [TextArea(2, 4)] public string memory_RoomInstructionText = "Explore this room carefully.\nTry to remember as many objects and details as you can.";
+    [TextArea(2, 4)] public string memory_DistractorInstructionText = "Before we continue, please count backwards from 100 by 3s.\n\nSay each number <b>aloud</b>.";
+    [TextArea(2, 4)] public string memory_RecallInstructionText = "Now you will be asked questions about the rooms you explored.\n\nAnswer as accurately as you can.";
+
+    // ── Memory2 (Document: "Memory2") ─────────────────────────────────────────
+    [Header("Memory 2 Experiment (Doc: Memory2)")]
+    public float memory2_TimePerRoomSeconds = 60f;
+    public float memory2_TransitionFadeDuration = 0.5f;
+    public float memory2_DistractorTaskDuration = 30f;
+    public bool memory2_UseDistractorTask = true;
+    public bool memory2_RandomizeQuestions = true;
+
+    [Header("Memory 2 – Remote Targets (from Firestore)")]
+    public List<MemoryTargetEntry> memory2_Targets = new List<MemoryTargetEntry>();
+
+    [TextArea(2, 4)] public string memory2_BriefingText = "<b>Memory 2 Experiment</b>\n\nYou will explore several rooms.\nPay close attention to the objects and details in each room.\n\nPress <b>Start</b> when you are ready.";
+    [TextArea(2, 4)] public string memory2_RoomInstructionText = "Explore this room carefully.\nTry to remember as many objects and details as you can.";
+    [TextArea(2, 4)] public string memory2_DistractorInstructionText = "Before we continue, please count backwards from 100 by 3s.\n\nSay each number <b>aloud</b>.";
+    [TextArea(2, 4)] public string memory2_RecallInstructionText = "Now you will be asked questions about the rooms you explored.\n\nAnswer as accurately as you can.";
 
     // ── Web App Integration ───────────────────────────────────────────────────
     [Header("Web App Integration")]
@@ -163,13 +165,22 @@ public class ExperimentConfig : ScriptableObject
             DocumentSnapshot depth2Snapshot = await depth2Ref.GetSnapshotAsync();
             if (depth2Snapshot.Exists) ApplyDepthPerception2Values(depth2Snapshot);
 
-            // 5. Memory
-            DocumentReference memoryRef = db.Collection("experimentModule").Document("Memory2");
+            // 5. Memory (Document: "Memory")
+            DocumentReference memoryRef = db.Collection("experimentModule").Document("Memory");
             DocumentSnapshot memorySnapshot = await memoryRef.GetSnapshotAsync();
             if (memorySnapshot.Exists)
             {
                 ApplyMemoryValues(memorySnapshot);
-                Debug.Log("[ExperimentConfig] Memory values updated from Firestore.");
+                Debug.Log("[ExperimentConfig] 'Memory' values updated from Firestore.");
+            }
+
+            // 6. Memory2 (Document: "Memory2")
+            DocumentReference memory2Ref = db.Collection("experimentModule").Document("Memory2");
+            DocumentSnapshot memory2Snapshot = await memory2Ref.GetSnapshotAsync();
+            if (memory2Snapshot.Exists)
+            {
+                ApplyMemory2Values(memory2Snapshot);
+                Debug.Log("[ExperimentConfig] 'Memory2' values updated from Firestore.");
             }
         }
         catch (Exception ex)
@@ -194,7 +205,7 @@ public class ExperimentConfig : ScriptableObject
         globalInstructionDelay = GetFloat("globalInstructionDelay", globalInstructionDelay);
 
         // Depth (Height)
-        depth_MinHeightMeters = GetFloat("depth_MinHeightMeters", depth_MinHeightMeters); 
+        depth_MinHeightMeters = GetFloat("depth_MinHeightMeters", depth_MinHeightMeters);
         depth_MaxHeightMeters = GetFloat("depth_MaxHeightMeters", depth_MaxHeightMeters);
         depth_ActualHeightMeters = GetFloat("depth_ActualHeightMeters", depth_ActualHeightMeters);
         depth_StepAmount = GetFloat("depth_StepAmount", depth_StepAmount);
@@ -207,7 +218,6 @@ public class ExperimentConfig : ScriptableObject
         distance_InstructionText2 = GetString("distance_InstructionText", GetString("distance_InstructionText2", distance_InstructionText2));
 
         // Attentional Blindness
-        // Attentional Blindness
         ab_FadeDelaySeconds = GetFloat("ab_FadeDelaySeconds", ab_FadeDelaySeconds);
         ab_FadeDurationSeconds = GetFloat("ab_FadeDurationSeconds", ab_FadeDurationSeconds);
         ab_PostFadePauseSeconds = GetFloat("ab_PostFadePauseSeconds", ab_PostFadePauseSeconds);
@@ -216,7 +226,6 @@ public class ExperimentConfig : ScriptableObject
         ab_AwarenessQuestionText = GetString("ab_AwarenessQuestionText", ab_AwarenessQuestionText);
         ab_NoticedText = GetString("ab_NoticedText", ab_NoticedText);
         ab_NotNoticedText = GetString("ab_NotNoticedText", ab_NotNoticedText);
-
         ab_SpecificFadeTarget = GetString("ab_SpecificFadeTarget", ab_SpecificFadeTarget);
 
         if (configMap.TryGetValue("ab_FurnitureList", out object furnitureObj))
@@ -234,7 +243,6 @@ public class ExperimentConfig : ScriptableObject
             {
                 ab_FurnitureList.AddRange(arr);
             }
-            Debug.Log($"[ExperimentConfig] Parsed ab_FurnitureList ({ab_FurnitureList.Count}): {string.Join(", ", ab_FurnitureList)}");
         }
 
         // Odd Item
@@ -249,7 +257,6 @@ public class ExperimentConfig : ScriptableObject
         oddItem_RatingGood = GetString("oddItem_RatingGood", oddItem_RatingGood);
         oddItem_RatingKeepPracticing = GetString("oddItem_RatingKeepPracticing", oddItem_RatingKeepPracticing);
 
-        // NEW – target selection
         oddItem_SelectedTarget = GetString("oddItem_SelectedTarget", oddItem_SelectedTarget);
         oddItem_RandomizeTarget = GetBool("oddItem_RandomizeTarget", oddItem_RandomizeTarget);
 
@@ -258,7 +265,7 @@ public class ExperimentConfig : ScriptableObject
             ParseOddItemTargets(targetsObj);
         }
 
-        // Memory
+        // Memory (Document: "Memory")
         memory_TimePerRoomSeconds = GetFloat("memory_TimePerRoomSeconds", memory_TimePerRoomSeconds);
         memory_TransitionFadeDuration = GetFloat("memory_TransitionFadeDuration", memory_TransitionFadeDuration);
         memory_DistractorTaskDuration = GetFloat("memory_DistractorTaskDuration", memory_DistractorTaskDuration);
@@ -271,7 +278,37 @@ public class ExperimentConfig : ScriptableObject
 
         if (configMap.TryGetValue("targets", out object memoryTargetsObj))
         {
-            ParseMemoryTargets(memoryTargetsObj);
+            memory_Targets = ParseMemoryTargetsList(memoryTargetsObj);
+        }
+    }
+
+    public void ApplyMemory2ConfigurationMap(Dictionary<string, object> configMap)
+    {
+        if (configMap == null) return;
+
+        float GetFloat(string key, float fallback) =>
+            configMap.TryGetValue(key, out object v) ? Convert.ToSingle(v) : fallback;
+
+        bool GetBool(string key, bool fallback) =>
+            configMap.TryGetValue(key, out object v) ? Convert.ToBoolean(v) : fallback;
+
+        string GetString(string key, string fallback) =>
+            configMap.TryGetValue(key, out object v) ? v.ToString() : fallback;
+
+        // Memory2 (Document: "Memory2")
+        memory2_TimePerRoomSeconds = GetFloat("memory_TimePerRoomSeconds", memory2_TimePerRoomSeconds);
+        memory2_TransitionFadeDuration = GetFloat("memory_TransitionFadeDuration", memory2_TransitionFadeDuration);
+        memory2_DistractorTaskDuration = GetFloat("memory2_DistractorTaskDuration", memory2_DistractorTaskDuration);
+        memory2_UseDistractorTask = GetBool("memory2_UseDistractorTask", memory2_UseDistractorTask);
+        memory2_RandomizeQuestions = GetBool("memory2_RandomizeQuestions", memory2_RandomizeQuestions);
+        memory2_BriefingText = GetString("memory_BriefingText", memory2_BriefingText);
+        memory2_RoomInstructionText = GetString("memory2_RoomInstructionText", memory2_RoomInstructionText);
+        memory2_DistractorInstructionText = GetString("memory2_DistractorInstructionText", memory2_DistractorInstructionText);
+        memory2_RecallInstructionText = GetString("memory2_RecallInstructionText", memory2_RecallInstructionText);
+
+        if (configMap.TryGetValue("targets", out object memory2TargetsObj))
+        {
+            memory2_Targets = ParseMemoryTargetsList(memory2TargetsObj);
         }
     }
 
@@ -283,14 +320,12 @@ public class ExperimentConfig : ScriptableObject
 
     private void ApplyOddItemValues(DocumentSnapshot snap)
     {
-        // Support both top-level fields and nested defaultConfig
         if (snap.TryGetValue("defaultConfig", out Dictionary<string, object> configMap))
         {
             ApplyConfigurationMap(configMap);
         }
         else
         {
-            // Fallback: treat the whole document as the config map
             var map = snap.ToDictionary();
             ApplyConfigurationMap(map);
         }
@@ -312,10 +347,20 @@ public class ExperimentConfig : ScriptableObject
     {
         if (!snap.TryGetValue("defaultConfig", out Dictionary<string, object> configMap))
         {
-            Debug.LogWarning("[ExperimentConfig] 'defaultConfig' field missing in Memory2 document.");
+            Debug.LogWarning("[ExperimentConfig] 'defaultConfig' field missing in Memory document.");
             return;
         }
         ApplyConfigurationMap(configMap);
+    }
+
+    private void ApplyMemory2Values(DocumentSnapshot snap)
+    {
+        if (!snap.TryGetValue("defaultConfig", out Dictionary<string, object> configMap))
+        {
+            Debug.LogWarning("[ExperimentConfig] 'defaultConfig' field missing in Memory2 document.");
+            return;
+        }
+        ApplyMemory2ConfigurationMap(configMap);
     }
 
     private void ParseOddItemTargets(object targetsObj)
@@ -334,15 +379,12 @@ public class ExperimentConfig : ScriptableObject
         {
             oddItem_AvailableTargets.AddRange(arr);
         }
-
-        Debug.Log($"[ExperimentConfig] Parsed {oddItem_AvailableTargets.Count} odd-item targets.");
     }
 
-    private void ParseMemoryTargets(object targetsObj)
+    private List<MemoryTargetEntry> ParseMemoryTargetsList(object targetsObj)
     {
-        if (targetsObj is not List<object> targetsList) return;
-
-        memory_Targets.Clear();
+        List<MemoryTargetEntry> parsedList = new List<MemoryTargetEntry>();
+        if (targetsObj is not List<object> targetsList) return parsedList;
 
         foreach (object targetObj in targetsList)
         {
@@ -390,10 +432,10 @@ public class ExperimentConfig : ScriptableObject
                 entry.questions = qList.ToArray();
             }
 
-            memory_Targets.Add(entry);
+            parsedList.Add(entry);
         }
 
-        Debug.Log($"[ExperimentConfig] Parsed {memory_Targets.Count} memory targets.");
+        return parsedList;
     }
 
     public void ApplyFromJson(string json)

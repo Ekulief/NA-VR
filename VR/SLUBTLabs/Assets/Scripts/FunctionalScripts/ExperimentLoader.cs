@@ -74,7 +74,6 @@ public class ExperimentLoader : MonoBehaviour
 
     private IEnumerator Start()
     {
-        // In the Unity Editor, if no XR device is active, don't wait forever for XR init
 #if UNITY_EDITOR
         float xrWaitTime = 0f;
         while (xrWaitTime < 3f && (XRGeneralSettings.Instance == null ||
@@ -85,17 +84,19 @@ public class ExperimentLoader : MonoBehaviour
             yield return null;
         }
 #else
-    // In a real build, wait properly for the headset
     yield return new WaitUntil(() =>
         XRGeneralSettings.Instance != null &&
         XRGeneralSettings.Instance.Manager != null &&
         XRGeneralSettings.Instance.Manager.isInitializationComplete);
 #endif
 
-        // Initial boot delay
-        yield return new WaitForSecondsRealtime(1.5f);
+        // Keep the screen black while everything initializes
+        yield return new WaitForSecondsRealtime(0.5f);
 
-        // Fade out the initial loading screen to reveal your hub
+        // CRITICAL: Wait for end of frame so Unity finishes its initial rendering pass
+        yield return new WaitForEndOfFrame();
+
+        // Now fade out smoothly
         yield return StartCoroutine(Fade(1f, 0f));
 
         // Firebase

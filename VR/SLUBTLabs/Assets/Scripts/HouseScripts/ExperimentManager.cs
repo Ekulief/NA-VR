@@ -118,6 +118,7 @@ public class ExperimentManager : MonoBehaviour
         while (QuestionManager.Instance == null)
             yield return new WaitForSeconds(0.1f);
 
+        QuestionManager.Instance.OnAnswerSubmitted -= OnQuestionAnswered;
         QuestionManager.Instance.OnAnswerSubmitted += OnQuestionAnswered;
     }
 
@@ -177,22 +178,24 @@ public class ExperimentManager : MonoBehaviour
         }
 
         var c = ExperimentConfigLoader.Current;
-        timePerRoom = c.memory_TimePerRoomSeconds;
-        transitionFadeDuration = c.memory_TransitionFadeDuration;
-        distractorTaskDuration = c.memory_DistractorTaskDuration;
-        useDistractorTask = c.memory_UseDistractorTask;
-        randomizeQuestions = c.memory_RandomizeQuestions;
-        BriefingText = c.memory_BriefingText;
-        RoomInstructionText = c.memory_RoomInstructionText;
-        DistractorInstructionText = c.memory_DistractorInstructionText;
-        RecallInstructionText = c.memory_RecallInstructionText;
 
-        if (briefingTextUI != null) briefingTextUI.text = BriefingText;
-        if (roomInstructionTextUI != null) roomInstructionTextUI.text = RoomInstructionText;
-        if (distractorInstructionTextUI != null) distractorInstructionTextUI.text = DistractorInstructionText;
-        if (recallInstructionTextUI != null) recallInstructionTextUI.text = RecallInstructionText;
+        timePerRoom = c.memory2_TimePerRoomSeconds > 0f ? c.memory2_TimePerRoomSeconds : timePerRoom;
+        transitionFadeDuration = c.memory2_TransitionFadeDuration > 0f ? c.memory2_TransitionFadeDuration : transitionFadeDuration;
+        distractorTaskDuration = c.memory2_DistractorTaskDuration > 0f ? c.memory2_DistractorTaskDuration : distractorTaskDuration;
+        useDistractorTask = c.memory2_UseDistractorTask;
+        randomizeQuestions = c.memory2_RandomizeQuestions;
 
-        Debug.Log("[ExperimentManager] Applied Memory config.");
+        BriefingText = c.memory2_BriefingText;
+        RoomInstructionText = c.memory2_RoomInstructionText;
+        DistractorInstructionText = c.memory2_DistractorInstructionText;
+        RecallInstructionText = c.memory2_RecallInstructionText;
+
+        if (briefingTextUI != null && !string.IsNullOrEmpty(BriefingText)) briefingTextUI.text = BriefingText;
+        if (roomInstructionTextUI != null && !string.IsNullOrEmpty(RoomInstructionText)) roomInstructionTextUI.text = RoomInstructionText;
+        if (distractorInstructionTextUI != null && !string.IsNullOrEmpty(DistractorInstructionText)) distractorInstructionTextUI.text = DistractorInstructionText;
+        if (recallInstructionTextUI != null && !string.IsNullOrEmpty(RecallInstructionText)) recallInstructionTextUI.text = RecallInstructionText;
+
+        Debug.Log("[ExperimentManager] Applied Memory2 config.");
     }
 
     private void Update()
@@ -252,7 +255,6 @@ public class ExperimentManager : MonoBehaviour
             yield return null;
 
         ApplyConfig();
-        //ExperimentLogger.Log("instructions_shown", "Memory briefing / config applied");
     }
 
     public void OnPlayerEnterRoom(string roomName)
@@ -271,7 +273,6 @@ public class ExperimentManager : MonoBehaviour
         if (currentRoomIndex >= rooms.Count)
         {
             OnAllRoomsExplored?.Invoke();
-          //  ExperimentLogger.Log("all_rooms_explored", $"All {rooms.Count} rooms explored");
             StartCoroutine(BeginTransitionToLab());
             yield break;
         }
@@ -295,15 +296,6 @@ public class ExperimentManager : MonoBehaviour
         isTimerRunning = true;
 
         OnRoomStarted?.Invoke(room.roomName, timePerRoom);
-
-        /* ExperimentLogger.Log("room_started",
-            $"Entered room: {room.roomName} (index {currentRoomIndex})",
-            new Dictionary<string, object>
-            {
-                { "roomIndex", currentRoomIndex },
-                { "roomName", room.roomName },
-                { "timeAllottedSeconds", timePerRoom }
-            });*/
     }
 
     private void OnRoomTimeUp()
@@ -318,14 +310,6 @@ public class ExperimentManager : MonoBehaviour
         });
 
         OnRoomEnded?.Invoke(endedRoom);
-
-        /* ExperimentLogger.Log("room_ended",
-             $"Room timer finished: {endedRoom}",
-             new Dictionary<string, object>
-             {
-                 { "roomIndex", currentRoomIndex },
-                 { "roomName", endedRoom ?? "" } 
-             });*/
 
         currentRoomIndex++;
         StartCoroutine(GoToNextRoom());
@@ -352,8 +336,6 @@ public class ExperimentManager : MonoBehaviour
         ChangeState(ExperimentState.Recalling);
         ApplyConfig();
 
-        //ExperimentLogger.Log("recall_phase_started", "Recall phase started");
-
         if (recallInstructionPanel != null)
         {
             recallInstructionPanel.SetActive(true);
@@ -377,7 +359,6 @@ public class ExperimentManager : MonoBehaviour
             StartCoroutine(RunDistractorThenQuestions());
         else
         {
-           // ExperimentLogger.Log("questions_started", "Recall questions started (no distractor)");
             OnRecallStarted?.Invoke();
         }
     }
@@ -386,9 +367,6 @@ public class ExperimentManager : MonoBehaviour
     {
         ChangeState(ExperimentState.DistractorTask);
         OnDistractorStarted?.Invoke(distractorTaskDuration);
-
-       // ExperimentLogger.Log("distractor_started",
-         //   $"Distractor task started ({distractorTaskDuration}s)");
 
         float waited = 0f;
         while (waited < distractorTaskDuration)
@@ -399,9 +377,6 @@ public class ExperimentManager : MonoBehaviour
         }
 
         OnDistractorEnded?.Invoke();
-       // ExperimentLogger.Log("distractor_ended", "Distractor task finished");
-
-       // ExperimentLogger.Log("questions_started", "Recall questions started after distractor");
         OnRecallStarted?.Invoke();
     }
 
@@ -411,7 +386,6 @@ public class ExperimentManager : MonoBehaviour
         OnExperimentFinished?.Invoke();
         Debug.Log("[ExperimentManager] Experiment complete.");
 
-      //  ExperimentLogger.Log("experiment_finished", "Memory experiment finished — saving results");
         SaveResultsToFirestore();
     }
 
@@ -523,6 +497,7 @@ public class ExperimentManager : MonoBehaviour
                 }
             };
 
+            // Combine both room tracking and question results into experimentalResults
             var experimentalResults = new List<object>();
             foreach (var r in _roomResults)
                 experimentalResults.Add(r);
@@ -544,8 +519,8 @@ public class ExperimentManager : MonoBehaviour
                 { "studentId", studentId },
                 { "vrId", vrId },
                 { "progressId", progressId },
-                { "experimentName", "Memory" },
-                { "moduleName", "Memory" },
+                { "experimentName", "Memory2" },
+                { "moduleName", "Memory2" },
                 { "completionStatus", "Completed" },
                 { "duration", durationDisplay },
                 { "durationSeconds", durationSeconds },
@@ -560,10 +535,10 @@ public class ExperimentManager : MonoBehaviour
             };
 
             await db.Collection("experimentResults").AddAsync(doc);
-            Debug.Log($"[ExperimentManager] Saved (duration={durationDisplay}, Q={_questionResults.Count}, progressId={progressId})");
+            Debug.Log($"[ExperimentManager] Saved (duration={durationDisplay}, Rooms={_roomResults.Count}, Q={_questionResults.Count}, progressId={progressId})");
 
             ExperimentLogger.Log("experiment_completed",
-                $"Memory experiment completed. Rooms={_roomResults.Count}, Questions={_questionResults.Count}, Correct={correctCount}",
+                $"Memory2 experiment completed. Rooms={_roomResults.Count}, Questions={_questionResults.Count}, Correct={correctCount}",
                 new Dictionary<string, object>
                 {
                     { "roomsCompleted", _roomResults.Count },

@@ -596,7 +596,10 @@ const handleSaveExperiment = async (event) => {
     alert("Please select an environment / module.");
     return;
   }
-
+if (!selectedVrId) {
+      alert("Please select a VR device assignment.");
+      return;
+    }
   if (moduleId === "Attentional_Blindness") {
     const isRandom = configuration.ab_UseRandomFadeTarget === true;
     if (!isRandom && !configuration.ab_SpecificFadeTarget) {
@@ -1260,12 +1263,13 @@ if (key === "depth_ActualHeightMeters" || key === "depth_MinHeightMeters") {
     Select the physical headset this experiment will run on.
   </p>
 
-  <select
+<select
     value={selectedVrId}
     onChange={(e) => setSelectedVrId(e.target.value)}
+    required
     className="w-full max-w-xs rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 bg-white"
   >
-    <option value="">— Select a VR device —</option>
+    <option value="" disabled>— Select a VR device —</option>
     {vrDevices.map((device) => {
       const label = device.vrId || device.id;
       const status = device.Status || device.status || "";
