@@ -5,9 +5,6 @@ using System.Collections;
 
 public class DistractorTaskUI : MonoBehaviour
 {
-    // ─────────────────────────────────────────
-    // INSPECTOR REFERENCES
-    // ─────────────────────────────────────────
     [Header("UI References")]
     public GameObject distractorPanel;
     public TextMeshProUGUI headerText;
@@ -21,21 +18,15 @@ public class DistractorTaskUI : MonoBehaviour
     public Color progressColor = new Color(0.2f, 0.6f, 1f);  // blue
     public Color urgentColor = new Color(1f, 0.4f, 0.1f);    // orange
 
-    // ─────────────────────────────────────────
-    // INTERNAL
-    // ─────────────────────────────────────────
-    private float totalDuration;
     private Coroutine sequenceCoroutine;
 
-    // ─────────────────────────────────────────
-    // UNITY EVENTS
-    // ─────────────────────────────────────────
     private void OnEnable()
     {
         if (ExperimentManager.Instance != null)
         {
             ExperimentManager.Instance.OnDistractorStarted += OnDistractorStarted;
             ExperimentManager.Instance.OnDistractorEnded += OnDistractorEnded;
+            ExperimentManager.Instance.OnTimerTick += OnTimerTick;
         }
     }
 
@@ -45,6 +36,7 @@ public class DistractorTaskUI : MonoBehaviour
         {
             ExperimentManager.Instance.OnDistractorStarted -= OnDistractorStarted;
             ExperimentManager.Instance.OnDistractorEnded -= OnDistractorEnded;
+            ExperimentManager.Instance.OnTimerTick -= OnTimerTick;
         }
     }
 
@@ -53,12 +45,8 @@ public class DistractorTaskUI : MonoBehaviour
         HidePanel();
     }
 
-    // ─────────────────────────────────────────
-    // EVENT HANDLERS
-    // ─────────────────────────────────────────
     private void OnDistractorStarted(float duration)
     {
-        totalDuration = duration;
         ShowPanel(duration);
     }
 
@@ -67,34 +55,30 @@ public class DistractorTaskUI : MonoBehaviour
         HidePanel();
     }
 
-    // ─────────────────────────────────────────
-    // PANEL CONTROL
-    // ─────────────────────────────────────────
     private void ShowPanel(float duration)
     {
         if (distractorPanel != null)
             distractorPanel.SetActive(true);
 
-        // Header
         if (headerText != null)
             headerText.text = "Before We Begin...";
 
-        // Instruction text from Firestore
         if (instructionText != null)
         {
             if (ExperimentConfigLoader.Current != null &&
-                !string.IsNullOrEmpty(ExperimentConfigLoader.Current.memory_DistractorInstructionText))
+                !string.IsNullOrEmpty(ExperimentConfigLoader.Current.memory2_DistractorInstructionText))
             {
-                instructionText.text = ExperimentConfigLoader.Current.memory_DistractorInstructionText;
+                instructionText.text = ExperimentConfigLoader.Current.memory2_DistractorInstructionText;
             }
             else
             {
-                // Fallback
                 instructionText.text = "Count backwards from 100 by 3s.\n\nSay each number <b>aloud</b>.";
             }
         }
 
-        // Slider setup (unchanged)
+        if (countdownText != null)
+            countdownText.text = $"{Mathf.CeilToInt(duration)} seconds remaining";
+
         if (progressSlider != null)
         {
             progressSlider.maxValue = duration;
@@ -103,62 +87,39 @@ public class DistractorTaskUI : MonoBehaviour
         if (progressFill != null)
             progressFill.color = progressColor;
 
-        StartCoroutine(RunCountdown(duration));
+        if (sequenceCoroutine != null) StopCoroutine(sequenceCoroutine);
         sequenceCoroutine = StartCoroutine(ShowCountingSequence());
     }
+
     private void HidePanel()
     {
-        if (distractorPanel != null)
-            distractorPanel.SetActive(false);
-
         if (sequenceCoroutine != null)
         {
             StopCoroutine(sequenceCoroutine);
             sequenceCoroutine = null;
         }
+
+        if (distractorPanel != null)
+            distractorPanel.SetActive(false);
     }
 
-    // ─────────────────────────────────────────
-    // COUNTDOWN TIMER DISPLAY
-    // ─────────────────────────────────────────
-    private IEnumerator RunCountdown(float duration)
+    private void OnTimerTick(float timeRemaining)
     {
-        float timeRemaining = duration;
-
-        while (timeRemaining > 0f)
+        if (ExperimentManager.Instance != null && ExperimentManager.Instance.CurrentState == ExperimentManager.ExperimentState.DistractorTask)
         {
-            // Update countdown text
             if (countdownText != null)
                 countdownText.text = $"{Mathf.CeilToInt(timeRemaining)} seconds remaining";
 
-            // Update slider
             if (progressSlider != null)
                 progressSlider.value = timeRemaining;
 
-            // Change color in last 10 seconds
             if (progressFill != null)
             {
-                progressFill.color = timeRemaining <= 10f
-                    ? urgentColor
-                    : progressColor;
+                progressFill.color = timeRemaining <= 10f ? urgentColor : progressColor;
             }
-
-            timeRemaining -= Time.deltaTime;
-            yield return null;
         }
-
-        // Ensure it hits exactly 0
-        if (countdownText != null)
-            countdownText.text = "0 seconds remaining";
-
-        if (progressSlider != null)
-            progressSlider.value = 0f;
     }
 
-    // ─────────────────────────────────────────
-    // COUNTING SEQUENCE DISPLAY
-    // Cycles through numbers to prompt participant
-    // ─────────────────────────────────────────
     private IEnumerator ShowCountingSequence()
     {
         int current = 100;
@@ -167,8 +128,6 @@ public class DistractorTaskUI : MonoBehaviour
         {
             if (countingSequenceText != null)
             {
-                // Show current number prominently
-                // with faded previous numbers
                 int prev1 = current + 3;
                 int prev2 = current + 6;
 
@@ -189,9 +148,7 @@ public class DistractorTaskUI : MonoBehaviour
                 countingSequenceText.text = display;
             }
 
-            // Wait 3 seconds before showing next number
             yield return new WaitForSeconds(3f);
-
             current -= 3;
         }
     }

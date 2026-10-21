@@ -256,18 +256,18 @@ public class ExperimentManager : MonoBehaviour
 
         ApplyConfig();
     }
-
     public void OnPlayerEnterRoom(string roomName)
     {
         if (CurrentState != ExperimentState.Exploring) return;
         if (roomName != currentRoomName) return;
+        Debug.Log($"[ExperimentManager] Player successfully entered active room: {roomName}");
     }
 
     public void OnPlayerExitRoom(string roomName)
     {
         if (CurrentState != ExperimentState.Exploring) return;
+        Debug.Log($"[ExperimentManager] Player exited room: {roomName}");
     }
-
     private IEnumerator GoToNextRoom()
     {
         if (currentRoomIndex >= rooms.Count)
@@ -336,6 +336,8 @@ public class ExperimentManager : MonoBehaviour
         ChangeState(ExperimentState.Recalling);
         ApplyConfig();
 
+        // FIXED: Explicitly show the recall instruction panel and STOP here 
+        // until the user manually clicks the "Begin Questions" button.
         if (recallInstructionPanel != null)
         {
             recallInstructionPanel.SetActive(true);
@@ -344,6 +346,7 @@ public class ExperimentManager : MonoBehaviour
         }
         else
         {
+            // Fallback if no panel is assigned: start immediately
             BeginQuestioning();
         }
     }
@@ -352,33 +355,54 @@ public class ExperimentManager : MonoBehaviour
     {
         if (IsSessionPaused()) return;
 
+        // 1. Hide the Recall Instruction panel
         if (recallInstructionPanel != null)
             recallInstructionPanel.SetActive(false);
 
+        // 2. If distractor is enabled, start the distractor phase sequence
         if (useDistractorTask)
+        {
             StartCoroutine(RunDistractorThenQuestions());
+        }
         else
         {
+            // Skip distractor and jump straight to questions
             OnRecallStarted?.Invoke();
         }
     }
 
+    private bool isDistractorTimerRunning = false;
+
     private IEnumerator RunDistractorThenQuestions()
     {
         ChangeState(ExperimentState.DistractorTask);
+
+        string source = (ExperimentConfigLoader.Current != null) ? "Firestore / Remote Config" : "Local Inspector Fallback";
+        Debug.Log($"[ExperimentManager] Starting Distractor Task immediately. Duration: {distractorTaskDuration}s | Source: {source}");
+
+        // Open the distractor panel and start countdown right away
         OnDistractorStarted?.Invoke(distractorTaskDuration);
 
-        float waited = 0f;
-        while (waited < distractorTaskDuration)
+        float timeRemaining = distractorTaskDuration;
+        while (timeRemaining > 0f)
         {
             yield return WaitWhilePaused();
-            waited += Time.deltaTime;
+            timeRemaining -= Time.deltaTime;
+
+            OnTimerTick?.Invoke(timeRemaining);
             yield return null;
         }
 
+        Debug.Log("[ExperimentManager] Distractor Task finished. Launching questions instantly.");
         OnDistractorEnded?.Invoke();
         OnRecallStarted?.Invoke();
     }
+    // Called by DistractorTaskUI when the user clicks the distractor button
+    public void StartDistractorTimer()
+    {
+        isDistractorTimerRunning = true;
+    }
+
 
     public void OnExperimentComplete()
     {
@@ -497,7 +521,6 @@ public class ExperimentManager : MonoBehaviour
                 }
             };
 
-            // Combine both room tracking and question results into experimentalResults
             var experimentalResults = new List<object>();
             foreach (var r in _roomResults)
                 experimentalResults.Add(r);
@@ -598,6 +621,22 @@ public class ExperimentManager : MonoBehaviour
             if (isTimerRunning)
                 roomTimeRemaining = 0f;
         }
+
+        if (GUILayout.Button("DEBUG: Skip to Questions / Lab"))
+        {
+            StopAllCoroutines();
+            currentRoomIndex = rooms.Count;
+            StartCoroutine(BeginTransitionToLab());
+        }
+
+        // ADDED: Lets you instantly force-trigger the distractor task on demand for testing
+        if (GUILayout.Button("DEBUG: Start Distractor"))
+        {
+            StopAllCoroutines();
+            if (recallInstructionPanel != null) recallInstructionPanel.SetActive(false);
+            StartCoroutine(RunDistractorThenQuestions());
+        }
+
         if (GUILayout.Button("DEBUG: Start Experiment"))
             StartExperiment();
 #endif

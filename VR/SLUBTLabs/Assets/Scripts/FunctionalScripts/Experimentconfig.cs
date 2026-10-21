@@ -193,14 +193,21 @@ public class ExperimentConfig : ScriptableObject
     {
         if (configMap == null) return;
 
+        // Automatically route to Memory2 map handler if config map contains memory2 keys
+        if (configMap.ContainsKey("memory2_BriefingText") || configMap.ContainsKey("memory2_TimePerRoomSeconds"))
+        {
+            ApplyMemory2ConfigurationMap(configMap);
+            return;
+        }
+
         float GetFloat(string key, float fallback) =>
-            configMap.TryGetValue(key, out object v) ? Convert.ToSingle(v) : fallback;
+            configMap.TryGetValue(key, out object v) && v != null ? Convert.ToSingle(v) : fallback;
 
         bool GetBool(string key, bool fallback) =>
-            configMap.TryGetValue(key, out object v) ? Convert.ToBoolean(v) : fallback;
+            configMap.TryGetValue(key, out object v) && v != null ? Convert.ToBoolean(v) : fallback;
 
         string GetString(string key, string fallback) =>
-            configMap.TryGetValue(key, out object v) ? v.ToString() : fallback;
+            configMap.TryGetValue(key, out object v) && v != null ? v.ToString() : fallback;
 
         globalInstructionDelay = GetFloat("globalInstructionDelay", globalInstructionDelay);
 
@@ -286,29 +293,49 @@ public class ExperimentConfig : ScriptableObject
     {
         if (configMap == null) return;
 
-        float GetFloat(string key, float fallback) =>
-            configMap.TryGetValue(key, out object v) ? Convert.ToSingle(v) : fallback;
+        float GetFloat(string key, float fallback)
+        {
+            if (configMap.TryGetValue(key, out object v) && v != null)
+                return Convert.ToSingle(v);
+            return fallback;
+        }
 
-        bool GetBool(string key, bool fallback) =>
-            configMap.TryGetValue(key, out object v) ? Convert.ToBoolean(v) : fallback;
+        bool GetBool(string key, bool fallback)
+        {
+            if (configMap.TryGetValue(key, out object v) && v != null)
+                return Convert.ToBoolean(v);
+            return fallback;
+        }
 
-        string GetString(string key, string fallback) =>
-            configMap.TryGetValue(key, out object v) ? v.ToString() : fallback;
+        string GetString(string key, string fallback)
+        {
+            if (configMap.TryGetValue(key, out object v) && v != null)
+                return v.ToString();
+            return fallback;
+        }
 
-        // Memory2 (Document: "Memory2")
-        memory2_TimePerRoomSeconds = GetFloat("memory_TimePerRoomSeconds", memory2_TimePerRoomSeconds);
-        memory2_TransitionFadeDuration = GetFloat("memory_TransitionFadeDuration", memory2_TransitionFadeDuration);
-        memory2_DistractorTaskDuration = GetFloat("memory2_DistractorTaskDuration", memory2_DistractorTaskDuration);
-        memory2_UseDistractorTask = GetBool("memory2_UseDistractorTask", memory2_UseDistractorTask);
-        memory2_RandomizeQuestions = GetBool("memory2_RandomizeQuestions", memory2_RandomizeQuestions);
-        memory2_BriefingText = GetString("memory_BriefingText", memory2_BriefingText);
-        memory2_RoomInstructionText = GetString("memory2_RoomInstructionText", memory2_RoomInstructionText);
-        memory2_DistractorInstructionText = GetString("memory2_DistractorInstructionText", memory2_DistractorInstructionText);
-        memory2_RecallInstructionText = GetString("memory2_RecallInstructionText", memory2_RecallInstructionText);
+        memory2_TimePerRoomSeconds = GetFloat("memory2_TimePerRoomSeconds", GetFloat("memory_TimePerRoomSeconds", memory2_TimePerRoomSeconds));
+        memory2_TransitionFadeDuration = GetFloat("memory2_TransitionFadeDuration", GetFloat("memory_TransitionFadeDuration", memory2_TransitionFadeDuration));
+        memory2_DistractorTaskDuration = GetFloat("memory2_DistractorTaskDuration", GetFloat("memory_DistractorTaskDuration", memory2_DistractorTaskDuration));
+        memory2_UseDistractorTask = GetBool("memory2_UseDistractorTask", GetBool("memory_UseDistractorTask", memory2_UseDistractorTask));
+        memory2_RandomizeQuestions = GetBool("memory2_RandomizeQuestions", GetBool("memory_RandomizeQuestions", memory2_RandomizeQuestions));
+
+        memory2_BriefingText = GetString("memory2_BriefingText", GetString("memory_BriefingText", memory2_BriefingText));
+        memory2_RoomInstructionText = GetString("memory2_RoomInstructionText", GetString("memory_RoomInstructionText", memory2_RoomInstructionText));
+        memory2_DistractorInstructionText = GetString("memory2_DistractorInstructionText", GetString("memory_DistractorInstructionText", memory2_DistractorInstructionText));
+        memory2_RecallInstructionText = GetString("memory2_RecallInstructionText", GetString("memory_RecallInstructionText", memory2_RecallInstructionText));
 
         if (configMap.TryGetValue("targets", out object memory2TargetsObj))
         {
             memory2_Targets = ParseMemoryTargetsList(memory2TargetsObj);
+        }
+        else if (configMap.TryGetValue("memory2_Targets", out object altTargetsObj))
+        {
+            memory2_Targets = ParseMemoryTargetsList(altTargetsObj);
+        }
+        else if (configMap.TryGetValue("memory_Targets", out object legacyTargetsObj))
+        {
+            memory2_Targets = ParseMemoryTargetsList(legacyTargetsObj);
         }
     }
 

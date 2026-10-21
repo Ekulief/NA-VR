@@ -69,33 +69,45 @@ public class QuestionManager : MonoBehaviour
 
         bool usedRemote = false;
 
-        // Check individual conditions to see exactly what fails
-        bool isCurrentNotNull = ExperimentConfigLoader.Current != null;
-        bool isTargetsNotNull = isCurrentNotNull && ExperimentConfigLoader.Current.memory_Targets != null;
-        int targetCount = isTargetsNotNull ? ExperimentConfigLoader.Current.memory_Targets.Count : 0;
-        bool hasTargets = targetCount > 0;
+        // FIXED: Check memory2_Targets first for Memory2, then fallback to memory_Targets
+        List<MemoryTargetEntry> activeTargets = null;
+        if (ExperimentConfigLoader.Current != null)
+        {
+            if (ExperimentConfigLoader.Current.memory2_Targets != null && ExperimentConfigLoader.Current.memory2_Targets.Count > 0)
+            {
+                activeTargets = ExperimentConfigLoader.Current.memory2_Targets;
+            }
+            else if (ExperimentConfigLoader.Current.memory_Targets != null && ExperimentConfigLoader.Current.memory_Targets.Count > 0)
+            {
+                activeTargets = ExperimentConfigLoader.Current.memory_Targets;
+            }
+        }
 
-        Debug.Log($"[QuestionManager Check] ExperimentConfigLoader.Current != null: {isCurrentNotNull}");
-        Debug.Log($"[QuestionManager Check] memory_Targets != null: {isTargetsNotNull}");
-        Debug.Log($"[QuestionManager Check] memory_Targets.Count > 0: {hasTargets} (Count: {targetCount})");
+        bool hasTargets = activeTargets != null && activeTargets.Count > 0;
 
-        if (isCurrentNotNull && isTargetsNotNull && hasTargets)
+        Debug.Log($"[QuestionManager Check] ExperimentConfigLoader.Current != null: {ExperimentConfigLoader.Current != null}");
+        Debug.Log($"[QuestionManager Check] Active Targets Count: {(hasTargets ? activeTargets.Count : 0)}");
+
+        if (hasTargets)
         {
             usedRemote = true;
             Debug.Log("[QuestionManager] Using remote targets from Firestore.");
 
-            foreach (MemoryTargetEntry entry in ExperimentConfigLoader.Current.memory_Targets)
+            foreach (MemoryTargetEntry entry in activeTargets)
                 AddEntryQuestions(entry);
         }
         else
         {
             Debug.Log("[QuestionManager] Using local ScriptableObject databases.");
 
-            foreach (MemoryTargetDatabase db in databases)
+            if (databases != null)
             {
-                if (db == null) continue;
-                foreach (MemoryTargetEntry entry in db.entries)
-                    AddEntryQuestions(entry);
+                foreach (MemoryTargetDatabase db in databases)
+                {
+                    if (db == null) continue;
+                    foreach (MemoryTargetEntry entry in db.entries)
+                        AddEntryQuestions(entry);
+                }
             }
         }
 
@@ -104,7 +116,6 @@ public class QuestionManager : MonoBehaviour
 
         Debug.Log($"[QuestionManager] Source: {(usedRemote ? "FIRESTORE" : "LOCAL")} | Built {allQuestions.Count} questions.");
     }
-
     private void AddEntryQuestions(MemoryTargetEntry entry)
     {
         if (entry.questions == null) return;

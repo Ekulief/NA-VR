@@ -52,6 +52,15 @@ export default function StudentExperimentRun() {
   const [connecting, setConnecting] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const timerRef = useRef(null);
+  const initializedRef = useRef(false);
+
+  // Initialize elapsedSeconds ONLY ONCE when progress first loads
+  useEffect(() => {
+    if (progress?.elapsedSeconds != null && !initializedRef.current) {
+      setElapsedSeconds(progress.elapsedSeconds);
+      initializedRef.current = true;
+    }
+  }, [progress?.elapsedSeconds]);
 
   // ---------- Preview state ----------
   const [showPreview, setShowPreview] = useState(false);
@@ -216,6 +225,8 @@ export default function StudentExperimentRun() {
     }
 
     if (progress?.sessionControl === "running") {
+      if (timerRef.current) clearInterval(timerRef.current);
+
       timerRef.current = setInterval(() => {
         setElapsedSeconds((prev) => prev + 1);
       }, 1000);
@@ -234,7 +245,25 @@ export default function StudentExperimentRun() {
   useEffect(() => {
     if (progress?.sessionControl === "idle") {
       setElapsedSeconds(0);
+      initializedRef.current = false;
     }
+  }, [progress?.id]);
+
+  // ---------- SAVE ON UNMOUNT EFFECT ----------
+  useEffect(() => {
+    const progressId = progress?.id;
+    
+    return () => {
+      if (progressId) {
+        const ref = doc(db, "experimentProgress", progressId);
+        updateDoc(ref, {
+          elapsedSeconds: elapsedSeconds,
+          updatedAt: serverTimestamp(),
+        }).catch((err) => {
+          console.error("Failed to save elapsed time on unmount:", err);
+        });
+      }
+    };
   }, [progress?.id]);
 
   // ---------- Helpers ----------
@@ -299,6 +328,7 @@ export default function StudentExperimentRun() {
         vrId: experiment.vrId || null,
         sessionControl: "idle",
         completionStatus: "In Progress",
+        elapsedSeconds: 0,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
@@ -325,6 +355,7 @@ export default function StudentExperimentRun() {
 
       const updates = {
         sessionControl: newControl,
+        elapsedSeconds: elapsedSeconds,
         updatedAt: serverTimestamp(),
       };
 
@@ -402,7 +433,6 @@ export default function StudentExperimentRun() {
     if (Array.isArray(data)) {
       if (data.length === 0) return <span className="text-gray-400">Empty list</span>;
       
-      // If it's an array of objects, render them as clean sub-cards or rows
       return (
         <div className="space-y-3 w-full">
           {data.map((item, idx) => (
@@ -607,7 +637,7 @@ export default function StudentExperimentRun() {
             <section className="border border-gray-300 rounded-xl p-5 h-full flex flex-col">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-medium">VR Preview</h2>
-                                <p className="text-sm text-gray-500">
+                <p className="text-sm text-gray-500">
                   Click inside the preview window, To exit, press Esc key twice
                 </p>
                 {showPreview && (
