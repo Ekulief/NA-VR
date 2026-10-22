@@ -29,6 +29,7 @@ public class ExperimentConfig : ScriptableObject
     public float ab_FadeDurationSeconds = 3f;
     public float ab_PostFadePauseSeconds = 2f;
     public bool ab_UseRandomFadeTarget = true;
+
     [TextArea(2, 4)]
     public string ab_InstructionText = "<b>Count the furniture</b>\n\nWalk around the scene and count how many\nfurniture items you can see.\n\nPress <b>Start Counting</b> when you are ready.";
     [TextArea(2, 4)]
@@ -37,8 +38,20 @@ public class ExperimentConfig : ScriptableObject
     public string ab_NoticedText = "You noticed the furniture item fading —\nyour attention was broadly distributed.";
     [TextArea(2, 3)]
     public string ab_NotNoticedText = "You did not notice the fading item.\nThis is the inattentional blindness effect.";
+
     public List<string> ab_FurnitureList = new();
     public string ab_SpecificFadeTarget = "";
+
+    [Header("Attentional Blindness — Audio (Radio)")]
+    public float ab_AudioDelaySeconds = 5f;
+    public bool ab_UseRandomAudioClip = true;
+    public int ab_SpecificAudioClipIndex = 0;
+    public string ab_SpecificAudioClipName = "";
+    public bool ab_AudioLoop = false;
+    [Range(0f, 1f)] public float ab_AudioVolume = 0.8f;
+
+    // NEW: List of available clip names (for the web app)
+    public List<string> ab_AvailableAudioClips = new();
 
     // ── Odd Item Detection ───────────────────────────────────────────────────
     [Header("Odd Item Detection")]
@@ -234,7 +247,12 @@ public class ExperimentConfig : ScriptableObject
         ab_NoticedText = GetString("ab_NoticedText", ab_NoticedText);
         ab_NotNoticedText = GetString("ab_NotNoticedText", ab_NotNoticedText);
         ab_SpecificFadeTarget = GetString("ab_SpecificFadeTarget", ab_SpecificFadeTarget);
-
+        ab_AudioDelaySeconds = GetFloat("ab_AudioDelaySeconds", ab_AudioDelaySeconds);
+        ab_UseRandomAudioClip = GetBool("ab_UseRandomAudioClip", ab_UseRandomAudioClip);
+        ab_SpecificAudioClipIndex = (int)GetFloat("ab_SpecificAudioClipIndex", ab_SpecificAudioClipIndex);
+        ab_SpecificAudioClipName = GetString("ab_SpecificAudioClipName", ab_SpecificAudioClipName);  
+        ab_AudioLoop = GetBool("ab_AudioLoop", ab_AudioLoop);
+        ab_AudioVolume = Mathf.Clamp01(GetFloat("ab_AudioVolume", ab_AudioVolume));
         if (configMap.TryGetValue("ab_FurnitureList", out object furnitureObj))
         {
             ab_FurnitureList.Clear();
@@ -251,7 +269,15 @@ public class ExperimentConfig : ScriptableObject
                 ab_FurnitureList.AddRange(arr);
             }
         }
-
+        if (configMap.TryGetValue("ab_AvailableAudioClips", out object clipsObj))
+        {
+            ab_AvailableAudioClips.Clear();
+            if (clipsObj is List<object> list)
+            {
+                foreach (object item in list)
+                    if (item != null) ab_AvailableAudioClips.Add(item.ToString());
+            }
+        }
         // Odd Item
         oddItem_SearchTimeLimitSeconds = GetFloat("oddItem_SearchTimeLimitSeconds", oddItem_SearchTimeLimitSeconds);
         oddItem_RaycastDistance = GetFloat("oddItem_RaycastDistance", oddItem_RaycastDistance);

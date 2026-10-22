@@ -26,6 +26,32 @@ public class AttentionalBlindnessManager : MonoBehaviour
     public float fadeDelay = 8f;
     public float fadeDuration = 3f;
 
+    // ─────────────────────────────────────────────
+    // NEW: Audio Distraction (Radio)
+    // ─────────────────────────────────────────────
+    [Header("Audio Distraction (Radio)")]
+    [Tooltip("AudioSource on the Radio object. Leave empty to auto-find.")]
+    public AudioSource radioAudioSource;
+
+    [Tooltip("List of possible sounds. One will be chosen at runtime.")]
+    public List<AudioClip> audioClips = new();
+
+    [Tooltip("Seconds after the participant presses 'Start Counting' before the sound begins.")]
+    public float audioDelay = 5f;
+
+    [Tooltip("If true, pick a random clip from the list. If false, use specificAudioClipIndex.")]
+    public bool useRandomAudioClip = true;
+
+    [Tooltip("Index into audioClips when useRandomAudioClip is false.")]
+    public int specificAudioClipIndex = 0;
+
+    [Tooltip("Whether the chosen clip should loop.")]
+    public bool audioLoop = false;
+
+    [Tooltip("Volume of the radio (0–1).")]
+    [Range(0f, 1f)]
+    public float audioVolume = 0.8f;
+
     [Header("UI — Instruction Panel")]
     public GameObject instructionPanel;
     public TMP_Text instructionText;
@@ -66,6 +92,9 @@ public class AttentionalBlindnessManager : MonoBehaviour
     private float _experimentStartRealtime;
     private DateTime _startedAtUtc;
 
+    // Audio state
+    private AudioClip _chosenClip;
+
     // Locomotion (XRI 3.0)
     private ContinuousMoveProvider _moveProvider;
     private ContinuousTurnProvider _turnProvider;
@@ -104,6 +133,7 @@ public class AttentionalBlindnessManager : MonoBehaviour
     private void OnDestroy()
     {
         UnlockLocomotion();
+        StopRadioSound();
     }
 
     private bool IsSessionPaused()
@@ -120,7 +150,6 @@ public class AttentionalBlindnessManager : MonoBehaviour
     // ─────────────────────────────────────────────
     // Locomotion lock / unlock
     // ─────────────────────────────────────────────
-
     private Vector3 _lockedPosition;
     private readonly List<Behaviour> _disabledLocomotion = new();
 
@@ -240,6 +269,7 @@ public class AttentionalBlindnessManager : MonoBehaviour
         }
         return null;
     }
+
     private IEnumerator BeginExperiment()
     {
         Debug.Log("[AttentionalBlindness] Waiting for Firestore config to be ready...");
@@ -251,20 +281,96 @@ public class AttentionalBlindnessManager : MonoBehaviour
         float delay = config != null ? config.globalInstructionDelay : 1.5f;
         yield return new WaitForSeconds(delay);
 
-        // Apply remote config overrides
-        // Apply remote config overrides
+        // ── Apply remote config overrides ────────────────────────────────
         if (config != null)
         {
             useRandomFadeTarget = config.ab_UseRandomFadeTarget;
             if (config.ab_FadeDelaySeconds > 0f) fadeDelay = config.ab_FadeDelaySeconds;
             if (config.ab_FadeDurationSeconds > 0f) fadeDuration = config.ab_FadeDurationSeconds;
 
+            // Audio config
+            if (config.ab_AudioDelaySeconds > 0f)
+                audioDelay = config.ab_AudioDelaySeconds;
+            useRandomAudioClip = config.ab_UseRandomAudioClip;
+            specificAudioClipIndex = config.ab_SpecificAudioClipIndex;
+            audioLoop = config.ab_AudioLoop;
+            if (config.ab_AudioVolume > 0f)
+                audioVolume = Mathf.Clamp01(config.ab_AudioVolume);
+
             Debug.Log($"[AttentionalBlindness] Config from Firestore → " +
                       $"ab_UseRandomFadeTarget={config.ab_UseRandomFadeTarget}, " +
                       $"ab_SpecificFadeTarget='{config.ab_SpecificFadeTarget}', " +
                       $"ab_FadeDelaySeconds={config.ab_FadeDelaySeconds}, " +
-                      $"ab_FadeDurationSeconds={config.ab_FadeDurationSeconds}");
+                      $"ab_FadeDurationSeconds={config.ab_FadeDurationSeconds}, " +
+                      $"ab_AudioDelaySeconds={config.ab_AudioDelaySeconds}, " +
+                      $"ab_UseRandomAudioClip={config.ab_UseRandomAudioClip}");
         }
+
+        // Auto-find the Radio’s AudioSource if not assigned
+        if (radioAudioSource == null)
+        {
+            var radio = GameObject.Find("Radio");
+            if (radio != null)
+                radioAudioSource = radio.GetComponent<AudioSource>();
+        }
+
+        if (radioAudioSource == null)
+            Debug.LogWarning("[AttentionalBlindness] No AudioSource found on Radio.");
+
+        // Choose which clip will play
+        _chosenClip = null;
+
+        if (audioClips != null && audioClips.Count > 0)
+        {
+            if (useRandomAudioClip)
+            {
+                _chosenClip = audioClips[UnityEngine.Random.Range(0, audioClips.Count)];
+            }
+            else
+            {
+                // 1. Prefer selection by name (from Firestore / web app)
+                string targetName = config != null ? config.ab_SpecificAudioClipName : null;
+
+                if (!string.IsNullOrEmpty(targetName))
+                {
+                    targetName = targetName.Trim();
+
+                    // Exact match (case-insensitive)
+                    _chosenClip = audioClips.Find(c =>
+                        c != null && string.Equals(c.name, targetName, StringComparison.OrdinalIgnoreCase));
+
+                    // Partial match fallback
+                    if (_chosenClip == null)
+                    {
+                        _chosenClip = audioClips.Find(c =>
+                            c != null && c.name.IndexOf(targetName, StringComparison.OrdinalIgnoreCase) >= 0);
+                    }
+
+                    if (_chosenClip != null)
+                    {
+                        Debug.Log($"[AttentionalBlindness] Audio clip selected by name → '{_chosenClip.name}'");
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"[AttentionalBlindness] Could not find clip named '{targetName}'. " +
+                                         $"Available clips: {string.Join(", ", audioClips.ConvertAll(c => c != null ? c.name : "null"))}");
+                    }
+                }
+
+                // 2. Fallback to index if name was not found or not provided
+                if (_chosenClip == null)
+                {
+                    int idx = Mathf.Clamp(specificAudioClipIndex, 0, audioClips.Count - 1);
+                    _chosenClip = audioClips[idx];
+                    Debug.Log($"[AttentionalBlindness] Falling back to index {idx} → '{_chosenClip?.name}'");
+                }
+            }
+        }
+
+        if (_chosenClip != null)
+            Debug.Log($"[AttentionalBlindness] Final audio clip: '{_chosenClip.name}' (delay={audioDelay}s, random={useRandomAudioClip})");
+        else
+            Debug.LogWarning("[AttentionalBlindness] No audio clips available.");
 
         // Build furniture list (recursive search so nested objects are found)
         if (config != null && config.ab_FurnitureList != null && config.ab_FurnitureList.Count > 0)
@@ -275,10 +381,8 @@ public class AttentionalBlindnessManager : MonoBehaviour
             foreach (string name in config.ab_FurnitureList)
             {
                 GameObject go = null;
-
                 if (parent != null)
                     go = FindChildRecursive(parent, name);
-
                 if (go == null)
                     go = GameObject.Find(name);
 
@@ -300,7 +404,6 @@ public class AttentionalBlindnessManager : MonoBehaviour
 
         // Select fade target
         _fadeTarget = null;
-
         if (useRandomFadeTarget)
         {
             if (furnitureItems.Count > 0)
@@ -356,8 +459,8 @@ public class AttentionalBlindnessManager : MonoBehaviour
                 $"Fade target selected: {_fadeTarget.name}",
                 new Dictionary<string, object>
                 {
-            { "itemName", _fadeTarget.name },
-            { "useRandom", useRandomFadeTarget }
+                    { "itemName", _fadeTarget.name },
+                    { "useRandom", useRandomFadeTarget }
                 });
         }
 
@@ -369,33 +472,36 @@ public class AttentionalBlindnessManager : MonoBehaviour
         }
 
         if (instructionPanel != null) instructionPanel.SetActive(true);
-
         LockLocomotion();
-
         ExperimentLogger.Log("instructions_shown", "Attentional Blindness instructions displayed");
     }
 
     private void OnStartCounting()
     {
         if (IsSessionPaused()) return;
+
         if (instructionPanel != null) instructionPanel.SetActive(false);
 
         // Stay locked for the whole trial
-
         _trialStartTime = Time.time;
         _experimentStartRealtime = Time.realtimeSinceStartup;
         _startedAtUtc = DateTime.UtcNow;
+
         ExperimentLogger.Log("trial_started", "Student began counting furniture");
+
         ShowCountInput();
         StartCoroutine(FadeOutAfterDelay());
+        StartCoroutine(PlayAudioAfterDelay());          // ← NEW
     }
 
     private void ShowCountInput()
     {
         _participantCount = 0;
         UpdateCountDisplay();
+
         if (countPromptText != null)
             countPromptText.text = "How many furniture items do you count?";
+
         if (countInputPanel != null) countInputPanel.SetActive(true);
     }
 
@@ -414,9 +520,60 @@ public class AttentionalBlindnessManager : MonoBehaviour
 
         Debug.Log($"[AttentionalBlindness] Fading out '{_fadeTarget.name}'...");
         ExperimentLogger.Log("fade_started", $"Fading out '{_fadeTarget.name}'");
+
         yield return StartCoroutine(FadeOut());
+
         Debug.Log($"[AttentionalBlindness] '{_fadeTarget.name}' fully faded.");
         ExperimentLogger.Log("fade_completed", $"'{_fadeTarget.name}' fully faded");
+    }
+
+    // ─────────────────────────────────────────────
+    // NEW: Audio playback
+    // ─────────────────────────────────────────────
+    private IEnumerator PlayAudioAfterDelay()
+    {
+        if (_chosenClip == null || radioAudioSource == null) yield break;
+
+        float waited = 0f;
+        while (waited < audioDelay)
+        {
+            yield return WaitWhilePaused();
+            waited += Time.deltaTime;
+            yield return null;
+        }
+
+        if (_trialComplete) yield break;
+
+        PlayRadioSound();
+    }
+
+    private void PlayRadioSound()
+    {
+        if (radioAudioSource == null || _chosenClip == null) return;
+
+        radioAudioSource.clip = _chosenClip;
+        radioAudioSource.loop = audioLoop;
+        radioAudioSource.volume = audioVolume;
+        radioAudioSource.Play();
+
+
+        ExperimentLogger.Log("audio_started",
+            $"Radio started playing '{_chosenClip.name}' after {audioDelay:F1}s",
+            new Dictionary<string, object>
+            {
+                { "clipName", _chosenClip.name },
+                { "delaySeconds", audioDelay },
+                { "loop", audioLoop },
+                { "volume", audioVolume }
+            });
+    }
+
+    private void StopRadioSound()
+    {
+        if (radioAudioSource != null && radioAudioSource.isPlaying)
+        {
+            radioAudioSource.Stop();
+        }
     }
 
     private void OnSubmitCount()
@@ -424,6 +581,7 @@ public class AttentionalBlindnessManager : MonoBehaviour
         if (IsSessionPaused()) return;
 
         _countSubmitTime = Time.time - _trialStartTime;
+
         if (countInputPanel != null) countInputPanel.SetActive(false);
 
         ExperimentLogger.Log("count_submitted",
@@ -444,6 +602,7 @@ public class AttentionalBlindnessManager : MonoBehaviour
         }
 
         if (awarenessPanel != null) awarenessPanel.SetActive(true);
+
         Debug.Log($"[AttentionalBlindness] Count submitted: {_participantCount} (actual: {_actualCount}) after {_countSubmitTime:F1}s");
     }
 
@@ -453,6 +612,10 @@ public class AttentionalBlindnessManager : MonoBehaviour
 
         _noticedAnomaly = noticed;
         _trialComplete = true;
+
+        // Stop the radio when the trial ends
+        StopRadioSound();
+
         if (awarenessPanel != null) awarenessPanel.SetActive(false);
 
         ExperimentLogger.Log("awareness_response",
@@ -498,7 +661,6 @@ public class AttentionalBlindnessManager : MonoBehaviour
     // ─────────────────────────────────────────────
     // Fade (no black shadow spot)
     // ─────────────────────────────────────────────
-
     private void CacheRenderers(GameObject target)
     {
         _fadeTargetRenderers.Clear();
@@ -595,7 +757,6 @@ public class AttentionalBlindnessManager : MonoBehaviour
     // ─────────────────────────────────────────────
     // Count helpers
     // ─────────────────────────────────────────────
-
     private void SetCount(int value)
     {
         _participantCount = Mathf.Max(0, value);
@@ -611,7 +772,6 @@ public class AttentionalBlindnessManager : MonoBehaviour
     // ─────────────────────────────────────────────
     // Firestore
     // ─────────────────────────────────────────────
-
     private async void SaveResultsToFirestore()
     {
         try
@@ -647,7 +807,15 @@ public class AttentionalBlindnessManager : MonoBehaviour
                     { "actualFurnitureCount", _actualCount },
                     { "fadedItemName", _fadeTarget != null ? _fadeTarget.name : "" },
                     { "instructionText", config != null ? config.ab_InstructionText ?? "" : "" },
-                    { "awarenessQuestionText", config != null ? config.ab_AwarenessQuestionText ?? "" : "" }
+                    { "awarenessQuestionText", config != null ? config.ab_AwarenessQuestionText ?? "" : "" },
+
+                    // NEW audio fields
+                    { "audioDelaySeconds", audioDelay },
+                    { "useRandomAudioClip", useRandomAudioClip },
+                    { "specificAudioClipIndex", specificAudioClipIndex },
+                    { "audioLoop", audioLoop },
+                    { "audioVolume", audioVolume },
+                    { "chosenClipName", _chosenClip != null ? _chosenClip.name : "" }
                 }
             };
 
@@ -688,6 +856,7 @@ public class AttentionalBlindnessManager : MonoBehaviour
             };
 
             await db.Collection("experimentResults").AddAsync(doc);
+
             Debug.Log($"[AttentionalBlindness] Saved (duration={durationDisplay}, progressId={progressId})");
 
             ExperimentLogger.Log("experiment_completed",
@@ -722,6 +891,7 @@ public class AttentionalBlindnessManager : MonoBehaviour
     private string GetConfigString(string fieldName, string fallback)
     {
         if (config == null) return fallback;
+
         switch (fieldName)
         {
             case "studentId":

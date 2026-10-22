@@ -18,7 +18,7 @@ import { db } from "../../config/firebase-config";
 import { ArrowLeft, Plus, Box, X, Save, Loader2, Trash2 } from "lucide-react";
 
 const CONFIGURATION_ORDER = {
-  Attentional_Blindness: [
+Attentional_Blindness: [
     "ab_AwarenessQuestionText",
     "ab_FadeDelaySeconds",
     "ab_FadeDurationSeconds",
@@ -28,6 +28,14 @@ const CONFIGURATION_ORDER = {
     "ab_PostFadePauseSeconds",
     "ab_UseRandomFadeTarget",
     "ab_SpecificFadeTarget",
+    "ab_AudioDelaySeconds",
+    "ab_UseRandomAudioClip",
+    "ab_SpecificAudioClip",
+    "ab_AudioLoop",
+    "ab_AudioVolume",
+    // "ab_SpecificAudioClipIndex",
+    "ab_AvailableAudioClips",
+
     "globalInstructionDelay",
   ],
 
@@ -150,9 +158,15 @@ const formatConfigLabel = (key) => {
     .replace(/^oddItem /i, "")
     .replace(/^odd item /i, "");
 
+  // nicer names for the new audio fields
+  if (key === "ab_AudioDelaySeconds") return "Audio Delay (seconds)";
+  if (key === "ab_UseRandomAudioClip") return "Use Random Audio Clip";
+  if (key === "ab_SpecificAudioClipName") return "Selected Audio Clip";
+  if (key === "ab_AudioLoop") return "Loop Audio";
+  if (key === "ab_AudioVolume") return "Audio Volume";
+
   return label.replace(/\b\w/g, (character) => character.toUpperCase()).trim();
 };
-
 const isLongTextKey = (key) => {
   const lower = String(key).toLowerCase();
   return (
@@ -1021,49 +1035,89 @@ if (!selectedVrId) {
   key === "depth_MinHeightMeters" ||
   key === "distance_MinDistanceMeters" ||
   key === "distance_MaxDistanceMeters" ||
-  key === "globalInstructionDelay"
+  key === "globalInstructionDelay" ||
+  key === "ab_AvailableAudioClips" ||          
+  key === "ab_SpecificAudioClipIndex"
 ) {
   return null;
 }
 
-                // Attentional Blindness - Selected Fade Target (Dropdown)
-                if (key === "ab_SpecificFadeTarget") {
-                  const isRandom = configuration.ab_UseRandomFadeTarget === true;
-                  const furniture = Array.isArray(configuration.ab_FurnitureList)
-                    ? configuration.ab_FurnitureList
-                    : [];
+// Attentional Blindness – Selected Fade Target
+if (key === "ab_SpecificFadeTarget") {
+  const isRandom = configuration.ab_UseRandomFadeTarget === true;
+  const furniture = Array.isArray(configuration.ab_FurnitureList)
+    ? configuration.ab_FurnitureList
+    : [];
 
-                  return (
-                    <div key={key}>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Selected Fade Target
-                      </label>
-                      <select
-                        value={value ?? ""}
-                        disabled={isRandom}
-                        onChange={(e) => updateConfigValue([key], e.target.value)}
-                        className={`w-full rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 ${
-                          isRandom
-                            ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                            : "bg-white"
-                        }`}
-                      >
-                        <option value="">— Select a target —</option>
-                        {furniture.map((item) => (
-                          <option key={item} value={item}>
-                            {item}
-                          </option>
-                        ))}
-                      </select>
-                      {isRandom && (
-                        <p className="mt-1 text-xs text-gray-500">
-                          Disabled while “Use Random Fade Target” is enabled.
-                        </p>
-                      )}
-                    </div>
-                  );
-                }
+  return (
+    <div key={key}>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        Selected Fade Target
+      </label>
+      <select
+        value={configuration[key] ?? ""}
+        disabled={isRandom}
+        onChange={(e) => updateConfigValue([key], e.target.value)}
+        className={`w-full rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 ${
+          isRandom
+            ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+            : "bg-white"
+        }`}
+      >
+        <option value="">— Select a target —</option>
+        {furniture.map((item) => (
+          <option key={item} value={item}>
+            {item}
+          </option>
+        ))}
+      </select>
+      {isRandom && (
+        <p className="mt-1 text-xs text-gray-500">
+          Disabled while “Use Random Fade Target” is enabled.
+        </p>
+      )}
+    </div>
+  );
+}
 
+// Attentional Blindness – Selected Audio Clip (Dropdown)
+// Attentional Blindness – Selected Audio Clip (Dropdown)
+if (key === "ab_SpecificAudioClip") {
+  const isRandom = configuration.ab_UseRandomAudioClip === true;
+  const availableClips = Array.isArray(configuration.ab_AvailableAudioClips)
+    ? configuration.ab_AvailableAudioClips
+    : [];
+
+  return (
+    <div key={key}>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        Selected Audio Clip
+      </label>
+      <select
+        value={configuration[key] ?? ""}
+        disabled={isRandom}
+        onChange={(e) => updateConfigValue([key], e.target.value)}
+        className={`w-full rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 ${
+          isRandom
+            ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+            : "bg-white"
+        }`}
+      >
+        <option value="">— Select a sound —</option>
+        {availableClips.map((clip) => (
+          <option key={clip} value={clip}>
+            {clip}
+          </option>
+        ))}
+      </select>
+      {isRandom && (
+        <p className="mt-1 text-xs text-gray-500">
+          Disabled while “Use Random Audio Clip” is enabled.
+        </p>
+      )}
+    </div>
+  );
+}
                 // Odd Item Detection - Selected Target (Dropdown)
 // Odd Item Detection - Selected Target (Dropdown)
 if (key === "oddItem_SelectedTarget") {
@@ -1137,7 +1191,6 @@ if (key === "oddItem_SelectedTarget") {
                     </div>
                   );
                 }
-                // ----- Never show Min / Max (they are fixed limits only) -----
 if (
   key === "distance_MinDistanceMeters" ||
   key === "distance_MaxDistanceMeters"
