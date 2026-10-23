@@ -56,6 +56,21 @@ public class SessionController : MonoBehaviour
             StartListening(progressDocumentId);
     }
 
+    /// <summary>
+    /// Explicitly switch tracking to a new progress ID on the fly.
+    /// </summary>
+    public void SwitchSession(string progressId)
+    {
+        if (string.IsNullOrEmpty(progressId))
+        {
+            Debug.LogWarning("[SessionController] Attempted to switch to an empty progressId.");
+            return;
+        }
+
+        Debug.Log($"[SessionController] Switching session listener from '{progressDocumentId}' to '{progressId}'");
+        StartListening(progressId);
+    }
+
     public void StartListening(string progressId)
     {
         if (string.IsNullOrEmpty(progressId))
@@ -88,7 +103,6 @@ public class SessionController : MonoBehaviour
         });
 
         Debug.Log($"[SessionController] Listening to experimentProgress/{progressDocumentId}");
-      //  ExperimentLogger.Log("session_listening", $"Started listening to progress document: {progressDocumentId}");
     }
 
     public void StopListening()
@@ -140,7 +154,6 @@ public class SessionController : MonoBehaviour
             case SessionState.Idle:
                 PauseOverlay.Instance?.Hide();
                 SetMovementEnabled(true);
-               // ExperimentLogger.Log("session_idle", "Session set to Idle");
                 break;
         }
 
@@ -156,8 +169,6 @@ public class SessionController : MonoBehaviour
         if (freezeTimeScaleWhenPaused)
             Time.timeScale = 0f;
 
-       // ExperimentLogger.Log("session_paused", "Session paused");
-
         OnPaused?.Invoke();
     }
 
@@ -170,8 +181,6 @@ public class SessionController : MonoBehaviour
         if (freezeTimeScaleWhenPaused)
             Time.timeScale = 1f;
 
-       // ExperimentLogger.Log("session_resumed", "Session running / resumed");
-
         OnResumed?.Invoke();
     }
 
@@ -181,8 +190,6 @@ public class SessionController : MonoBehaviour
         SetMovementEnabled(true);
         FreezeExperimentSystems(false);
         Time.timeScale = 1f;
-
-      //  ExperimentLogger.Log("session_ended", "Session ended");
 
         OnSessionEnded?.Invoke();
 
@@ -200,14 +207,8 @@ public class SessionController : MonoBehaviour
             loader.ReturnToHub();
             yield break;
         }
-
-       // Debug.LogWarning("[SessionController] No ExperimentLoader — add your hub teleport here.");
     }
 
-    /// <summary>
-    /// Freezes / unfreezes player movement by enabling/disabling
-    /// the XR Interaction Simulator (keeps hands locked in place).
-    /// </summary>
     private void SetMovementEnabled(bool enabled)
     {
         var simulators = FindObjectsByType<MonoBehaviour>(

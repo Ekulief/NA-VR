@@ -21,6 +21,8 @@ public class ExperimentConfig : ScriptableObject
     public string experimentId;
     public string vrId;
     public string progressId;
+    public string moduleId;
+    public string sceneId;
     public float globalInstructionDelay = 1.5f;
 
     // ── Attentional Blindness (Furniture Counting) ───────────────────────────
@@ -491,6 +493,93 @@ public class ExperimentConfig : ScriptableObject
         return parsedList;
     }
 
+
+    public async Task FetchActiveSessionFromFirestore(string fallbackVrId = "VR-01")
+    {
+        try
+        {
+            FirebaseFirestore db = FirebaseFirestore.DefaultInstance;
+
+            // 1. Get hardware ID (same as loader)
+            string deviceId = SystemInfo.deviceUniqueIdentifier;
+            string vrId = fallbackVrId;
+            DocumentSnapshot deviceDoc = null;
+
+            QuerySnapshot deviceSnap = await db.Collection("vrDevices")
+                .WhereEqualTo("deviceId", deviceId)
+                .Limit(1)
+                .GetSnapshotAsync();
+
+            if (deviceSnap.Count > 0)
+            {
+                foreach (var doc in deviceSnap.Documents)
+                {
+                    deviceDoc = doc;
+                    break;
+                }
+
+                if (deviceDoc != null && deviceDoc.ContainsField("vrId"))
+                {
+                    vrId = deviceDoc.GetValue<string>("vrId") ?? fallbackVrId;
+                }
+            }
+
+            // 2. Extract currentProgressId from the matched device document
+            string currentProgressId = "";
+            if (deviceDoc != null && deviceDoc.ContainsField("currentProgressId"))
+            {
+                currentProgressId = deviceDoc.GetValue<string>("currentProgressId") ?? "";
+            }
+
+            if (string.IsNullOrEmpty(currentProgressId))
+            {
+                Debug.LogWarning("[ExperimentConfig] No active 'currentProgressId' found on device document.");
+                return;
+            }
+
+            progressId = currentProgressId;
+
+            // 3. Read experimentProgress/{progressId} to get experimentId
+            DocumentSnapshot progressSnap = await db.Collection("experimentProgress").Document(progressId).GetSnapshotAsync();
+            if (!progressSnap.Exists)
+            {
+                Debug.LogError($"[ExperimentConfig] Progress document '{progressId}' not found!");
+                return;
+            }
+
+            experimentId = progressSnap.ContainsField("experimentId") ? progressSnap.GetValue<string>("experimentId") : "";
+            if (string.IsNullOrEmpty(experimentId))
+                experimentId = progressSnap.ContainsField("exeprimentId") ? progressSnap.GetValue<string>("exeprimentId") : "";
+
+            if (string.IsNullOrEmpty(experimentId))
+            {
+                Debug.LogError($"[ExperimentConfig] Progress document has no 'experimentId'.");
+                return;
+            }
+
+            // 4. Read experiment/{experimentId} to get moduleId and sceneId
+            DocumentSnapshot expSnap = await db.Collection("experiment").Document(experimentId).GetSnapshotAsync();
+            if (!expSnap.Exists)
+            {
+                Debug.LogError($"[ExperimentConfig] Experiment document '{experimentId}' not found!");
+                return;
+            }
+
+            moduleId = expSnap.ContainsField("moduleId") ? expSnap.GetValue<string>("moduleId") : "";
+            sceneId = expSnap.ContainsField("sceneId") ? expSnap.GetValue<string>("sceneId") : "";
+
+            Debug.Log(sfxLog($"Refreshed Session Chain -> Module: {moduleId} | Scene: {sceneId} | Progress: {progressId}"));
+
+            // 5. Load the specific module's parameters
+            await FetchFromFirestoreAsync();
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"[ExperimentConfig] Failed to fetch session chain: {ex.Message}");
+        }
+    }
+
+    private string sfxLog(string msg) => $"[ExperimentConfig] {msg}";
     public void ApplyFromJson(string json)
     {
         JsonUtility.FromJsonOverwrite(json, this);

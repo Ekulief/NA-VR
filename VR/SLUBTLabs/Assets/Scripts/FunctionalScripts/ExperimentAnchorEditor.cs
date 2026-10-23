@@ -1,6 +1,5 @@
 ﻿#if UNITY_EDITOR
 using UnityEditor;
-using UnityEngine;
 
 /// <summary>
 /// Custom Inspector for ExperimentAnchor.

@@ -150,6 +150,10 @@ public class ExperimentConfigLoader : MonoBehaviour
             return;
         }
 
+        config.moduleId = GetFieldString(experimentDoc, "moduleId");
+        config.sceneId = GetFieldString(experimentDoc, "sceneId");
+        Debug.Log($"[ConfigLoader] Experiment document loaded → moduleId='{config.moduleId}', sceneId='{config.sceneId}'");
+
         // ── STEP 6: Apply configuration map ───────────────────────────────────
         Dictionary<string, object> configMap = null;
         if (experimentDoc.TryGetValue("configuration", out Dictionary<string, object> c1))
@@ -169,10 +173,13 @@ public class ExperimentConfigLoader : MonoBehaviour
     }
 
     private async Task<DocumentSnapshot> ResolveProgressDocAsync(
-        FirebaseFirestore db,
-        DocumentSnapshot deviceDoc,
-        string vrId)
+       FirebaseFirestore db,
+       DocumentSnapshot deviceDoc,
+       string vrId)
     {
+        // ✅ FIX: Capture the active scene immediately on the main thread before any 'await' calls
+        string currentScene = SceneManager.GetActiveScene().name;
+
         // 1. Pinned currentProgressId on device
         if (deviceDoc != null && deviceDoc.ContainsField("currentProgressId"))
         {
@@ -202,7 +209,6 @@ public class ExperimentConfigLoader : MonoBehaviour
         if (progressSnap.Count == 0)
             return null;
 
-        string currentScene = SceneManager.GetActiveScene().name;
         Debug.Log($"[ConfigLoader] Active scene='{currentScene}', In Progress count={progressSnap.Count}");
 
         foreach (DocumentSnapshot progressDoc in progressSnap.Documents)

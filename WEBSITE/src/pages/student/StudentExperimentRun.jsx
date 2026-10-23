@@ -10,6 +10,7 @@ import {
   addDoc,
   updateDoc,
   onSnapshot,
+  limit,
   serverTimestamp,
   getDocs,
   runTransaction,
@@ -309,7 +310,7 @@ const handleConnectVR = async () => {
   try {
     setConnecting(true);
 
-    // 1. Find the device document that owns this vrId
+    // Find the device document
     const deviceQuery = query(
       collection(db, "vrDevices"),
       where("vrId", "==", vrId),
@@ -318,46 +319,39 @@ const handleConnectVR = async () => {
     const deviceSnap = await getDocs(deviceQuery);
 
     if (deviceSnap.empty) {
-      alert(`Headset "${vrId}" is not registered in the system.`);
+      alert(`Headset "${vrId}" is not registered.`);
       return;
     }
 
     const deviceRef = deviceSnap.docs[0].ref;
 
-    // 2. Atomic lock + create progress
+    // Atomic lock + create progress
     const newProgressId = await runTransaction(db, async (transaction) => {
       const deviceDoc = await transaction.get(deviceRef);
       const data = deviceDoc.data() || {};
 
-      // ---- LOCK CHECK ----
+      // Reject if already locked by an active session
       if (data.currentProgressId) {
-        // Optional: verify the progress is still alive
-        const existingProgressRef = doc(db, "experimentProgress", data.currentProgressId);
-        const existingProgress = await transaction.get(existingProgressRef);
+        const existingRef = doc(db, "experimentProgress", data.currentProgressId);
+        const existing = await transaction.get(existingRef);
 
-        if (existingProgress.exists()) {
-          const status = existingProgress.data().completionStatus;
-          const control = existingProgress.data().sessionControl;
-
-          // Still considered active
+        if (existing.exists()) {
+          const status = existing.data().completionStatus;
+          const control = existing.data().sessionControl;
           if (status === "In Progress" && control !== "ended") {
             throw new Error("BUSY");
           }
         }
-        // If the old progress is already finished/missing we can take over
       }
 
-      // ---- CREATE PROGRESS ----
-      let groupId = null;
-      // (keep your existing group lookup if you want – it can stay outside the transaction)
-
-      const progressRef = doc(collection(db, "experimentProgress")); // auto-id
+      // Create progress
+      const progressRef = doc(collection(db, "experimentProgress"));
 
       const progressData = {
         blockId: blockId || null,
         experimentId,
         studentId: user.uid,
-        groupId,
+        groupId,       
         vrId,
         sessionControl: "idle",
         completionStatus: "In Progress",
@@ -368,9 +362,9 @@ const handleConnectVR = async () => {
 
       transaction.set(progressRef, progressData);
 
-      // ---- LOCK THE DEVICE ----
+      // ★ THIS IS THE CRITICAL LINE ★
       transaction.update(deviceRef, {
-        currentProgressId: progressRef.id,
+        currentProgressId: progressRef.id,   // ← must be the real ID
         status: "busy",
         updatedAt: serverTimestamp(),
       });
@@ -378,13 +372,13 @@ const handleConnectVR = async () => {
       return progressRef.id;
     });
 
-    console.log("Locked headset and created progress:", newProgressId);
+    console.log("Locked headset → progressId =", newProgressId);
   } catch (err) {
     if (err.message === "BUSY") {
-      alert("This VR headset is currently in use by another student. Please try again later.");
+      alert("This VR headset is currently in use by another student.");
     } else {
       console.error(err);
-      alert("Unable to connect VR device. Please try again.");
+      alert("Unable to connect VR device.");
     }
   } finally {
     setConnecting(false);

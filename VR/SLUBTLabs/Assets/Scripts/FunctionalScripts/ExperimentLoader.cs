@@ -55,12 +55,13 @@ public class ExperimentLoader : MonoBehaviour
         if (loadingText != null)
         {
             loadingText.enabled = true;
-            loadingText.text = "Loading…";
+            loadingText.text = "Initializing VR & Connecting...";
         }
     }
 
     private IEnumerator Start()
     {
+        // 1. Wait for XR Initialization
 #if UNITY_EDITOR
         float xrWaitTime = 0f;
         while (xrWaitTime < 3f && (XRGeneralSettings.Instance == null ||
@@ -77,20 +78,29 @@ public class ExperimentLoader : MonoBehaviour
             XRGeneralSettings.Instance.Manager.isInitializationComplete);
 #endif
 
+        // 2. Wait for Firebase Initialization
+        if (loadingText != null) loadingText.text = "Connecting to Database...";
+        if (!FirebaseManager.IsInitialized)
+        {
+            yield return new WaitUntil(() => FirebaseManager.IsInitialized);
+        }
+        _db = FirebaseFirestore.DefaultInstance;
+
+        // 3. Wait for the Experiment Configuration to be Ready
+        if (loadingText != null) loadingText.text = "Loading Experiment Configuration...";
+
+        // Assuming ExperimentConfigLoader has an IsReady property and a way to fetch/bind config
+        yield return new WaitUntil(() => ExperimentConfigLoader.IsReady && ExperimentConfigLoader.Current != null);
+
+        // Grab the loaded config reference
+        config = ExperimentConfigLoader.Current;
+
+        if (loadingText != null) loadingText.text = "Ready!";
         yield return new WaitForSecondsRealtime(0.5f);
         yield return new WaitForEndOfFrame();
+
+        // 4. Fade out the loading screen, letting the player see the main room & anchors
         yield return StartCoroutine(Fade(1f, 0f));
-
-        if (FirebaseManager.IsInitialized)
-            _db = FirebaseFirestore.DefaultInstance;
-        else
-            StartCoroutine(WaitForFirebaseInit());
-    }
-
-    private IEnumerator WaitForFirebaseInit()
-    {
-        yield return new WaitUntil(() => FirebaseManager.IsInitialized);
-        _db = FirebaseFirestore.DefaultInstance;
     }
 
     public void LoadScene(string sceneName)
@@ -259,7 +269,7 @@ public class ExperimentLoader : MonoBehaviour
         fadeCanvas.blocksRaycasts = true;
 
         if (logoImage != null) logoImage.enabled = true;
-        if (loadingText != null) loadingText.enabled = true;
+        if (loadingText != null) loadingText.text = loadingText.text; // Keeps existing message
 
         float elapsed = 0f;
         while (elapsed < fadeDuration)
