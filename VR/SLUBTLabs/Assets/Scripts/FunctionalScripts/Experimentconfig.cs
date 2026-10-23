@@ -143,61 +143,7 @@ public class ExperimentConfig : ScriptableObject
     public bool useRemoteConfig = true;
 
     // ── Runtime Methods ───────────────────────────────────────────────────────
-    public async Task FetchFromFirestoreAsync()
-    {
-        if (!useRemoteConfig)
-        {
-            Debug.Log("[ExperimentConfig] Firestore synchronization disabled. Using local inspector values.");
-            return;
-        }
 
-        try
-        {
-            FirebaseFirestore db = FirebaseFirestore.DefaultInstance;
-
-            // 1. Attentional Blindness
-            DocumentReference abRef = db.Collection("experimentModule").Document("Attentional_Blindness");
-            DocumentSnapshot abSnapshot = await abRef.GetSnapshotAsync();
-            if (abSnapshot.Exists) ApplyAttentionalBlindnessValues(abSnapshot);
-
-            // 2. Odd Item Detection
-            DocumentReference oddItemRef = db.Collection("experimentModule").Document("Odd_Item_Detection");
-            DocumentSnapshot oddItemSnapshot = await oddItemRef.GetSnapshotAsync();
-            if (oddItemSnapshot.Exists) ApplyOddItemValues(oddItemSnapshot);
-
-            // 3. Depth Perception
-            DocumentReference depthRef = db.Collection("experimentModule").Document("Depth_Perception");
-            DocumentSnapshot depthSnapshot = await depthRef.GetSnapshotAsync();
-            if (depthSnapshot.Exists) ApplyDepthPerceptionValues(depthSnapshot);
-
-            // 4. Distance Perception
-            DocumentReference depth2Ref = db.Collection("experimentModule").Document("Distance_Perception");
-            DocumentSnapshot depth2Snapshot = await depth2Ref.GetSnapshotAsync();
-            if (depth2Snapshot.Exists) ApplyDepthPerception2Values(depth2Snapshot);
-
-            // 5. Memory (Document: "Memory")
-            DocumentReference memoryRef = db.Collection("experimentModule").Document("Memory");
-            DocumentSnapshot memorySnapshot = await memoryRef.GetSnapshotAsync();
-            if (memorySnapshot.Exists)
-            {
-                ApplyMemoryValues(memorySnapshot);
-                Debug.Log("[ExperimentConfig] 'Memory' values updated from Firestore.");
-            }
-
-            // 6. Memory2 (Document: "Memory2")
-            DocumentReference memory2Ref = db.Collection("experimentModule").Document("Memory2");
-            DocumentSnapshot memory2Snapshot = await memory2Ref.GetSnapshotAsync();
-            if (memory2Snapshot.Exists)
-            {
-                ApplyMemory2Values(memory2Snapshot);
-                Debug.Log("[ExperimentConfig] 'Memory2' values updated from Firestore.");
-            }
-        }
-        catch (Exception ex)
-        {
-            Debug.LogError($"[ExperimentConfig] Error fetching parameters from Firestore: {ex.Message}");
-        }
-    }
 
     public void ApplyConfigurationMap(Dictionary<string, object> configMap)
     {
@@ -559,8 +505,7 @@ public class ExperimentConfig : ScriptableObject
 
             Debug.Log(sfxLog($"Refreshed Session Chain -> Module: {moduleId} | Scene: {sceneId} | Progress: {progressId}"));
 
-            // 5. Load the specific module's parameters
-            await FetchFromFirestoreAsync();
+    
         }
         catch (System.Exception ex)
         {

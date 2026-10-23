@@ -487,8 +487,17 @@ const releaseVrLock = async (progressId, vrId) => {
   }
 };
 
-const handlePlay = () => updateSessionControl("running");
-const handlePause = () => updateSessionControl("paused");
+// The web dashboard can no longer START a session (idle -> running).
+// The participant starts it from the "Begin Experiment" button in VR.
+// The dashboard may only resume a session that is currently paused.
+const handleResume = () => {
+  if (progress?.sessionControl !== "paused") return;
+  updateSessionControl("running");
+};
+const handlePause = () => {
+  if (progress?.sessionControl !== "running") return;
+  updateSessionControl("paused");
+};
 
 const handleEnd = async () => {
   const confirmed = window.confirm(
@@ -691,13 +700,20 @@ const handleEnd = async () => {
                 </button>
               ) : (
                 <div className="flex flex-col gap-3">
-                  {(isIdle || isPaused) && (
+                  {isIdle && (
+                    <div className="w-full rounded-lg py-3 px-4 flex items-center justify-center gap-2 bg-gray-100 border border-gray-200 text-gray-500 cursor-not-allowed">
+                      <Loader2 size={18} className="animate-spin" />
+                      <span>Waiting for participant to begin…</span>
+                    </div>
+                  )}
+
+                  {isPaused && (
                     <button
-                      onClick={handlePlay}
+                      onClick={handleResume}
                       className="w-full rounded-lg py-3 flex items-center justify-center gap-2 bg-green-700 hover:bg-green-600 text-white transition"
                     >
                       <Play size={18} fill="currentColor" />
-                      <span>{isPaused ? "Resume" : "Play"}</span>
+                      <span>Resume</span>
                     </button>
                   )}
 
@@ -743,6 +759,10 @@ const handleEnd = async () => {
               ) : isPaused ? (
                 <p className="text-center text-sm text-yellow-600 mt-2">
                   Paused
+                </p>
+              ) : isIdle ? (
+                <p className="text-center text-sm text-gray-500 mt-2">
+                  Starts when the participant presses Begin Experiment
                 </p>
               ) : null}
             </section>

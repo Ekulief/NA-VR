@@ -215,9 +215,47 @@ public class OddItemManager : MonoBehaviour
     {
         ExperimentConfig cfg = config != null ? config : ExperimentConfigLoader.Current;
 
-        // 1. Randomize has highest priority
+        Debug.Log($"[OddItemDetection Debug] --- Starting Target Resolution ---");
+        Debug.Log($"[OddItemDetection Debug] cfg is null? {cfg == null}");
+        if (cfg != null)
+        {
+            Debug.Log($"[OddItemDetection Debug] cfg.oddItem_SelectedTarget from Firestore: '{cfg.oddItem_SelectedTarget}'");
+            Debug.Log($"[OddItemDetection Debug] cfg.oddItem_RandomizeTarget: {cfg.oddItem_RandomizeTarget}");
+        }
+
+        Debug.Log($"[OddItemDetection Debug] Total oddItemPrefabs loaded in Inspector: {oddItemPrefabs.Count}");
+        for (int i = 0; i < oddItemPrefabs.Count; i++)
+        {
+            if (oddItemPrefabs[i] != null)
+                Debug.Log($"[OddItemDetection Debug] Prefab [{i}]: '{oddItemPrefabs[i].name}'");
+            else
+                Debug.Log($"[OddItemDetection Debug] Prefab [{i}]: NULL");
+        }
+
+        // 1. Explicit selection from Firestore takes HIGHEST priority if provided
+        if (cfg != null && !string.IsNullOrEmpty(cfg.oddItem_SelectedTarget))
+        {
+            Debug.Log($"[OddItemDetection Debug] Evaluating explicit target: '{cfg.oddItem_SelectedTarget}'");
+
+            GameObject match = oddItemPrefabs.Find(p =>
+                p != null &&
+                p.name.Equals(cfg.oddItem_SelectedTarget, StringComparison.OrdinalIgnoreCase));
+
+            if (match != null)
+            {
+                Debug.Log($"[OddItemDetection Debug] SUCCESS: Found matching prefab for explicit target: '{match.name}'");
+                return match;
+            }
+            else
+            {
+                Debug.LogWarning($"[OddItemDetection Debug] WARNING: Explicit target '{cfg.oddItem_SelectedTarget}' did NOT match any prefab name in the list!");
+            }
+        }
+
+        // 2. Randomize if enabled and no explicit target matched
         if (cfg != null && cfg.oddItem_RandomizeTarget)
         {
+            Debug.Log($"[OddItemDetection Debug] Randomize is enabled. Building pool...");
             List<GameObject> pool = oddItemPrefabs;
 
             if (cfg.oddItem_AvailableTargets != null && cfg.oddItem_AvailableTargets.Count > 0)
@@ -231,35 +269,25 @@ public class OddItemManager : MonoBehaviour
             if (pool.Count > 0)
             {
                 GameObject random = pool[UnityEngine.Random.Range(0, pool.Count)];
-                Debug.Log($"[OddItemDetection] Randomized target: {random.name}");
+                Debug.Log($"[OddItemDetection Debug] SUCCESS: Randomized target chosen: '{random.name}'");
                 return random;
             }
-
-            Debug.LogWarning("[OddItemDetection] Randomize enabled but pool is empty. Falling back...");
-        }
-
-        // 2. Explicit selection from Firestore
-        if (cfg != null && !string.IsNullOrEmpty(cfg.oddItem_SelectedTarget))
-        {
-            GameObject match = oddItemPrefabs.Find(p =>
-                p != null &&
-                p.name.Equals(cfg.oddItem_SelectedTarget, StringComparison.OrdinalIgnoreCase));
-
-            if (match != null)
+            else
             {
-                Debug.Log($"[OddItemDetection] Using selected target from config: {match.name}");
-                return match;
+                Debug.LogWarning("[OddItemDetection Debug] Randomize enabled but filtered pool is empty.");
             }
-
-            Debug.LogWarning(
-                $"[OddItemDetection] Selected target '{cfg.oddItem_SelectedTarget}' " +
-                "not found in oddItemPrefabs. Falling back...");
         }
 
         // 3. Fallback to inspector index
         int index = Mathf.Clamp(selectedOddItemIndex, 0, oddItemPrefabs.Count - 1);
-        Debug.Log($"[OddItemDetection] Using fallback index {index}: {oddItemPrefabs[index].name}");
-        return oddItemPrefabs[index];
+        if (oddItemPrefabs.Count > 0 && oddItemPrefabs[index] != null)
+        {
+            Debug.Log($"[OddItemDetection Debug] FALLBACK: Using inspector index {index} ('{oddItemPrefabs[index].name}')");
+            return oddItemPrefabs[index];
+        }
+
+        Debug.LogError("[OddItemDetection Debug] CRITICAL: No valid target could be resolved!");
+        return null;
     }
     private Transform FindRightController()
     {
