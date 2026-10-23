@@ -12,6 +12,7 @@ import {
   onSnapshot,
   serverTimestamp,
   getDocs,
+  runTransaction,
 } from "firebase/firestore";
 
 import { db } from "../../config/firebase-config";
@@ -291,41 +292,73 @@ export default function StudentExperimentRun() {
       : elapsedSeconds;
 
   // ---------- Actions ----------
-  const handleConnectVR = async () => {
-    if (!experiment || !user?.uid || connecting || progress) return;
+const handleConnectVR = async () => {
+  if (!experiment || !user?.uid || connecting || progress) return;
 
-    const confirmed = window.confirm(
-      `Connect to VR headset "${experiment.vrId || "Unknown"}"?\n\nThis will create a new session for this experiment.`
+  const vrId = experiment.vrId;
+  if (!vrId) {
+    alert("This experiment has no VR headset assigned.");
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `Connect to VR headset "${vrId}"?\n\nOnly one student can use a headset at a time.`
+  );
+  if (!confirmed) return;
+
+  try {
+    setConnecting(true);
+
+    // 1. Find the device document that owns this vrId
+    const deviceQuery = query(
+      collection(db, "vrDevices"),
+      where("vrId", "==", vrId),
+      limit(1)
     );
-    if (!confirmed) return;
+    const deviceSnap = await getDocs(deviceQuery);
 
-    try {
-      setConnecting(true);
+    if (deviceSnap.empty) {
+      alert(`Headset "${vrId}" is not registered in the system.`);
+      return;
+    }
 
-      let groupId = null;
+    const deviceRef = deviceSnap.docs[0].ref;
 
-      try {
-        const groupsQuery = query(
-          collection(db, "group"),
-          where("blockId", "==", blockId),
-          where("studentIds", "array-contains", user.uid)
-        );
+    // 2. Atomic lock + create progress
+    const newProgressId = await runTransaction(db, async (transaction) => {
+      const deviceDoc = await transaction.get(deviceRef);
+      const data = deviceDoc.data() || {};
 
-        const groupsSnap = await getDocs(groupsQuery);
+      // ---- LOCK CHECK ----
+      if (data.currentProgressId) {
+        // Optional: verify the progress is still alive
+        const existingProgressRef = doc(db, "experimentProgress", data.currentProgressId);
+        const existingProgress = await transaction.get(existingProgressRef);
 
-        if (!groupsSnap.empty) {
-          groupId = groupsSnap.docs[0].id;
+        if (existingProgress.exists()) {
+          const status = existingProgress.data().completionStatus;
+          const control = existingProgress.data().sessionControl;
+
+          // Still considered active
+          if (status === "In Progress" && control !== "ended") {
+            throw new Error("BUSY");
+          }
         }
-      } catch (err) {
-        console.error("Error finding student group:", err);
+        // If the old progress is already finished/missing we can take over
       }
+
+      // ---- CREATE PROGRESS ----
+      let groupId = null;
+      // (keep your existing group lookup if you want – it can stay outside the transaction)
+
+      const progressRef = doc(collection(db, "experimentProgress")); // auto-id
 
       const progressData = {
         blockId: blockId || null,
         experimentId,
         studentId: user.uid,
         groupId,
-        vrId: experiment.vrId || null,
+        vrId,
         sessionControl: "idle",
         completionStatus: "In Progress",
         elapsedSeconds: 0,
@@ -333,19 +366,30 @@ export default function StudentExperimentRun() {
         updatedAt: serverTimestamp(),
       };
 
-      const docRef = await addDoc(
-        collection(db, "experimentProgress"),
-        progressData
-      );
+      transaction.set(progressRef, progressData);
 
-      console.log("Created progress:", docRef.id, "with groupId:", groupId);
-    } catch (err) {
-      console.error("Failed to create progress:", err);
+      // ---- LOCK THE DEVICE ----
+      transaction.update(deviceRef, {
+        currentProgressId: progressRef.id,
+        status: "busy",
+        updatedAt: serverTimestamp(),
+      });
+
+      return progressRef.id;
+    });
+
+    console.log("Locked headset and created progress:", newProgressId);
+  } catch (err) {
+    if (err.message === "BUSY") {
+      alert("This VR headset is currently in use by another student. Please try again later.");
+    } else {
+      console.error(err);
       alert("Unable to connect VR device. Please try again.");
-    } finally {
-      setConnecting(false);
     }
-  };
+  } finally {
+    setConnecting(false);
+  }
+};
 
   const updateSessionControl = async (newControl) => {
     if (!progress?.id) return;
@@ -371,16 +415,49 @@ export default function StudentExperimentRun() {
     }
   };
 
-  const handlePlay = () => updateSessionControl("running");
-  const handlePause = () => updateSessionControl("paused");
-  const handleEnd = async () => {
-    const confirmed = window.confirm(
-      "End this experiment session? This cannot be undone."
-    );
-    if (!confirmed) return;
-    await updateSessionControl("ended");
-  };
+const releaseVrLock = async (progressId, vrId) => {
+  if (!vrId || !progressId) return;
 
+  try {
+    const deviceQuery = query(
+      collection(db, "vrDevices"),
+      where("vrId", "==", vrId),
+      limit(1)
+    );
+
+    const deviceSnap = await getDocs(deviceQuery);
+    if (deviceSnap.empty) return;
+
+    const deviceRef = deviceSnap.docs[0].ref;
+
+    await runTransaction(db, async (transaction) => {
+      const deviceDoc = await transaction.get(deviceRef);
+      const data = deviceDoc.data() || {};
+
+      // Only clear if we are still the owner
+      if (data.currentProgressId === progressId) {
+        transaction.update(deviceRef, {
+          currentProgressId: null,
+          status: "available",
+          updatedAt: serverTimestamp(),
+        });
+      }
+    });
+  } catch (err) {
+    console.error("Failed to release VR lock:", err);
+  }
+};
+
+const handlePlay = () => updateSessionControl("running");
+const handlePause = () => updateSessionControl("paused");
+
+const handleEnd = async () => {
+  const confirmed = window.confirm(
+    "End this experiment session? This cannot be undone."
+  );
+  if (!confirmed) return;
+  await updateSessionControl("ended");
+};
   const handleDownloadResults = () => {
     const payload = {
       experimentName: experiment?.experimentName || "Untitled Experiment",

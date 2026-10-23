@@ -332,76 +332,50 @@ const toggleVrDevice = (deviceId) => {
     return [...prev, deviceId];
   });
 };
-  useEffect(() => {
-    const getExperiment = async () => {
-      if (!experimentId) {
-        setLoading(false);
-        setModuleLoading(false);
+ useEffect(() => {
+  const getExperiment = async () => {
+    if (!experimentId) {
+      setLoading(false);
+      setModuleLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const experimentRef = doc(db, "experiment", experimentId);
+      const experimentSnap = await getDoc(experimentRef);
+
+      if (!experimentSnap.exists()) {
+        alert("Experiment not found.");
+        navigate(-1);
         return;
       }
+
+      const data = experimentSnap.data();
+
+      // ← put it here
       setSelectedVrId(data.vrId || "");
-      try {
-        setLoading(true);
 
-        const experimentRef = doc(db, "experiment", experimentId);
-        const experimentSnap = await getDoc(experimentRef);
+      setExperimentName(data.experimentName || "");
+      setInstructions(data.instructions || "");
+      setEnvironment(data.environment || "");
+      setSelectedGroups(data.groupIds || []);
+      setAllowStudentExperiments(data.allowStudentExperiments === true);
 
-        if (!experimentSnap.exists()) {
-          alert("Experiment not found.");
-          navigate(-1);
-          return;
-        }
+      // ... rest of the existing code
+    } catch (error) {
+      console.error("Error getting experiment:", error);
+      alert("Unable to load the experiment.");
+      navigate(-1);
+    } finally {
+      setLoading(false);
+      setModuleLoading(false);
+    }
+  };
 
-        const data = experimentSnap.data();
-
-        setExperimentName(data.experimentName || "");
-        setInstructions(data.instructions || "");
-        setEnvironment(data.environment || "");
-        setSelectedGroups(data.groupIds || []);
-        setAllowStudentExperiments(data.allowStudentExperiments === true);
-
-        const savedModuleId = data.moduleId || "";
-        const savedEnvironment = data.environment || "";
-
-        let option = ENVIRONMENT_OPTIONS.find(
-          (item) =>
-            item.moduleId === savedModuleId || item.name === savedEnvironment,
-        );
-
-        if (option) {
-          const module = await loadExperimentModule(
-            savedModuleId || option.moduleId,
-          );
-
-          if (module) {
-            setModuleId(module.id);
-            setModuleName(module.moduleName || option.name);
-            setExperimentName(data.experimentName || module.moduleName || option.name);
-            setSceneId(module.sceneId || "");
-            setModuleDescription(module.description || option.description);
-            setInstructions(data.instructions || module.description || option.description);
-
-            if (data.configuration && typeof data.configuration === "object") {
-              setConfiguration(cloneConfig(data.configuration));
-            } else {
-              setConfiguration(cloneConfig(module.defaultConfig || {}));
-            }
-          }
-        } else if (data.configuration && typeof data.configuration === "object") {
-          setConfiguration(cloneConfig(data.configuration));
-        }
-      } catch (error) {
-        console.error("Error getting experiment:", error);
-        alert("Unable to load the experiment.");
-        navigate(-1);
-      } finally {
-        setLoading(false);
-        setModuleLoading(false);
-      }
-    };
-
-    getExperiment();
-  }, [experimentId, navigate]);
+  getExperiment();
+}, [experimentId, navigate]);
 
   const updateConfigValue = (path, value) => {
     setConfiguration((previous) => {
