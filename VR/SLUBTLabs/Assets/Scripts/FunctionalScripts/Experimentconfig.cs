@@ -69,12 +69,7 @@ public class ExperimentConfig : ScriptableObject
     public string oddItem_SelectedTarget = "";
     public bool oddItem_RandomizeTarget = false;
 
-    [Header("Odd Item Detection — Time Ratings")]
-    public float oddItem_ExcellentThresholdSeconds = 10f;
-    public float oddItem_GoodThresholdSeconds = 20f;
-    public string oddItem_RatingExcellent = "Excellent!";
-    public string oddItem_RatingGood = "Good";
-    public string oddItem_RatingKeepPracticing = "Keep Practicing";
+
 
     // ── Depth Perception ──────────────────────────────────────────────────────
     [Header("Depth Perception")]
@@ -286,12 +281,6 @@ public class ExperimentConfig : ScriptableObject
         oddItem_InstructionText = GetString("oddItem_InstructionText", oddItem_InstructionText);
         oddItem_TargetDisplayName = GetString("oddItem_TargetDisplayName", oddItem_TargetDisplayName);
         oddItem_WrongItemFeedback = GetString("oddItem_WrongItemFeedback", oddItem_WrongItemFeedback);
-        oddItem_ExcellentThresholdSeconds = GetFloat("oddItem_ExcellentThresholdSeconds", oddItem_ExcellentThresholdSeconds);
-        oddItem_GoodThresholdSeconds = GetFloat("oddItem_GoodThresholdSeconds", oddItem_GoodThresholdSeconds);
-        oddItem_RatingExcellent = GetString("oddItem_RatingExcellent", oddItem_RatingExcellent);
-        oddItem_RatingGood = GetString("oddItem_RatingGood", oddItem_RatingGood);
-        oddItem_RatingKeepPracticing = GetString("oddItem_RatingKeepPracticing", oddItem_RatingKeepPracticing);
-
         oddItem_SelectedTarget = GetString("oddItem_SelectedTarget", oddItem_SelectedTarget);
         oddItem_RandomizeTarget = GetBool("oddItem_RandomizeTarget", oddItem_RandomizeTarget);
 

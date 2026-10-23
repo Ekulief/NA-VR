@@ -24,9 +24,10 @@ public class ShelfSpawner : MonoBehaviour
     [Header("Config")]
     [Tooltip("Optional — assign your ExperimentConfig asset to override grid settings from web app.")]
     public ExperimentConfig config;
-
     [Header("Grid Configuration")]
-    public int columns = 5;
+    [Tooltip("If true, Columns/Rows come from ExperimentConfig. If false, use the values set in the Inspector.")]
+    public bool useConfigGrid = true;
+    public int columns = 2;
     public int rows = 2;
     public float randomPositionOffset = 0.04f;
     public float randomRotationOffset = 15f;
@@ -54,14 +55,16 @@ public class ShelfSpawner : MonoBehaviour
         _bounds.isTrigger = true;
 
         // Apply config overrides if assigned
+        // Apply config overrides only when useConfigGrid is enabled
         ExperimentConfig cfg = config;
-        if (cfg != null)
+        if (cfg != null && useConfigGrid)
         {
             columns = cfg.shelf_Columns;
             rows = cfg.shelf_Rows;
             randomPositionOffset = cfg.shelf_RandomPositionOffset;
             randomRotationOffset = cfg.shelf_RandomRotationOffset;
         }
+        // else: keep the Columns / Rows / offsets set in the Inspector
 
         // All spawned items are parented under this holder so they get
         // destroyed automatically when the scene unloads

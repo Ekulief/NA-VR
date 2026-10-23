@@ -38,6 +38,7 @@ export default function StudentExperimentRun() {
   const { user } = useAuth();
 
   const [experiment, setExperiment] = useState(null);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -294,97 +295,138 @@ export default function StudentExperimentRun() {
 
   // ---------- Actions ----------
 const handleConnectVR = async () => {
-  if (!experiment || !user?.uid || connecting || progress) return;
+    if (!experiment || !user?.uid || connecting || progress) return;
 
-  const vrId = experiment.vrId;
-  if (!vrId) {
-    alert("This experiment has no VR headset assigned.");
-    return;
-  }
-
-  const confirmed = window.confirm(
-    `Connect to VR headset "${vrId}"?\n\nOnly one student can use a headset at a time.`
-  );
-  if (!confirmed) return;
-
-  try {
-    setConnecting(true);
-
-    // Find the device document
-    const deviceQuery = query(
-      collection(db, "vrDevices"),
-      where("vrId", "==", vrId),
-      limit(1)
-    );
-    const deviceSnap = await getDocs(deviceQuery);
-
-    if (deviceSnap.empty) {
-      alert(`Headset "${vrId}" is not registered.`);
+    const vrId = experiment.vrId;
+    if (!vrId) {
+      alert("This experiment has no VR headset assigned.");
       return;
     }
 
-    const deviceRef = deviceSnap.docs[0].ref;
+    const confirmed = window.confirm(
+      `Connect to VR headset "${vrId}"?\n\nOnly one student can use a headset at a time.`
+    );
+    if (!confirmed) return;
 
-    // Atomic lock + create progress
-    const newProgressId = await runTransaction(db, async (transaction) => {
-      const deviceDoc = await transaction.get(deviceRef);
-      const data = deviceDoc.data() || {};
+    try {
+      setConnecting(true);
 
-      // Reject if already locked by an active session
-      if (data.currentProgressId) {
-        const existingRef = doc(db, "experimentProgress", data.currentProgressId);
-        const existing = await transaction.get(existingRef);
+      // 1. Resolve which group the student belongs to among the experiment's groupIDs
+      let resolvedGroupId = null;
+      const experimentGroupIds = experiment.groupIds || [];
 
-        if (existing.exists()) {
-          const status = existing.data().completionStatus;
-          const control = existing.data().sessionControl;
-          if (status === "In Progress" && control !== "ended") {
-            throw new Error("BUSY");
+      if (experimentGroupIds.length > 0) {
+        console.log("Checking experiment groupIDs:", experimentGroupIds);
+
+        // Loop through each group ID directly using getDoc (bulletproof against query issues)
+        for (const groupId of experimentGroupIds) {
+          try {
+            const groupRef = doc(db, "group", groupId);
+            const groupSnap = await getDoc(groupRef);
+
+            if (groupSnap.exists()) {
+              const groupData = groupSnap.data();
+              const members = groupData.studentIds || [];
+              
+              console.log(`Checking group ${groupId} with studentIds:`, members);
+
+              if (members.includes(user.uid) || groupData.studentId === user.uid) {
+                resolvedGroupId = groupSnap.id;
+                console.log("Match found! resolvedGroupId =", resolvedGroupId);
+                break;
+              }
+            }
+          } catch (err) {
+            console.error(`Error fetching group ${groupId}:`, err);
           }
         }
+
+        // Fallback: If no explicit group match found, default to the first one available
+        if (!resolvedGroupId && experimentGroupIds.length > 0) {
+          resolvedGroupId = experimentGroupIds[0];
+          console.log("No student match found, falling back to first group ID:", resolvedGroupId);
+        }
+      } else {
+        console.warn("No groupIDs found on experiment document!");
       }
 
-      // Create progress
-      const progressRef = doc(collection(db, "experimentProgress"));
+      // 2. Find the device document
+      const deviceQuery = query(
+        collection(db, "vrDevices"),
+        where("vrId", "==", vrId),
+        limit(1)
+      );
+      const deviceSnap = await getDocs(deviceQuery);
 
-      const progressData = {
-        blockId: blockId || null,
-        experimentId,
-        studentId: user.uid,
-        groupId,       
-        vrId,
-        sessionControl: "idle",
-        completionStatus: "In Progress",
-        elapsedSeconds: 0,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      };
+      if (deviceSnap.empty) {
+        alert(`Headset "${vrId}" is not registered.`);
+        return;
+      }
 
-      transaction.set(progressRef, progressData);
+      const deviceRef = deviceSnap.docs[0].ref;
 
-      // ★ THIS IS THE CRITICAL LINE ★
-      transaction.update(deviceRef, {
-        currentProgressId: progressRef.id,   // ← must be the real ID
-        status: "busy",
-        updatedAt: serverTimestamp(),
+      // 3. Atomic lock + create progress with the resolved groupId
+      const newProgressId = await runTransaction(db, async (transaction) => {
+        const deviceDoc = await transaction.get(deviceRef);
+        const data = deviceDoc.data() || {};
+
+        // Reject if already locked by an active session
+        if (data.currentProgressId) {
+          const existingRef = doc(db, "experimentProgress", data.currentProgressId);
+          const existing = await transaction.get(existingRef);
+
+          if (existing.exists()) {
+            const status = existing.data().completionStatus;
+            const control = existing.data().sessionControl;
+            if (status === "In Progress" && control !== "ended") {
+              throw new Error("BUSY");
+            }
+          }
+        }
+
+        // Create progress
+        const progressRef = doc(collection(db, "experimentProgress"));
+
+        const progressData = {
+          blockId: blockId || null,
+          experimentId,
+          studentId: user.uid,
+          groupId: resolvedGroupId,      // Dynamically matched groupId
+          vrId,
+          sessionControl: "idle",
+          completionStatus: "In Progress",
+          elapsedSeconds: 0,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        };
+
+        transaction.set(progressRef, progressData);
+
+        // Update device document pointers
+        transaction.update(deviceRef, {
+          currentProgressId: progressRef.id,
+          currentExperimentId: experimentId,
+          currentGroupId: resolvedGroupId,
+          currentUserId: user.uid,
+          status: "In Use",
+          updatedAt: serverTimestamp(),
+        });
+
+        return progressRef.id;
       });
 
-      return progressRef.id;
-    });
-
-    console.log("Locked headset → progressId =", newProgressId);
-  } catch (err) {
-    if (err.message === "BUSY") {
-      alert("This VR headset is currently in use by another student.");
-    } else {
-      console.error(err);
-      alert("Unable to connect VR device.");
+      console.log("Locked headset → progressId =", newProgressId, "groupId =", resolvedGroupId);
+    } catch (err) {
+      if (err.message === "BUSY") {
+        alert("This VR headset is currently in use by another student.");
+      } else {
+        console.error(err);
+        alert("Unable to connect VR device.");
+      }
+    } finally {
+      setConnecting(false);
     }
-  } finally {
-    setConnecting(false);
-  }
-};
-
+  };
   const updateSessionControl = async (newControl) => {
     if (!progress?.id) return;
 
@@ -432,6 +474,9 @@ const releaseVrLock = async (progressId, vrId) => {
       if (data.currentProgressId === progressId) {
         transaction.update(deviceRef, {
           currentProgressId: null,
+          currentExperimentId: null,
+          currentGroupId: null,
+          currentUserId: null,
           status: "available",
           updatedAt: serverTimestamp(),
         });

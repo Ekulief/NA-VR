@@ -80,20 +80,15 @@ Depth_Perception: [
     "targets",
   ],
 
-  Odd_Item_Detection: [
-    "globalInstructionDelay",
-    "oddItem_ExcellentThresholdSeconds",
-    "oddItem_GoodThresholdSeconds",
-    "oddItem_InstructionText",
-    "oddItem_RatingExcellent",
-    "oddItem_RatingGood",
-    "oddItem_RatingKeepPracticing",
-    "oddItem_RandomizeTarget",
-    "oddItem_RaycastDistance",
-    "oddItem_SearchTimeLimitSeconds",
-    "oddItem_WrongItemFeedback",
-    "oddItem_SelectedTarget",
-  ],
+Odd_Item_Detection: [
+  "globalInstructionDelay",
+  "oddItem_InstructionText",
+  "oddItem_WrongItemFeedback",
+  "oddItem_RandomizeTarget",
+  "oddItem_SelectedTarget",
+  "oddItem_RaycastDistance",
+  "oddItem_SearchTimeLimitSeconds",
+],
 };
 
 const ENVIRONMENT_OPTIONS = [
@@ -167,18 +162,7 @@ const formatConfigLabel = (key) => {
 
   return label.replace(/\b\w/g, (character) => character.toUpperCase()).trim();
 };
-const isLongTextKey = (key) => {
-  const lower = String(key).toLowerCase();
-  return (
-    lower.includes("instruction") ||
-    lower.includes("question") ||
-    lower.includes("briefing") ||
-    lower.includes("description") ||
-    lower.includes("feedback") ||
-    lower.includes("rating") ||
-    lower.includes("text")
-  );
-};
+
 
 export default function InstructorExperimentBuilder() {
   const navigate = useNavigate();
@@ -324,14 +308,7 @@ export default function InstructorExperimentBuilder() {
 
     return () => clearTimeout(timeout);
   }, [newTargetIndex, configuration.targets]);
-const toggleVrDevice = (deviceId) => {
-  setSelectedVrDevices((prev) => {
-    if (prev.includes(deviceId)) {
-      return prev.filter((id) => id !== deviceId);
-    }
-    return [...prev, deviceId];
-  });
-};
+
  useEffect(() => {
   const getExperiment = async () => {
     if (!experimentId) {
@@ -1149,22 +1126,6 @@ if (key === "oddItem_SelectedTarget") {
                   );
                 }
 
-                // Long text
-                if (isLongTextKey(key)) {
-                  return (
-                    <div key={key} className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {formatConfigLabel(key)}
-                      </label>
-                      <textarea
-                        value={value ?? ""}
-                        onChange={(e) => updateConfigValue([key], e.target.value)}
-                        rows={2}
-                        className="w-full rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                      />
-                    </div>
-                  );
-                }
 if (
   key === "distance_MinDistanceMeters" ||
   key === "distance_MaxDistanceMeters"

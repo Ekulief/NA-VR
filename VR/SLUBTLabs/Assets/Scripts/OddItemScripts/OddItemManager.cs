@@ -90,6 +90,21 @@ public class OddItemManager : MonoBehaviour
         for (int i = 0; i < shelves.Length; i++)
             shelves[i].distractorPrefabs = allLists[i];
 
+        foreach (var shelf in shelves)
+        {
+            bool bulky = shelf.distractorPrefabs.Count > 0 &&
+                shelf.distractorPrefabs.TrueForAll(p =>
+                    p != null && (p.name.Contains("Beer") || p.name.Contains("Box") || p.name.Contains("Bread")));
+
+            if (bulky)
+            {
+                shelf.useConfigGrid = false;
+                shelf.columns = 2;
+                shelf.rows = 2;
+                shelf.randomPositionOffset = 0.1f;
+            }
+        }
+
         Debug.Log("[OddItemDetection] Shelf categories shuffled between shelves.");
     }
 
@@ -394,39 +409,20 @@ public class OddItemManager : MonoBehaviour
 
         _feedbackDisplay?.ShowSuccess("Correct! That's the odd item!");
 
-        string timeRating;
-        ExperimentConfig cfg = config;
-
-        if (cfg != null)
-        {
-            if (_foundTime < cfg.oddItem_ExcellentThresholdSeconds)
-                timeRating = cfg.oddItem_RatingExcellent;
-            else if (_foundTime < cfg.oddItem_GoodThresholdSeconds)
-                timeRating = cfg.oddItem_RatingGood;
-            else
-                timeRating = cfg.oddItem_RatingKeepPracticing;
-        }
-        else
-        {
-            timeRating = _foundTime < 10f ? "Excellent!" : _foundTime < 20f ? "Good" : "Keep Practicing";
-        }
-
         ExperimentLogger.Log("item_found",
-            $"Odd item found: {_chosenOddItemPrefab.name} in {_foundTime:F1}s (Rating: {timeRating})",
+            $"Odd item found: {_chosenOddItemPrefab.name} in {_foundTime:F1}s",
             new Dictionary<string, object>
             {
-                { "itemName", _chosenOddItemPrefab.name },
-                { "searchTimeSeconds", _foundTime },
-                { "rating", timeRating },
-                { "found", true }
+            { "itemName", _chosenOddItemPrefab.name },
+            { "searchTimeSeconds", _foundTime },
+            { "found", true }
             });
 
         if (resultsSummaryText != null)
         {
             resultsSummaryText.text =
                 $"Odd Item Found!\n\n" +
-                $"Search time:    {_foundTime:F1}s\n" +
-                $"Rating:         {timeRating}\n\n" +
+                $"Search time: {_foundTime:F1}s\n\n" +
                 $"The odd item was the {_chosenOddItemPrefab.name}.";
         }
 
@@ -447,6 +443,8 @@ public class OddItemManager : MonoBehaviour
             waited += Time.deltaTime;
             yield return null;
         }
+
+        _feedbackDisplay?.HideFeedback();
 
         if (resultsPanel != null)
             resultsPanel.SetActive(true);

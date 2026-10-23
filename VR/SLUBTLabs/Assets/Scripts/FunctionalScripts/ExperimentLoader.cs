@@ -65,8 +65,8 @@ public class ExperimentLoader : MonoBehaviour
 #if UNITY_EDITOR
         float xrWaitTime = 0f;
         while (xrWaitTime < 3f && (XRGeneralSettings.Instance == null ||
-                                   XRGeneralSettings.Instance.Manager == null ||
-                                   !XRGeneralSettings.Instance.Manager.isInitializationComplete))
+                                    XRGeneralSettings.Instance.Manager == null ||
+                                    !XRGeneralSettings.Instance.Manager.isInitializationComplete))
         {
             xrWaitTime += Time.unscaledDeltaTime;
             yield return null;
@@ -89,7 +89,6 @@ public class ExperimentLoader : MonoBehaviour
         // 3. Wait for the Experiment Configuration to be Ready
         if (loadingText != null) loadingText.text = "Loading Experiment Configuration...";
 
-        // Assuming ExperimentConfigLoader has an IsReady property and a way to fetch/bind config
         yield return new WaitUntil(() => ExperimentConfigLoader.IsReady && ExperimentConfigLoader.Current != null);
 
         // Grab the loaded config reference
@@ -225,9 +224,25 @@ public class ExperimentLoader : MonoBehaviour
         string studentId = config != null ? config.studentId : "";
         string groupId = config != null ? config.groupId : "";
 
+        // --- Added Debug checks for null or empty values ---
+        if (string.IsNullOrEmpty(groupId))
+        {
+            Debug.LogWarning("[ExperimentLoader] Warning: groupId is null or empty when updating device status!");
+        }
+        else
+        {
+            Debug.Log($"[ExperimentLoader] groupId is valid: '{groupId}'");
+        }
+
+        if (string.IsNullOrEmpty(studentId))
+        {
+            Debug.LogWarning("[ExperimentLoader] Warning: studentId is null or empty when updating device status!");
+        }
+        // ---------------------------------------------------
+
         var update = new Dictionary<string, object>
         {
-            { "Status", status },
+            { "status", status },
             { "currentExperimentId", experimentSceneName },
             { "currentUserId", studentId },
             { "currentGroupId", groupId },
@@ -237,8 +252,12 @@ public class ExperimentLoader : MonoBehaviour
         try
         {
             await _db.Collection("vrDevices").Document(vrDeviceDocumentId).UpdateAsync(update);
+            Debug.Log("[ExperimentLoader] Successfully updated device status in Firebase.");
         }
-        catch { }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"[ExperimentLoader] Failed to update device status: {ex.Message}");
+        }
     }
 
     private void SetMainSceneVisible(bool visible)
@@ -269,7 +288,7 @@ public class ExperimentLoader : MonoBehaviour
         fadeCanvas.blocksRaycasts = true;
 
         if (logoImage != null) logoImage.enabled = true;
-        if (loadingText != null) loadingText.text = loadingText.text; // Keeps existing message
+        if (loadingText != null) loadingText.text = loadingText.text;
 
         float elapsed = 0f;
         while (elapsed < fadeDuration)
