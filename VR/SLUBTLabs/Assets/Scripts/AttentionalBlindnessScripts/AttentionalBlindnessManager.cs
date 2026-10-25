@@ -26,9 +26,7 @@ public class AttentionalBlindnessManager : MonoBehaviour
     public float fadeDelay = 8f;
     public float fadeDuration = 3f;
 
-    // ─────────────────────────────────────────────
-    // NEW: Audio Distraction (Radio)
-    // ─────────────────────────────────────────────
+
     [Header("Audio Distraction (Radio)")]
     [Tooltip("AudioSource on the Radio object. Leave empty to auto-find.")]
     public AudioSource radioAudioSource;
@@ -95,7 +93,7 @@ public class AttentionalBlindnessManager : MonoBehaviour
     // Audio state
     private AudioClip _chosenClip;
 
-    // Locomotion (XRI 3.0)
+
     private ContinuousMoveProvider _moveProvider;
     private ContinuousTurnProvider _turnProvider;
     private SnapTurnProvider _snapTurnProvider;
@@ -180,15 +178,12 @@ public class AttentionalBlindnessManager : MonoBehaviour
         Debug.Log($"[AttentionalBlindness] Found VR Player: '{origin.name}' " +
                   $"(pos={origin.transform.position}, children={origin.transform.childCount})");
 
-        // Disable only locomotion that translates / teleports the body
         DisableIfFound<ContinuousMoveProvider>(origin, "Move (thumbstick walk)");
         DisableIfFound<TeleportationProvider>(origin, "Teleportation");
 
-        // Optional: also block stick-turn (head look still works)
         DisableIfFound<ContinuousTurnProvider>(origin, "ContinuousTurn (stick)");
         DisableIfFound<SnapTurnProvider>(origin, "SnapTurn (stick)");
 
-        // CharacterController – stop residual physics push
         _characterController = origin.GetComponent<CharacterController>();
         if (_characterController != null && _characterController.enabled)
         {
@@ -196,7 +191,6 @@ public class AttentionalBlindnessManager : MonoBehaviour
             Debug.Log("[AttentionalBlindness] Disabled: CharacterController on VR Player");
         }
 
-        // Freeze origin position (stops any leftover translation; head can still look)
         _lockedPosition = origin.transform.position;
         _locomotionLocked = true;
 
@@ -246,13 +240,10 @@ public class AttentionalBlindnessManager : MonoBehaviour
         }
         if (origin == null) return;
 
-        // Keep body fixed; camera under Camera Offset still tracks the headset
         origin.transform.position = _lockedPosition;
     }
 
-    // ─────────────────────────────────────────────
-    // Experiment flow
-    // ─────────────────────────────────────────────
+
     private static GameObject FindChildRecursive(Transform parent, string name)
     {
         if (parent == null) return null;
@@ -305,8 +296,7 @@ public class AttentionalBlindnessManager : MonoBehaviour
                       $"ab_AudioDelaySeconds={config.ab_AudioDelaySeconds}, " +
                       $"ab_UseRandomAudioClip={config.ab_UseRandomAudioClip}");
         }
-
-        // Auto-find the Radio’s AudioSource if not assigned
+        LocomotionLocker.Lock(LocomotionLocker.LockMode.Full, xrOriginOverride);       
         if (radioAudioSource == null)
         {
             var radio = GameObject.Find("Radio");
@@ -482,7 +472,6 @@ public class AttentionalBlindnessManager : MonoBehaviour
 
         if (instructionPanel != null) instructionPanel.SetActive(false);
 
-        // Stay locked for the whole trial
         _trialStartTime = Time.time;
         _experimentStartRealtime = Time.realtimeSinceStartup;
         _startedAtUtc = DateTime.UtcNow;
@@ -491,7 +480,7 @@ public class AttentionalBlindnessManager : MonoBehaviour
 
         ShowCountInput();
         StartCoroutine(FadeOutAfterDelay());
-        StartCoroutine(PlayAudioAfterDelay());          // ← NEW
+        StartCoroutine(PlayAudioAfterDelay());          
     }
 
     private void ShowCountInput()

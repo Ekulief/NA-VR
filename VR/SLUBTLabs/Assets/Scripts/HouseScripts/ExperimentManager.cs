@@ -380,7 +380,6 @@ public class ExperimentManager : MonoBehaviour
         string source = (ExperimentConfigLoader.Current != null) ? "Firestore / Remote Config" : "Local Inspector Fallback";
         Debug.Log($"[ExperimentManager] Starting Distractor Task immediately. Duration: {distractorTaskDuration}s | Source: {source}");
 
-        // Open the distractor panel and start countdown right away
         OnDistractorStarted?.Invoke(distractorTaskDuration);
 
         float timeRemaining = distractorTaskDuration;
@@ -397,7 +396,6 @@ public class ExperimentManager : MonoBehaviour
         OnDistractorEnded?.Invoke();
         OnRecallStarted?.Invoke();
     }
-    // Called by DistractorTaskUI when the user clicks the distractor button
     public void StartDistractorTimer()
     {
         isDistractorTimerRunning = true;
@@ -629,7 +627,6 @@ public class ExperimentManager : MonoBehaviour
             StartCoroutine(BeginTransitionToLab());
         }
 
-        // ADDED: Lets you instantly force-trigger the distractor task on demand for testing
         if (GUILayout.Button("DEBUG: Start Distractor"))
         {
             StopAllCoroutines();

@@ -52,7 +52,6 @@ public class QuestionManager : MonoBehaviour
 
     private void OnRecallStarted()
     {
-        // Prefer remote config if available
         if (ExperimentConfigLoader.Current != null)
         {
             randomizeQuestions = ExperimentConfigLoader.Current.memory_RandomizeQuestions;
@@ -69,7 +68,6 @@ public class QuestionManager : MonoBehaviour
 
         bool usedRemote = false;
 
-        // FIXED: Check memory2_Targets first for Memory2, then fallback to memory_Targets
         List<MemoryTargetEntry> activeTargets = null;
         if (ExperimentConfigLoader.Current != null)
         {
@@ -126,7 +124,6 @@ public class QuestionManager : MonoBehaviour
 
             string[] choices = q.multipleChoiceOptions;
 
-            // Default choices when Firestore left the array empty
             if (choices == null || choices.Length == 0)
             {
                 switch (q.questionType)
@@ -134,7 +131,7 @@ public class QuestionManager : MonoBehaviour
 
 
                     case QuestionType.YesNo:
-                        choices = new string[] { }; // Yes/No uses its own buttons
+                        choices = new string[] { }; 
                         break;
 
                     default:

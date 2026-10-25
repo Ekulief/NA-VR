@@ -25,26 +25,35 @@ public class BeginExperimentButton : MonoBehaviour
         starting = true;
         startButton.interactable = false;
 
-        bool started = false;
-
-        // Set by ExperimentConfigLoader at startup (pinned currentProgressId on the device).
         string progressId = ExperimentConfigLoader.Current != null
             ? ExperimentConfigLoader.Current.progressId
             : null;
 
-        if (string.IsNullOrEmpty(progressId))
-            Debug.LogWarning("[BeginExperiment] No active progress ID. Did the student connect on the web?");
-        else
-            started = await TryStartSession(progressId);
+        Debug.Log($"[BeginExperiment] progressId = '{progressId}'");
 
-        if (started) onSessionStarted.Invoke();
-        else startButton.interactable = true;   // allow retry
+        if (string.IsNullOrEmpty(progressId))
+        {
+            Debug.LogWarning("[BeginExperiment] No progressId – web app was never connected!");
+            startButton.interactable = true;
+            starting = false;
+            return;
+        }
+
+        bool started = await TryStartSession(progressId);
+        Debug.Log($"[BeginExperiment] TryStartSession returned: {started}");
+
+        if (started)
+        {
+            LocomotionLocker.Unlock();
+            onSessionStarted.Invoke();
+        }
+        else
+        {
+            startButton.interactable = true;
+        }
 
         starting = false;
     }
-
-    // Transaction: only idle -> running. Never overwrites a session the
-    // dashboard has already paused or ended.
     private static async Task<bool> TryStartSession(string progressId)
     {
         var db = FirebaseFirestore.DefaultInstance;

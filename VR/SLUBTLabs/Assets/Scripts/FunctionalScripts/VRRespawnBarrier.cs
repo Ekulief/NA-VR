@@ -24,7 +24,6 @@ public class VRRespawnBarrier : MonoBehaviour
 
     private void LocateReferences()
     {
-        // 1. Find XROrigin by component, fall back to string search
         if (_cachedXrOrigin == null)
         {
             _cachedXrOrigin = FindFirstObjectByType<XROrigin>();
@@ -36,7 +35,6 @@ public class VRRespawnBarrier : MonoBehaviour
             }
         }
 
-        // 2. Find Spawn Point by name search
         if (_cachedSpawnPoint == null)
         {
             GameObject spawnObj = GameObject.Find(spawnPointName);
@@ -51,13 +49,11 @@ public class VRRespawnBarrier : MonoBehaviour
     {
         if (Time.time - _lastRespawnTime < respawnCooldown) return;
 
-        // Auto-detect references if not already cached
         if (_cachedXrOrigin == null || _cachedSpawnPoint == null)
         {
             LocateReferences();
         }
 
-        // Check if the collider belongs to MainCamera or the XR Rig
         if (other.CompareTag("MainCamera") || other.GetComponentInParent<XROrigin>() != null)
         {
             _lastRespawnTime = Time.time;
@@ -75,21 +71,16 @@ public class VRRespawnBarrier : MonoBehaviour
 
         Camera vrCam = _cachedXrOrigin.Camera ?? Camera.main;
 
-        // 1. Flatten the target forward direction to avoid horizon tilt
         Vector3 forwardYOnly = Vector3.ProjectOnPlane(_cachedSpawnPoint.forward, Vector3.up).normalized;
         if (forwardYOnly == Vector3.zero)
             forwardYOnly = Vector3.forward;
 
-        // 2. Match view rotation on the horizontal axis
         _cachedXrOrigin.MatchOriginUpCameraForward(Vector3.up, forwardYOnly);
 
-        // 3. Keep the user's physical standing height relative to the spawn floor
         if (vrCam != null)
         {
-            // Calculate height offset between camera eyes and XR Origin base floor
             float currentEyeHeightOffset = vrCam.transform.position.y - _cachedXrOrigin.transform.position.y;
 
-            // Set camera location to spawn ground level + current physical eye height
             Vector3 targetCameraPosition = _cachedSpawnPoint.position + (Vector3.up * currentEyeHeightOffset);
             _cachedXrOrigin.MoveCameraToWorldLocation(targetCameraPosition);
         }

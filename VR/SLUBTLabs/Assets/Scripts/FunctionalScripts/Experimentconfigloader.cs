@@ -63,11 +63,9 @@ public class ExperimentConfigLoader : MonoBehaviour
     {
         FirebaseFirestore db = FirebaseFirestore.DefaultInstance;
 
-        // ── STEP 1: Hardware ID ───────────────────────────────────────────────
         string deviceId = SystemInfo.deviceUniqueIdentifier;
         Debug.Log($"[ConfigLoader] This device hardware ID = {deviceId}");
 
-        // ── STEP 2: vrDevices → vrId + optional currentProgressId ─────────────
         string vrId = fallbackVrId;
         DocumentSnapshot deviceDoc = null;
 
@@ -101,7 +99,6 @@ public class ExperimentConfigLoader : MonoBehaviour
 
         ResolvedVrId = vrId;
 
-        // ── STEP 3: Choose progress document ──────────────────────────────────
         DocumentSnapshot progressDoc = await ResolveProgressDocAsync(db, deviceDoc, vrId);
         if (progressDoc == null)
         {
@@ -111,13 +108,12 @@ public class ExperimentConfigLoader : MonoBehaviour
 
         string progressId = progressDoc.Id;
 
-        // ── STEP 4: Assign standard session IDs ────────────────────────────────
         string studentId = GetFieldString(progressDoc, "studentId");
         string groupId = GetFieldString(progressDoc, "groupId");
         string blockId = GetFieldString(progressDoc, "blockId");
         string experimentId = GetFieldString(progressDoc, "experimentId");
         if (string.IsNullOrEmpty(experimentId))
-            experimentId = GetFieldString(progressDoc, "exeprimentId"); // typo fallback
+            experimentId = GetFieldString(progressDoc, "exeprimentId");
 
         config.studentId = studentId;
         config.groupId = groupId;
@@ -139,7 +135,6 @@ public class ExperimentConfigLoader : MonoBehaviour
             return;
         }
 
-        // ── STEP 5: Experiment document ───────────────────────────────────────
         DocumentSnapshot experimentDoc = await db.Collection("experiment")
             .Document(experimentId)
             .GetSnapshotAsync();
@@ -154,7 +149,6 @@ public class ExperimentConfigLoader : MonoBehaviour
         config.sceneId = GetFieldString(experimentDoc, "sceneId");
         Debug.Log($"[ConfigLoader] Experiment document loaded → moduleId='{config.moduleId}', sceneId='{config.sceneId}'");
 
-        // ── STEP 6: Apply configuration map ───────────────────────────────────
         Dictionary<string, object> configMap = null;
         if (experimentDoc.TryGetValue("configuration", out Dictionary<string, object> c1))
             configMap = c1;
@@ -177,10 +171,8 @@ public class ExperimentConfigLoader : MonoBehaviour
        DocumentSnapshot deviceDoc,
        string vrId)
     {
-        // ✅ FIX: Capture the active scene immediately on the main thread before any 'await' calls
         string currentScene = SceneManager.GetActiveScene().name;
 
-        // 1. Pinned currentProgressId on device
         if (deviceDoc != null && deviceDoc.ContainsField("currentProgressId"))
         {
             string pinnedId = deviceDoc.GetValue<string>("currentProgressId") ?? "";
@@ -200,7 +192,6 @@ public class ExperimentConfigLoader : MonoBehaviour
             }
         }
 
-        // 2. Query all 'In Progress' for this vrId and match scene
         QuerySnapshot progressSnap = await db.Collection("experimentProgress")
             .WhereEqualTo("vrId", vrId)
             .WhereEqualTo("completionStatus", "In Progress")
@@ -237,7 +228,6 @@ public class ExperimentConfigLoader : MonoBehaviour
             }
         }
 
-        // 3. Fallback: return the first active session
         foreach (DocumentSnapshot progressDoc in progressSnap.Documents)
         {
             Debug.LogWarning($"[ConfigLoader] No scene match for '{currentScene}'. Using first In Progress: {progressDoc.Id}");
@@ -268,7 +258,6 @@ public class ExperimentConfigLoader : MonoBehaviour
         if (!string.IsNullOrEmpty(sceneId))
         {
             string cleanTarget = Clean(sceneId);
-            // Use exact match instead of IndexOf to prevent 'Memory Scene' from matching 'Memory Scene 2'
             if (string.Equals(cleanCurrent, cleanTarget, StringComparison.OrdinalIgnoreCase))
             {
                 return true;

@@ -12,8 +12,8 @@ public class PauseOverlay : MonoBehaviour
     public Color dimColor = new Color(0f, 0f, 0f, 0.85f);
     public Color titleColor = Color.white;
 
-    private const float DISTANCE = 1.2f;
-    private static readonly Vector2 PANEL_SIZE = new Vector2(2.6f, 1.8f);
+    private const float DISTANCE = 1.0f;
+    private static readonly Vector2 PANEL_SIZE = new Vector2(1.6f, 1.0f);  
 
     private GameObject _canvasObj;
     private Canvas _canvas;
@@ -81,29 +81,28 @@ public class PauseOverlay : MonoBehaviour
         GameObject titleObj = new GameObject("Title");
         titleObj.transform.SetParent(_canvasObj.transform, false);
         RectTransform titleRt = titleObj.AddComponent<RectTransform>();
-        titleRt.anchorMin = new Vector2(0.05f, 0.35f);
-        titleRt.anchorMax = new Vector2(0.95f, 0.65f);
+        titleRt.anchorMin = new Vector2(0.05f, 0.30f);
+        titleRt.anchorMax = new Vector2(0.95f, 0.70f);
         titleRt.offsetMin = Vector2.zero;
         titleRt.offsetMax = Vector2.zero;
 
         TMP_Text title = titleObj.AddComponent<TextMeshProUGUI>();
         title.text = pausedMessage;
-        title.fontSize = 60f;
+        title.fontSize = 48f;                    
         title.alignment = TextAlignmentOptions.Center;
         title.color = titleColor;
         title.enableAutoSizing = true;
-        title.fontSizeMin = 36f;
-        title.fontSizeMax = 80f;
+        title.fontSizeMin = 28f;
+        title.fontSizeMax = 60f;
         title.fontStyle = FontStyles.Bold;
         title.outlineWidth = 0.3f;
         title.outlineColor = new Color(0f, 0f, 0f, 0.9f);
 
-        _canvasObj.transform.localScale = Vector3.one * 0.01f;
+        _canvasObj.transform.localScale = Vector3.one * 0.008f;  
     }
 
     private void LateUpdate()
     {
-        // If paused, forcefully lock the camera position so head movement cannot wander
         if (_isPaused && _cameraTransform != null)
         {
             _cameraTransform.position = _lockedPosition;
@@ -145,7 +144,6 @@ public class PauseOverlay : MonoBehaviour
 
         if (_cameraTransform != null)
         {
-            // Lock the exact pose right when paused
             _lockedPosition = _cameraTransform.position;
             _lockedRotation = _cameraTransform.rotation;
         }
@@ -153,14 +151,22 @@ public class PauseOverlay : MonoBehaviour
         _isPaused = true;
         _followTarget = null;
         _canvasObj.SetActive(true);
-        Debug.Log("[PauseOverlay] Paused & Head Locked");
+
+        LocomotionLocker.Lock(LocomotionLocker.LockMode.Full);
+
+        Debug.Log("[PauseOverlay] Paused – head + locomotion locked");
     }
 
     public void Hide()
     {
         _isPaused = false;
+
         if (_canvasObj != null)
             _canvasObj.SetActive(false);
+
+        LocomotionLocker.Unlock();
+
+        Debug.Log("[PauseOverlay] Resumed – locomotion unlocked");
     }
 
     private void OnDestroy()

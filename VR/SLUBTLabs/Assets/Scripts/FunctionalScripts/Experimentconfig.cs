@@ -52,7 +52,6 @@ public class ExperimentConfig : ScriptableObject
     public bool ab_AudioLoop = false;
     [Range(0f, 1f)] public float ab_AudioVolume = 0.8f;
 
-    // NEW: List of available clip names (for the web app)
     public List<string> ab_AvailableAudioClips = new();
 
     // ── Odd Item Detection ───────────────────────────────────────────────────
@@ -80,7 +79,7 @@ public class ExperimentConfig : ScriptableObject
     public string depth_InstructionText = "<b>Depth Perception Test</b>\n\nObserve the target building structure and estimate its height in meters.\n\nPress <b>Start Test</b> when ready.";
     public float depth_ActualHeightMeters = 20f;
 
-    // ── Depth Perception 2 (Horizontal Distance) ─────────────────────────────
+    // ── DISTANCE PERCEPTION (Horizontal Distance) ─────────────────────────────
     [Header("Distance Perception — Car Subject Distance Bounds")]
     public float distance_MinDistanceMeters = 10f;
     public float distance_MaxDistanceMeters = 115f;
@@ -88,7 +87,7 @@ public class ExperimentConfig : ScriptableObject
     [TextArea(2, 4)]
     public string distance_InstructionText2 = "Observe the car ahead and estimate its horizontal distance in meters.";
 
-    // ── Reaction Time ─────────────────────────────────────────────────────────
+    // ── Reaction Time ─────────NOT YET IMPLEMENTED────────────────────────────────────────────────
     [Header("Reaction Time")]
     [Range(5, 40)] public int rt_TotalTrials = 10;
     [Range(0.5f, 2f)] public float rt_MinForeperiodSeconds = 1.0f;
@@ -98,7 +97,6 @@ public class ExperimentConfig : ScriptableObject
     [TextArea(2, 4)]
     public string rt_InstructionText = "Press the trigger when you see the green panel.\n\nPress trigger to begin.";
 
-    // ── Shelf Spawner ─────────────────────────────────────────────────────────
     [Header("Shelf Spawner")]
     public int shelf_Columns = 5;
     public int shelf_Rows = 2;
@@ -142,14 +140,12 @@ public class ExperimentConfig : ScriptableObject
     [Tooltip("If enabled, configuration parameters are fetched directly from Firestore at startup.")]
     public bool useRemoteConfig = true;
 
-    // ── Runtime Methods ───────────────────────────────────────────────────────
 
 
     public void ApplyConfigurationMap(Dictionary<string, object> configMap)
     {
         if (configMap == null) return;
 
-        // Automatically route to Memory2 map handler if config map contains memory2 keys
         if (configMap.ContainsKey("memory2_BriefingText") || configMap.ContainsKey("memory2_TimePerRoomSeconds"))
         {
             ApplyMemory2ConfigurationMap(configMap);
@@ -167,14 +163,14 @@ public class ExperimentConfig : ScriptableObject
 
         globalInstructionDelay = GetFloat("globalInstructionDelay", globalInstructionDelay);
 
-        // Depth (Height)
+        // Depth
         depth_MinHeightMeters = GetFloat("depth_MinHeightMeters", depth_MinHeightMeters);
         depth_MaxHeightMeters = GetFloat("depth_MaxHeightMeters", depth_MaxHeightMeters);
         depth_ActualHeightMeters = GetFloat("depth_ActualHeightMeters", depth_ActualHeightMeters);
         depth_StepAmount = GetFloat("depth_StepAmount", depth_StepAmount);
         depth_InstructionText = GetString("depth_InstructionText", depth_InstructionText);
 
-        // Depth 2 / Distance Perception
+        // Distance Perception
         distance_MinDistanceMeters = Mathf.Clamp(GetFloat("distance_MinDistanceMeters", GetFloat("distance_MinDistanceMeters", distance_MinDistanceMeters)), 0f, 115f);
         distance_MaxDistanceMeters = Mathf.Clamp(GetFloat("distance_MaxDistanceMeters", GetFloat("distance_MaxDistanceMeters", distance_MaxDistanceMeters)), 0f, 115f);
         distance_ActualDistanceMeters = Mathf.Clamp(GetFloat("distance_ActualDistanceMeters", GetFloat("distance_ActualDistanceMeters", distance_ActualDistanceMeters)), distance_MinDistanceMeters, distance_MaxDistanceMeters);
@@ -435,7 +431,7 @@ public class ExperimentConfig : ScriptableObject
         {
             FirebaseFirestore db = FirebaseFirestore.DefaultInstance;
 
-            // 1. Get hardware ID (same as loader)
+            // 1. Get hardware ID 
             string deviceId = SystemInfo.deviceUniqueIdentifier;
             string vrId = fallbackVrId;
             DocumentSnapshot deviceDoc = null;
@@ -474,7 +470,7 @@ public class ExperimentConfig : ScriptableObject
 
             progressId = currentProgressId;
 
-            // 3. Read experimentProgress/{progressId} to get experimentId
+            // 3. Read experimentProgressto get experimentId
             DocumentSnapshot progressSnap = await db.Collection("experimentProgress").Document(progressId).GetSnapshotAsync();
             if (!progressSnap.Exists)
             {
@@ -492,7 +488,7 @@ public class ExperimentConfig : ScriptableObject
                 return;
             }
 
-            // 4. Read experiment/{experimentId} to get moduleId and sceneId
+            // 4. Read experiment to get moduleId and sceneId
             DocumentSnapshot expSnap = await db.Collection("experiment").Document(experimentId).GetSnapshotAsync();
             if (!expSnap.Exists)
             {

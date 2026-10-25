@@ -146,12 +146,10 @@ public class ShelfSpawner : MonoBehaviour
 
         foreach (LayoutManager.ItemSnapshot itemSnap in snapshot.items)
         {
-            // Find the matching prefab by name
             GameObject prefab = null;
 
             if (itemSnap.isOddItem)
             {
-                // Odd item — search all oddItemPrefabs on OddItemManager
                 OddItemManager mgr = FindAnyObjectByType<OddItemManager>();
                 if (mgr != null)
                     prefab = mgr.oddItemPrefabs.Find(p =>
@@ -159,7 +157,6 @@ public class ShelfSpawner : MonoBehaviour
             }
             else
             {
-                // Distractor — search this shelf's distractor list
                 prefab = distractorPrefabs.Find(p => p.name == itemSnap.prefabName);
             }
 
@@ -186,7 +183,6 @@ public class ShelfSpawner : MonoBehaviour
                   $"{_spawnedItems.Count} items reconstructed.");
     }
 
-    // ── Spawning ──────────────────────────────────────────────────────────────
     private void SpawnShelf()
     {
         if (distractorPrefabs == null || distractorPrefabs.Count == 0)
@@ -229,7 +225,6 @@ public class ShelfSpawner : MonoBehaviour
 
                 GameObject prefab = distractorPrefabs[Random.Range(0, distractorPrefabs.Count)];
 
-                // Parent under _itemHolder so items get destroyed with the scene
                 GameObject spawned = Instantiate(prefab, basePosition + randomOffset, spawnRotation, _itemHolder.transform);
                 spawned.tag = "SpawnedItem";
                 _spawnedItems.Add(spawned);
@@ -268,7 +263,6 @@ public class ShelfSpawner : MonoBehaviour
         _targetSlotIndex = -1;
     }
 
-    // ── Editor helper ─────────────────────────────────────────────────────────
     private void OnDrawGizmosSelected()
     {
         BoxCollider box = GetComponent<BoxCollider>();

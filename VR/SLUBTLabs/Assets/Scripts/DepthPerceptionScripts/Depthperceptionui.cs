@@ -63,7 +63,6 @@ public class DepthPerceptionUI : MonoBehaviour
     public float referenceHeightMetres = 14f;
     [Tooltip("Height in metres that the side building's unscaled model represents (adjust if it's shorter natively)")]
     public float sideReferenceHeightMetres = 12f; 
-    // --- private state ---
     private Vector3 _mainBaseScale;
     private Vector3 _sideBaseScale;
     private Vector3[] _propBaseLocalPositions;

@@ -17,7 +17,6 @@ public class MemoryExperimentManager : MonoBehaviour
 
     public enum Phase { Idle, Study, Transitioning, Recalling, Distractor, Test, Complete }
 
-    // ── Events (same signatures as ExperimentManager so TimerHUD can hook them) ──
     public Action<string, float> OnRoomStarted;
     public Action<string> OnRoomEnded;
     public Action OnAllRoomsExplored;
@@ -141,7 +140,6 @@ public class MemoryExperimentManager : MonoBehaviour
                            "Drag StartQuestioningButton onto Begin Questioning Button.");
         }
 
-        // Hide recall panel until lab
         if (recallInstructionPanel != null)
             recallInstructionPanel.SetActive(false);
 
@@ -184,7 +182,6 @@ public class MemoryExperimentManager : MonoBehaviour
 
         var c = ExperimentConfigLoader.Current;
 
-        // Uses memory_ properties to pull exclusively from the "Memory" document
         studyDuration = c.memory_TimePerRoomSeconds > 0f ? c.memory_TimePerRoomSeconds : studyDuration;
         distractorDuration = c.memory_DistractorTaskDuration > 0f ? c.memory_DistractorTaskDuration : distractorDuration;
         if (c.memory_TransitionFadeDuration > 0f)
@@ -237,32 +234,49 @@ public class MemoryExperimentManager : MonoBehaviour
             yield return null;
     }
 
-    public void StartExperiment()
+    public async void StartExperiment()
     {
         if (IsSessionPaused()) return;
-
         if (currentPhase != Phase.Idle)
         {
             Debug.LogWarning("[MemoryExperimentManager] Experiment already running.");
             return;
         }
-
         if (objectTracker == null)
         {
             Debug.LogError("[MemoryExperimentManager] objectTracker is not assigned.");
             ExperimentLogger.Log("error", "objectTracker is not assigned");
             return;
         }
-
         if (!_configApplied)
             ApplyConfig();
 
+        // ── 1. Notify web app + unlock locomotion ──────────────────────────
+        string progressId = ExperimentConfigLoader.Current != null
+            ? ExperimentConfigLoader.Current.progressId
+            : null;
+
+        if (!string.IsNullOrEmpty(progressId))
+        {
+            bool started = await TryStartSession(progressId);
+            if (!started)
+            {
+                Debug.LogWarning("[MemoryExperimentManager] Could not start session (already running or missing doc). Continuing anyway.");
+            }
+        }
+        else
+        {
+            Debug.LogWarning("[MemoryExperimentManager] No progressId – web app will not be notified.");
+        }
+
+        // Always unlock so the student can walk during the study phase
+        LocomotionLocker.Unlock();
+        Debug.Log("[MemoryExperimentManager] Locomotion unlocked.");
+
+        // ── 2. Existing experiment start logic ─────────────────────────────
         ShowStartUI(false);
-
         objectTracker.CaptureOriginalLayout();
-
         GenerateTrials();
-
         if (trials.Count == 0)
         {
             Debug.LogError("[MemoryExperimentManager] No trials generated.");
@@ -280,15 +294,42 @@ public class MemoryExperimentManager : MonoBehaviour
             $"Memory experiment started with {trials.Count} trials",
             new Dictionary<string, object>
             {
-                { "sessionId", sessionId },
-                { "numberOfTrials", trials.Count },
-                { "studyDuration", studyDuration },
-                { "distractorDuration", distractorDuration }
+            { "sessionId", sessionId },
+            { "numberOfTrials", trials.Count },
+            { "studyDuration", studyDuration },
+            { "distractorDuration", distractorDuration }
             });
 
         StartCoroutine(BeginStudyPhase());
     }
+    private static async System.Threading.Tasks.Task<bool> TryStartSession(string progressId)
+    {
+        var db = FirebaseFirestore.DefaultInstance;
+        var docRef = db.Collection("experimentProgress").Document(progressId);
 
+        try
+        {
+            return await db.RunTransactionAsync(async tx =>
+            {
+                var snap = await tx.GetSnapshotAsync(docRef);
+                if (!snap.Exists) return false;
+                if (snap.GetValue<string>("sessionControl") != "idle") return false;
+
+                tx.Update(docRef, new Dictionary<string, object>
+            {
+                { "sessionControl", "running" },
+                { "elapsedSeconds", 0 },
+                { "updatedAt", FieldValue.ServerTimestamp },
+            });
+                return true;
+            });
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"[MemoryExperimentManager] Failed to start session: {e}");
+            return false;
+        }
+    }
     IEnumerator BeginStudyPhase()
     {
         currentPhase = Phase.Study;
@@ -377,7 +418,6 @@ public class MemoryExperimentManager : MonoBehaviour
         if (fadeController != null)
             yield return StartCoroutine(fadeController.FadeIn(transitionFadeDuration));
 
-        // Wait for player to press "Begin Questions" before distractor / questions
         StartRecallPhase();
     }
 
@@ -400,7 +440,6 @@ public class MemoryExperimentManager : MonoBehaviour
         }
         else
         {
-            // No panel assigned: skip straight to distractor / questions
             Debug.LogWarning("[MemoryExperimentManager] recallInstructionPanel not assigned — auto-continuing.");
             BeginQuestioning();
         }
@@ -411,7 +450,6 @@ public class MemoryExperimentManager : MonoBehaviour
     /// </summary>
     public void BeginQuestioning()
     {
-        // Do not hard-block on pause — log and continue so the flow cannot soft-lock
         if (IsSessionPaused())
             Debug.LogWarning("[MemoryExperimentManager] BeginQuestioning while session paused — continuing anyway.");
 
@@ -445,8 +483,6 @@ public class MemoryExperimentManager : MonoBehaviour
         ExperimentLogger.Log("distractor_started", $"Distractor ({duration}s)");
         Debug.Log($"[MemoryExperimentManager] Distractor started for {duration}s.");
 
-        // Use realtime so pause / timescale cannot freeze the distractor forever
-        // while DinerDistractorTaskUI still counts to 0 with Time.deltaTime.
         float endAt = Time.realtimeSinceStartup + duration;
         while (Time.realtimeSinceStartup < endAt)
         {
@@ -474,10 +510,8 @@ public class MemoryExperimentManager : MonoBehaviour
         Debug.Log("[MemoryExperimentManager] StartTestPhase — invoking OnRecallStarted.");
         OnRecallStarted?.Invoke();
 
-        // If DinerQuestionManager is present, subscribe to its answers so trialResults gets populated!
         if (DinerQuestionManager.Instance != null)
         {
-            // Unsubscribe first to avoid duplicate bindings, then subscribe
             DinerQuestionManager.Instance.OnAnswerSubmitted -= OnDinerAnswered;
             DinerQuestionManager.Instance.OnAnswerSubmitted += OnDinerAnswered;
 
@@ -637,7 +671,6 @@ public class MemoryExperimentManager : MonoBehaviour
         SaveFinalResults();
     }
 
-    // ── Teleport (same approach as ExperimentManager) ──────────────────────
 
     void TeleportPlayer(Transform destination)
     {
@@ -674,7 +707,6 @@ public class MemoryExperimentManager : MonoBehaviour
         bool wasKinematic = rb != null && rb.isKinematic;
         bool usedGravity = rb != null && rb.useGravity;
 
-        // Temporarily stop physics from interfering with the teleport.
         if (cc != null)
             cc.enabled = false;
 
@@ -690,7 +722,6 @@ public class MemoryExperimentManager : MonoBehaviour
         if (vrCamera == null)
             vrCamera = playerTransform.GetComponentInChildren<Camera>();
 
-        // Align the player's horizontal facing direction with the spawn marker.
         Vector3 targetForward =
             Vector3.ProjectOnPlane(destination.forward, Vector3.up).normalized;
 
@@ -711,8 +742,6 @@ public class MemoryExperimentManager : MonoBehaviour
             }
         }
 
-        // Put the XR Origin directly at the spawn marker's floor position.
-        // Do not add a hard-coded 1.6 m height.
         if (vrCamera != null)
         {
             Vector3 cameraOffset =
@@ -765,7 +794,6 @@ public class MemoryExperimentManager : MonoBehaviour
 
     IEnumerator ReenableLocomotion(CharacterController cc, Rigidbody rb)
     {
-        // Wait a couple of physics frames so the pose settles before gravity returns
         yield return null;
         yield return new WaitForFixedUpdate();
 
@@ -773,15 +801,12 @@ public class MemoryExperimentManager : MonoBehaviour
         if (rb != null)
         {
             rb.isKinematic = false;
-            // Keep gravity OFF for XR locomotion providers that drive motion themselves.
-            // If you use a non-XR CharacterController walker, set this true.
             rb.useGravity = false;
             rb.linearVelocity = Vector3.zero;
             rb.angularVelocity = Vector3.zero;
         }
     }
 
-    // ── UI helpers ─────────────────────────────────────────────────────────
 
     void SetQuestionText(string msg)
     {

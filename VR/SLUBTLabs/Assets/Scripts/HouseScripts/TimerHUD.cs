@@ -38,14 +38,12 @@ public class TimerHUD : MonoBehaviour
 
     private IEnumerator SubscribeWhenReady()
     {
-        // Wait a few frames for managers to Awake
         for (int i = 0; i < 30 && !_subscribed; i++)
         {
             TrySubscribe();
             if (_subscribed) yield break;
             yield return null;
         }
-        // Keep trying a bit longer in case manager loads late
         float t = 0f;
         while (!_subscribed && t < 10f)
         {

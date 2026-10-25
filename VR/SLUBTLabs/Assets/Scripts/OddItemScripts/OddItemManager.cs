@@ -22,7 +22,7 @@ public class OddItemManager : MonoBehaviour
 
     [Header("Odd Items")]
     public List<GameObject> oddItemPrefabs = new();
-    public int selectedOddItemIndex = 0;          // fallback when no remote selection
+    public int selectedOddItemIndex = 0;          
 
     [Header("Shuffle")]
     public bool shuffleItems = true;
@@ -159,7 +159,6 @@ public class OddItemManager : MonoBehaviour
             yield break;
         }
 
-        // ---------- Choose target (Selected → Random → Index) ----------
         _chosenOddItemPrefab = ResolveTargetPrefab();
         Debug.Log($"[OddItemDetection] Chosen odd item: '{_chosenOddItemPrefab.name}'");
 
@@ -232,7 +231,6 @@ public class OddItemManager : MonoBehaviour
                 Debug.Log($"[OddItemDetection Debug] Prefab [{i}]: NULL");
         }
 
-        // 1. Explicit selection from Firestore takes HIGHEST priority if provided
         if (cfg != null && !string.IsNullOrEmpty(cfg.oddItem_SelectedTarget))
         {
             Debug.Log($"[OddItemDetection Debug] Evaluating explicit target: '{cfg.oddItem_SelectedTarget}'");
@@ -252,7 +250,6 @@ public class OddItemManager : MonoBehaviour
             }
         }
 
-        // 2. Randomize if enabled and no explicit target matched
         if (cfg != null && cfg.oddItem_RandomizeTarget)
         {
             Debug.Log($"[OddItemDetection Debug] Randomize is enabled. Building pool...");
