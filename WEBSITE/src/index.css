@@ -5,3 +5,10 @@
     --font-google: "Google Sans Flex", sans-serif;
     --color-slublue: #111FA2;
 }
+
+.live-video video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
