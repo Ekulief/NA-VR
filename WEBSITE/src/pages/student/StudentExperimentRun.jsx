@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import {
@@ -7,7 +7,6 @@ import {
   collection,
   query,
   where,
-  addDoc,
   updateDoc,
   onSnapshot,
   limit,
@@ -28,8 +27,10 @@ import {
   Download,
   Loader2,
   X,
-  FileText,
   CheckCircle2,
+  UserPlus,
+  RotateCcw,
+  Users,
 } from "lucide-react";
 
 export default function StudentExperimentRun() {
@@ -38,48 +39,80 @@ export default function StudentExperimentRun() {
   const { user } = useAuth();
 
   const [experiment, setExperiment] = useState(null);
-
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Progress document
-  const [progress, setProgress] = useState(null);
+  const [allProgress, setAllProgress] = useState([]);
+  const [activeProgressId, setActiveProgressId] = useState(null);
 
-  // Result document (from experimentResults)
   const [result, setResult] = useState(null);
-
-  // Logs
   const [logs, setLogs] = useState([]);
 
-  // Local UI helpers
   const [connecting, setConnecting] = useState(false);
+  const [markingDone, setMarkingDone] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const timerRef = useRef(null);
   const initializedRef = useRef(false);
 
-  // Initialize elapsedSeconds ONLY ONCE when progress first loads
-  useEffect(() => {
-    if (progress?.elapsedSeconds != null && !initializedRef.current) {
-      setElapsedSeconds(progress.elapsedSeconds);
-      initializedRef.current = true;
-    }
-  }, [progress?.elapsedSeconds]);
-
-  // ---------- Preview state ----------
+  const [resolvedGroupId, setResolvedGroupId] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
 
-  // Map moduleId → Unity preview scene name
+  // ---------- Derived ----------
+  const progress = useMemo(() => {
+    if (!activeProgressId) return null;
+    return allProgress.find((p) => p.id === activeProgressId) || null;
+  }, [allProgress, activeProgressId]);
+
+  const participants = useMemo(() => {
+    const map = {};
+    allProgress.forEach((p) => {
+      const code = p.participantCode || "UNKNOWN";
+      if (!map[code]) {
+        map[code] = { participantCode: code, attempts: [] };
+      }
+      map[code].attempts.push(p);
+    });
+
+    Object.values(map).forEach((entry) => {
+      entry.attempts.sort(
+        (a, b) => (a.attemptNumber || 0) - (b.attemptNumber || 0)
+      );
+    });
+
+    return Object.values(map).sort((a, b) =>
+      a.participantCode.localeCompare(b.participantCode, undefined, {
+        numeric: true,
+      })
+    );
+  }, [allProgress]);
+
+  const currentParticipantCode = progress?.participantCode || null;
+  const currentAttemptNumber = progress?.attemptNumber || null;
+
+  const nextParticipantCode = useMemo(() => {
+    if (participants.length === 0) return "P01";
+    const nums = participants
+      .map((p) => parseInt(String(p.participantCode).replace(/\D/g, ""), 10))
+      .filter((n) => !isNaN(n));
+    const max = nums.length ? Math.max(...nums) : 0;
+    return `P${String(max + 1).padStart(2, "0")}`;
+  }, [participants]);
+
+  // Per-group done status (not whole experiment)
+  const isDataCollectionDone = Boolean(
+    resolvedGroupId &&
+      experiment?.dataCollectionByGroup?.[resolvedGroupId]?.status === "done"
+  );
+
   const previewSceneMap = {
     Depth_Perception: "DepthPerception_Preview",
     Odd_Item_Detection: "OddItem_Preview",
     Attentional_Blindness: "AttentionalBlindness_Preview",
     Memory2: "MemoryHouse_Preview",
     Distance_Perception: "DistancePerception_Preview",
-    Memory: "MemoryDiner_Preview"
-    // Add more experiments here later
+    Memory: "MemoryDiner_Preview",
   };
 
-  // Get the correct preview scene name from the experiment
   const getPreviewSceneName = () => {
     if (!experiment) return null;
     const key = experiment.moduleId || experiment.sceneId;
@@ -88,53 +121,121 @@ export default function StudentExperimentRun() {
 
   // ---------- Load experiment ----------
   useEffect(() => {
-    const loadExperiment = async () => {
-      try {
-        setLoading(true);
-        setError("");
+    if (!experimentId) return;
 
-        const experimentRef = doc(db, "experiment", experimentId);
-        const snap = await getDoc(experimentRef);
+    const experimentRef = doc(db, "experiment", experimentId);
 
+    // Live listener so other devices / refresh pick up dataCollectionByGroup
+    const unsubscribe = onSnapshot(
+      experimentRef,
+      (snap) => {
         if (!snap.exists()) {
           setError("Experiment not found.");
+          setExperiment(null);
+          setLoading(false);
           return;
         }
-
         setExperiment({ id: snap.id, ...snap.data() });
-      } catch (err) {
+        setError("");
+        setLoading(false);
+      },
+      (err) => {
         console.error(err);
         setError("Unable to load the experiment.");
-      } finally {
         setLoading(false);
       }
-    };
+    );
 
-    if (experimentId) loadExperiment();
+    return () => unsubscribe();
   }, [experimentId]);
 
-  // ---------- Check for existing progress & listen ----------
+  // ---------- Resolve group ----------
   useEffect(() => {
-    if (!experimentId || !user?.uid) return;
+    if (!experiment || !user?.uid) return;
 
-    const q = query(
-      collection(db, "experimentProgress"),
-      where("experimentId", "==", experimentId),
-      where("studentId", "==", user.uid)
-    );
+    const resolveGroup = async () => {
+      const experimentGroupIds = experiment.groupIds || [];
+      if (experimentGroupIds.length === 0) {
+        setResolvedGroupId(null);
+        return;
+      }
+
+      for (const groupId of experimentGroupIds) {
+        try {
+          const groupRef = doc(db, "group", groupId);
+          const groupSnap = await getDoc(groupRef);
+          if (groupSnap.exists()) {
+            const groupData = groupSnap.data();
+            const members = groupData.studentIds || [];
+            if (
+              members.includes(user.uid) ||
+              groupData.studentId === user.uid
+            ) {
+              setResolvedGroupId(groupSnap.id);
+              return;
+            }
+          }
+        } catch (err) {
+          console.error(`Error fetching group ${groupId}:`, err);
+        }
+      }
+
+      setResolvedGroupId(experimentGroupIds[0] || null);
+    };
+
+    resolveGroup();
+  }, [experiment, user?.uid]);
+
+  // ---------- Listen to all progress ----------
+  useEffect(() => {
+    if (!experimentId) return;
+
+    let q;
+    if (resolvedGroupId) {
+      q = query(
+        collection(db, "experimentProgress"),
+        where("experimentId", "==", experimentId),
+        where("groupId", "==", resolvedGroupId)
+      );
+    } else {
+      q = query(
+        collection(db, "experimentProgress"),
+        where("experimentId", "==", experimentId)
+      );
+    }
 
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        if (snapshot.empty) {
-          setProgress(null);
-          return;
-        }
-
         const docs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-        const active =
-          docs.find((d) => d.sessionControl !== "ended") || docs[0];
-        setProgress(active);
+
+        docs.sort((a, b) => {
+          const ta =
+            a.createdAt?.toMillis?.() ||
+            new Date(a.createdAt || 0).getTime() ||
+            0;
+          const tb =
+            b.createdAt?.toMillis?.() ||
+            new Date(b.createdAt || 0).getTime() ||
+            0;
+          return tb - ta;
+        });
+
+        setAllProgress(docs);
+
+        setActiveProgressId((prev) => {
+          const prevDoc = prev ? docs.find((d) => d.id === prev) : null;
+
+          if (prevDoc && prevDoc.sessionControl !== "ended") {
+            return prev;
+          }
+
+          const live = docs.find((d) => d.sessionControl !== "ended");
+          if (live) return live.id;
+
+          if (prevDoc) return prev;
+          return docs[0]?.id ?? null;
+        });
       },
       (err) => {
         console.error("Error listening to progress:", err);
@@ -142,9 +243,9 @@ export default function StudentExperimentRun() {
     );
 
     return () => unsubscribe();
-  }, [experimentId, user?.uid]);
+  }, [experimentId, resolvedGroupId]);
 
-  // ---------- Listen to experimentResults for this progress ----------
+  // ---------- Result for active progress ----------
   useEffect(() => {
     if (!progress?.id) {
       setResult(null);
@@ -181,7 +282,7 @@ export default function StudentExperimentRun() {
     return () => unsubscribe();
   }, [progress?.id]);
 
-  // ---------- Listen to logs for current progress ----------
+  // ---------- Logs for active progress ----------
   useEffect(() => {
     if (!progress?.id) {
       setLogs([]);
@@ -229,7 +330,6 @@ export default function StudentExperimentRun() {
 
     if (progress?.sessionControl === "running") {
       if (timerRef.current) clearInterval(timerRef.current);
-
       timerRef.current = setInterval(() => {
         setElapsedSeconds((prev) => prev + 1);
       }, 1000);
@@ -246,16 +346,17 @@ export default function StudentExperimentRun() {
   }, [progress?.sessionControl, result?.durationSeconds]);
 
   useEffect(() => {
-    if (progress?.sessionControl === "idle") {
+    initializedRef.current = false;
+    if (progress?.elapsedSeconds != null) {
+      setElapsedSeconds(progress.elapsedSeconds);
+      initializedRef.current = true;
+    } else {
       setElapsedSeconds(0);
-      initializedRef.current = false;
     }
   }, [progress?.id]);
 
-  // ---------- SAVE ON UNMOUNT EFFECT ----------
   useEffect(() => {
     const progressId = progress?.id;
-    
     return () => {
       if (progressId) {
         const ref = doc(db, "experimentProgress", progressId);
@@ -272,9 +373,7 @@ export default function StudentExperimentRun() {
   // ---------- Helpers ----------
   const formatTime = (totalSeconds) => {
     const seconds = Math.max(0, Math.round(Number(totalSeconds) || 0));
-    const m = Math.floor(seconds / 60)
-      .toString()
-      .padStart(2, "0");
+    const m = Math.floor(seconds / 60).toString().padStart(2, "0");
     const s = (seconds % 60).toString().padStart(2, "0");
     return `${m}:${s}`;
   };
@@ -289,13 +388,11 @@ export default function StudentExperimentRun() {
   };
 
   const displaySeconds =
-    result?.durationSeconds != null
-      ? result.durationSeconds
-      : elapsedSeconds;
+    result?.durationSeconds != null ? result.durationSeconds : elapsedSeconds;
 
-  // ---------- Actions ----------
-const handleConnectVR = async () => {
-    if (!experiment || !user?.uid || connecting || progress) return;
+  // ---------- Create progress ----------
+  const createProgress = async ({ participantCode, attemptNumber }) => {
+    if (!experiment || !user?.uid || connecting || isDataCollectionDone) return;
 
     const vrId = experiment.vrId;
     if (!vrId) {
@@ -303,54 +400,9 @@ const handleConnectVR = async () => {
       return;
     }
 
-    const confirmed = window.confirm(
-      `Connect to VR headset "${vrId}"?\n\nOnly one student can use a headset at a time.`
-    );
-    if (!confirmed) return;
-
     try {
       setConnecting(true);
 
-      // 1. Resolve which group the student belongs to among the experiment's groupIDs
-      let resolvedGroupId = null;
-      const experimentGroupIds = experiment.groupIds || [];
-
-      if (experimentGroupIds.length > 0) {
-        console.log("Checking experiment groupIDs:", experimentGroupIds);
-
-        // Loop through each group ID directly using getDoc (bulletproof against query issues)
-        for (const groupId of experimentGroupIds) {
-          try {
-            const groupRef = doc(db, "group", groupId);
-            const groupSnap = await getDoc(groupRef);
-
-            if (groupSnap.exists()) {
-              const groupData = groupSnap.data();
-              const members = groupData.studentIds || [];
-              
-              console.log(`Checking group ${groupId} with studentIds:`, members);
-
-              if (members.includes(user.uid) || groupData.studentId === user.uid) {
-                resolvedGroupId = groupSnap.id;
-                console.log("Match found! resolvedGroupId =", resolvedGroupId);
-                break;
-              }
-            }
-          } catch (err) {
-            console.error(`Error fetching group ${groupId}:`, err);
-          }
-        }
-
-        // Fallback: If no explicit group match found, default to the first one available
-        if (!resolvedGroupId && experimentGroupIds.length > 0) {
-          resolvedGroupId = experimentGroupIds[0];
-          console.log("No student match found, falling back to first group ID:", resolvedGroupId);
-        }
-      } else {
-        console.warn("No groupIDs found on experiment document!");
-      }
-
-      // 2. Find the device document
       const deviceQuery = query(
         collection(db, "vrDevices"),
         where("vrId", "==", vrId),
@@ -365,14 +417,16 @@ const handleConnectVR = async () => {
 
       const deviceRef = deviceSnap.docs[0].ref;
 
-      // 3. Atomic lock + create progress with the resolved groupId
       const newProgressId = await runTransaction(db, async (transaction) => {
         const deviceDoc = await transaction.get(deviceRef);
         const data = deviceDoc.data() || {};
 
-        // Reject if already locked by an active session
         if (data.currentProgressId) {
-          const existingRef = doc(db, "experimentProgress", data.currentProgressId);
+          const existingRef = doc(
+            db,
+            "experimentProgress",
+            data.currentProgressId
+          );
           const existing = await transaction.get(existingRef);
 
           if (existing.exists()) {
@@ -384,15 +438,16 @@ const handleConnectVR = async () => {
           }
         }
 
-        // Create progress
         const progressRef = doc(collection(db, "experimentProgress"));
 
         const progressData = {
           blockId: blockId || null,
           experimentId,
           studentId: user.uid,
-          groupId: resolvedGroupId,      // Dynamically matched groupId
+          groupId: resolvedGroupId,
           vrId,
+          participantCode,
+          attemptNumber,
           sessionControl: "idle",
           completionStatus: "In Progress",
           elapsedSeconds: 0,
@@ -402,7 +457,6 @@ const handleConnectVR = async () => {
 
         transaction.set(progressRef, progressData);
 
-        // Update device document pointers
         transaction.update(deviceRef, {
           currentProgressId: progressRef.id,
           currentExperimentId: experimentId,
@@ -415,18 +469,62 @@ const handleConnectVR = async () => {
         return progressRef.id;
       });
 
-      console.log("Locked headset → progressId =", newProgressId, "groupId =", resolvedGroupId);
+      setActiveProgressId(newProgressId);
     } catch (err) {
       if (err.message === "BUSY") {
-        alert("This VR headset is currently in use by another student.");
+        alert("This VR headset is currently in use.");
       } else {
         console.error(err);
-        alert("Unable to connect VR device.");
+        alert("Unable to start participant / attempt.");
       }
     } finally {
       setConnecting(false);
     }
   };
+
+  const handleStartNextParticipant = async () => {
+    if (isDataCollectionDone) return;
+
+    const confirmed = window.confirm(
+      `Start ${nextParticipantCode}?\n\nThis will create Attempt 1 for a new participant.`
+    );
+    if (!confirmed) return;
+
+    await createProgress({
+      participantCode: nextParticipantCode,
+      attemptNumber: 1,
+    });
+  };
+
+  const handleStartNewAttempt = async () => {
+    if (!currentParticipantCode || isDataCollectionDone) return;
+
+    const existingAttempts =
+      participants.find((p) => p.participantCode === currentParticipantCode)
+        ?.attempts || [];
+
+    const nextAttempt =
+      existingAttempts.length > 0
+        ? Math.max(...existingAttempts.map((a) => a.attemptNumber || 0)) + 1
+        : 1;
+
+    const confirmed = window.confirm(
+      `Start Attempt ${nextAttempt} for ${currentParticipantCode}?`
+    );
+    if (!confirmed) return;
+
+    if (progress && progress.sessionControl !== "ended") {
+      await updateSessionControl("ended");
+      await releaseVrLock(progress.id, progress.vrId || experiment.vrId);
+    }
+
+    await createProgress({
+      participantCode: currentParticipantCode,
+      attemptNumber: nextAttempt,
+    });
+  };
+
+  // ---------- Session control ----------
   const updateSessionControl = async (newControl) => {
     if (!progress?.id) return;
 
@@ -451,66 +549,283 @@ const handleConnectVR = async () => {
     }
   };
 
-const releaseVrLock = async (progressId, vrId) => {
-  if (!vrId || !progressId) return;
+  const releaseVrLock = async (progressId, vrId) => {
+    if (!vrId || !progressId) return;
 
-  try {
-    const deviceQuery = query(
-      collection(db, "vrDevices"),
-      where("vrId", "==", vrId),
-      limit(1)
+    try {
+      const deviceQuery = query(
+        collection(db, "vrDevices"),
+        where("vrId", "==", vrId),
+        limit(1)
+      );
+
+      const deviceSnap = await getDocs(deviceQuery);
+      if (deviceSnap.empty) return;
+
+      const deviceRef = deviceSnap.docs[0].ref;
+
+      await runTransaction(db, async (transaction) => {
+        const deviceDoc = await transaction.get(deviceRef);
+        const data = deviceDoc.data() || {};
+
+        if (data.currentProgressId === progressId) {
+          transaction.update(deviceRef, {
+            currentProgressId: null,
+            currentExperimentId: null,
+            currentGroupId: null,
+            currentUserId: null,
+            status: "available",
+            updatedAt: serverTimestamp(),
+          });
+        }
+      });
+    } catch (err) {
+      console.error("Failed to release VR lock:", err);
+    }
+  };
+
+  const handleResume = () => {
+    if (progress?.sessionControl !== "paused") return;
+    updateSessionControl("running");
+  };
+
+  const handlePause = () => {
+    if (progress?.sessionControl !== "running") return;
+    updateSessionControl("paused");
+  };
+
+  const handleEndAttempt = async () => {
+    const confirmed = window.confirm(
+      "End this attempt? The participant can still do another attempt later."
     );
+    if (!confirmed) return;
 
-    const deviceSnap = await getDocs(deviceQuery);
-    if (deviceSnap.empty) return;
+    await updateSessionControl("ended");
+    await releaseVrLock(progress.id, progress.vrId || experiment.vrId);
+  };
 
-    const deviceRef = deviceSnap.docs[0].ref;
+  // ---------- Mark data collection done (per group) ----------
+  const handleMarkDataCollectionDone = async () => {
+    if (!experimentId || !user?.uid || !resolvedGroupId || isDataCollectionDone)
+      return;
 
-    await runTransaction(db, async (transaction) => {
-      const deviceDoc = await transaction.get(deviceRef);
-      const data = deviceDoc.data() || {};
+    const hasLive = allProgress.some((p) => p.sessionControl !== "ended");
+    if (hasLive) {
+      const ok = window.confirm(
+        "There is still an active attempt.\n\nMark data collection as done for your group anyway? You should end the current attempt first if possible."
+      );
+      if (!ok) return;
+    } else {
+      const ok = window.confirm(
+        "Mark data collection as done for your group?\n\nThe instructor will see your group as finished. Other groups assigned to this experiment are not affected. You will not be able to start new participants from this page."
+      );
+      if (!ok) return;
+    }
 
-      // Only clear if we are still the owner
-      if (data.currentProgressId === progressId) {
-        transaction.update(deviceRef, {
-          currentProgressId: null,
-          currentExperimentId: null,
-          currentGroupId: null,
-          currentUserId: null,
-          status: "available",
-          updatedAt: serverTimestamp(),
-        });
+    try {
+      setMarkingDone(true);
+
+      await updateDoc(doc(db, "experiment", experimentId), {
+        [`dataCollectionByGroup.${resolvedGroupId}`]: {
+          status: "done",
+          completedAt: serverTimestamp(),
+          completedBy: user.uid,
+        },
+        updatedAt: serverTimestamp(),
+      });
+
+      // Local state updates immediately; onSnapshot will also refresh
+      setExperiment((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          dataCollectionByGroup: {
+            ...(prev.dataCollectionByGroup || {}),
+            [resolvedGroupId]: {
+              status: "done",
+              completedBy: user.uid,
+            },
+          },
+        };
+      });
+    } catch (err) {
+      console.error("Failed to mark data collection done:", err);
+      alert("Unable to mark as done. Please try again.");
+    } finally {
+      setMarkingDone(false);
+    }
+  };
+
+  // ---------- CSV helpers ----------
+  const flattenObject = (obj, prefix = "") => {
+    const out = {};
+    if (obj === null || obj === undefined) return out;
+
+    if (typeof obj !== "object" || Array.isArray(obj)) {
+      out[prefix || "value"] = Array.isArray(obj) ? JSON.stringify(obj) : obj;
+      return out;
+    }
+
+    for (const [k, v] of Object.entries(obj)) {
+      const key = prefix ? `${prefix}_${k}` : k;
+      if (v !== null && typeof v === "object" && !Array.isArray(v)) {
+        Object.assign(out, flattenObject(v, key));
+      } else if (Array.isArray(v)) {
+        out[key] = JSON.stringify(v);
+      } else {
+        out[key] = v;
       }
-    });
-  } catch (err) {
-    console.error("Failed to release VR lock:", err);
-  }
-};
+    }
+    return out;
+  };
 
-// The web dashboard can no longer START a session (idle -> running).
-// The participant starts it from the "Begin Experiment" button in VR.
-// The dashboard may only resume a session that is currently paused.
-const handleResume = () => {
-  if (progress?.sessionControl !== "paused") return;
-  updateSessionControl("running");
-};
-const handlePause = () => {
-  if (progress?.sessionControl !== "running") return;
-  updateSessionControl("paused");
-};
+  const normalizeForFlatten = (value) => {
+    if (
+      Array.isArray(value) &&
+      value.length === 1 &&
+      typeof value[0] === "object"
+    ) {
+      return value[0];
+    }
+    return value;
+  };
 
-const handleEnd = async () => {
-  const confirmed = window.confirm(
-    "End this experiment session? This cannot be undone."
-  );
-  if (!confirmed) return;
-  await updateSessionControl("ended");
-};
-  const handleDownloadResults = () => {
+  const handleDownloadJamoviCSV = async () => {
+    try {
+      const completed = allProgress.filter(
+        (p) =>
+          p.completionStatus === "Completed" || p.sessionControl === "ended"
+      );
+
+      if (completed.length === 0) {
+        alert("No completed attempts to export yet.");
+        return;
+      }
+
+      const rows = [];
+
+      for (const p of completed) {
+        const resultQuery = query(
+          collection(db, "experimentResults"),
+          where("progressId", "==", p.id)
+        );
+        const resultSnap = await getDocs(resultQuery);
+
+        let resultData = {};
+        if (!resultSnap.empty) {
+          const docs = resultSnap.docs.map((d) => d.data());
+          docs.sort((a, b) => {
+            const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+            const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+            return tb - ta;
+          });
+          resultData = docs[0];
+        }
+
+        const base = {
+          participantCode: p.participantCode || "",
+          attemptNumber: p.attemptNumber || 1,
+          experimentName: experiment?.experimentName || "",
+          vrId: p.vrId || experiment?.vrId || "",
+          durationSeconds:
+            resultData.durationSeconds ?? p.elapsedSeconds ?? "",
+          completedAt:
+            resultData.completedAt ||
+            resultData.timestamp ||
+            p.completionAt ||
+            "",
+          completionStatus: p.completionStatus || "",
+        };
+
+        const configFlat = flattenObject(
+          normalizeForFlatten(experiment?.configuration) || {},
+          "config"
+        );
+
+        const resultsFlat = resultData.experimentalResults
+          ? flattenObject(
+              normalizeForFlatten(resultData.experimentalResults) || {},
+              "result"
+            )
+          : {};
+
+        rows.push({ ...base, ...configFlat, ...resultsFlat });
+      }
+
+      if (rows.length === 0) {
+        alert("No data to export.");
+        return;
+      }
+
+      const EXCLUDE_KEYS = new Set([
+        "moduleId",
+        "config_globalInstructionDelay",
+        "globalInstructionDelay",
+        "config_oddItem_AvailableTargets",
+        "config_oddItem_RaycastDistance",
+        "config_ab_AvailableAudioClips",
+        "config_ab_FurnitureList",
+      ]);
+
+      const headers = [
+        ...new Set(rows.flatMap((r) => Object.keys(r))),
+      ].filter((h) => !EXCLUDE_KEYS.has(h));
+
+      const preferred = [
+        "participantCode",
+        "attemptNumber",
+        "experimentName",
+        "durationSeconds",
+        "completedAt",
+        "completionStatus",
+        "vrId",
+      ];
+
+      const orderedHeaders = [
+        ...preferred.filter((h) => headers.includes(h)),
+        ...headers.filter((h) => !preferred.includes(h)),
+      ];
+
+      const escape = (v) => {
+        if (v === null || v === undefined) return "";
+        const s = String(v);
+        return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      };
+
+      const csvContent = [
+        orderedHeaders.join(","),
+        ...rows.map((row) =>
+          orderedHeaders.map((h) => escape(row[h])).join(",")
+        ),
+      ].join("\n");
+
+      const blob = new Blob([csvContent], {
+        type: "text/csv;charset=utf-8;",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${(experiment?.experimentName || "results").replace(
+        /\s+/g,
+        "_"
+      )}_jamovi.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("CSV export failed:", err);
+      alert("Failed to export CSV. Please try again.");
+    }
+  };
+
+  const handleDownloadJSON = () => {
     const payload = {
       experimentName: experiment?.experimentName || "Untitled Experiment",
       vrId: experiment?.vrId,
       progressId: progress?.id,
+      participantCode: progress?.participantCode,
+      attemptNumber: progress?.attemptNumber,
       durationSeconds:
         result?.durationSeconds != null
           ? result.durationSeconds
@@ -544,24 +859,31 @@ const handleEnd = async () => {
     link.download = `${(payload.experimentName || "results").replace(
       /\s+/g,
       "_"
-    )}_results.json`;
+    )}_${progress?.participantCode || "P"}_A${
+      progress?.attemptNumber || 1
+    }.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
 
-  // ---------- Render helpers for dynamic config/results blocks ----------
+  // ---------- Render helpers ----------
   const renderDynamicDataNode = (data) => {
-    if (data === null || data === undefined) return <span className="text-gray-400">—</span>;
+    if (data === null || data === undefined)
+      return <span className="text-gray-400">—</span>;
 
     if (Array.isArray(data)) {
-      if (data.length === 0) return <span className="text-gray-400">Empty list</span>;
-      
+      if (data.length === 0)
+        return <span className="text-gray-400">Empty list</span>;
+
       return (
         <div className="space-y-3 w-full">
           {data.map((item, idx) => (
-            <div key={idx} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+            <div
+              key={idx}
+              className="bg-gray-50 border border-gray-200 rounded-lg p-3"
+            >
               <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">
                 Item #{idx + 1}
               </span>
@@ -576,12 +898,17 @@ const handleEnd = async () => {
       return (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
           {Object.entries(data).map(([key, value]) => (
-            <div key={key} className="bg-white border border-gray-200 rounded-lg p-3 flex flex-col justify-between">
+            <div
+              key={key}
+              className="bg-white border border-gray-200 rounded-lg p-3 flex flex-col justify-between"
+            >
               <span className="text-xs font-medium text-gray-500 capitalize mb-1">
                 {key.replace(/([A-Z])/g, " $1")}
               </span>
               <div className="text-sm font-medium text-gray-900 break-words">
-                {typeof value === "object" ? renderDynamicDataNode(value) : String(value)}
+                {typeof value === "object"
+                  ? renderDynamicDataNode(value)
+                  : String(value)}
               </div>
             </div>
           ))}
@@ -624,7 +951,7 @@ const handleEnd = async () => {
         ? "Paused"
         : isIdle
           ? "Ready"
-          : "Not Connected";
+          : "No active attempt";
 
   const statusStyle = isEnded
     ? "bg-indigo-100 text-indigo-700"
@@ -655,11 +982,18 @@ const handleEnd = async () => {
           <h1 className="text-2xl font-medium">
             {experiment.experimentName || "Untitled Experiment"}
           </h1>
-          <span
-            className={`px-3 py-1 rounded-full text-sm whitespace-nowrap ${statusStyle}`}
-          >
-            {statusLabel}
-          </span>
+          <div className="flex items-center gap-2">
+            {isDataCollectionDone && (
+              <span className="px-3 py-1 rounded-full text-sm bg-green-100 text-green-800 whitespace-nowrap">
+                Group data collection done
+              </span>
+            )}
+            <span
+              className={`px-3 py-1 rounded-full text-sm whitespace-nowrap ${statusStyle}`}
+            >
+              {statusLabel}
+            </span>
+          </div>
         </div>
 
         <p className="text-gray-500 mb-1">
@@ -675,35 +1009,111 @@ const handleEnd = async () => {
           </p>
         )}
 
-        {/* Expanded 12-column grid layout with a larger preview */}
+        {/* Main grid */}
         <div className="grid lg:grid-cols-12 gap-6 mb-6 items-stretch">
-          {/* Left column – controls + timer (Span 4) */}
+          {/* Left column */}
           <div className="lg:col-span-4 flex flex-col gap-6">
+            {/* Participant & Attempts */}
+            <section className="border border-gray-300 rounded-xl p-5">
+              <h2 className="text-lg font-medium mb-4 flex items-center gap-2">
+                <Users size={18} />
+                Participant & Attempts
+              </h2>
+
+              {currentParticipantCode ? (
+                <div className="mb-4 p-3 rounded-lg bg-indigo-50 border border-indigo-100">
+                  <p className="text-xs text-indigo-600 font-medium uppercase tracking-wider">
+                    Current Participant
+                  </p>
+                  <p className="text-2xl font-semibold text-indigo-900">
+                    {currentParticipantCode}
+                  </p>
+                  <p className="text-sm text-indigo-700 mt-0.5">
+                    Attempt {currentAttemptNumber}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 mb-4">
+                  No active participant. Start one below.
+                </p>
+              )}
+
+              <div className="flex flex-col gap-2 mb-4">
+                <button
+                  onClick={handleStartNextParticipant}
+                  disabled={connecting || isDataCollectionDone}
+                  className="w-full rounded-lg py-2.5 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white transition disabled:opacity-60"
+                >
+                  {connecting ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    <UserPlus size={16} />
+                  )}
+                  <span>Start {nextParticipantCode}</span>
+                </button>
+
+                {currentParticipantCode && (
+                  <button
+                    onClick={handleStartNewAttempt}
+                    disabled={connecting || isDataCollectionDone}
+                    className="w-full rounded-lg py-2.5 flex items-center justify-center gap-2 border border-indigo-300 text-indigo-700 hover:bg-indigo-50 transition disabled:opacity-60"
+                  >
+                    <RotateCcw size={16} />
+                    <span>New Attempt for {currentParticipantCode}</span>
+                  </button>
+                )}
+              </div>
+
+              {participants.length > 0 && (
+                <div className="border-t border-gray-200 pt-3">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
+                    All Participants
+                  </p>
+                  <div className="max-h-48 overflow-y-auto space-y-2">
+                    {participants.map((p) => (
+                      <div key={p.participantCode} className="text-sm">
+                        <p className="font-medium text-gray-800">
+                          {p.participantCode}
+                        </p>
+                        <div className="ml-2 space-y-0.5">
+                          {p.attempts.map((a) => (
+                            <button
+                              key={a.id}
+                              onClick={() => setActiveProgressId(a.id)}
+                              className={`block w-full text-left px-2 py-1 rounded text-xs transition ${
+                                a.id === activeProgressId
+                                  ? "bg-indigo-100 text-indigo-800 font-medium"
+                                  : "text-gray-600 hover:bg-gray-100"
+                              }`}
+                            >
+                              Attempt {a.attemptNumber} ·{" "}
+                              {a.sessionControl === "ended"
+                                ? "Completed"
+                                : a.sessionControl || "—"}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </section>
+
             {/* Session Control */}
             <section className="border border-gray-300 rounded-xl p-5">
               <h2 className="text-lg font-medium mb-4">Session Control</h2>
 
               {!isConnected ? (
-                <button
-                  onClick={handleConnectVR}
-                  disabled={connecting}
-                  className="w-full rounded-lg py-3 text-center border border-gray-300 hover:bg-gray-50 transition disabled:opacity-60 disabled:cursor-wait flex items-center justify-center gap-2"
-                >
-                  {connecting ? (
-                    <>
-                      <Loader2 size={18} className="animate-spin" />
-                      Connecting...
-                    </>
-                  ) : (
-                    "Connect VR Device"
-                  )}
-                </button>
+                <p className="text-sm text-gray-500">
+                  Start a participant to begin controlling the session.
+                </p>
               ) : (
                 <div className="flex flex-col gap-3">
                   {isIdle && (
-                    <div className="w-full rounded-lg py-3 px-4 flex items-center justify-center gap-2 bg-gray-100 border border-gray-200 text-gray-500 cursor-not-allowed">
+                    <div className="w-full rounded-lg py-3 px-4 flex items-center justify-center gap-2 bg-gray-100 border border-gray-200 text-gray-500">
                       <Loader2 size={18} className="animate-spin" />
-                      <span>Waiting for participant to begin…</span>
+                      <span>Waiting for participant to begin in VR…</span>
                     </div>
                   )}
 
@@ -729,17 +1139,17 @@ const handleEnd = async () => {
 
                   {!isEnded && (
                     <button
-                      onClick={handleEnd}
+                      onClick={handleEndAttempt}
                       className="w-full rounded-lg py-3 flex items-center justify-center gap-2 bg-red-700 hover:bg-red-600 text-white transition"
                     >
                       <Square size={16} fill="currentColor" />
-                      <span>End / Disconnect</span>
+                      <span>End Attempt</span>
                     </button>
                   )}
 
                   {isEnded && (
                     <p className="text-center text-sm text-gray-500 py-2">
-                      Session completed
+                      This attempt is completed
                     </p>
                   )}
                 </div>
@@ -768,13 +1178,13 @@ const handleEnd = async () => {
             </section>
           </div>
 
-          {/* Right – VR Preview (Span 8 - Much Bigger View) */}
+          {/* Right – VR Preview */}
           <div className="lg:col-span-8">
             <section className="border border-gray-300 rounded-xl p-5 h-full flex flex-col">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-medium">VR Preview</h2>
                 <p className="text-sm text-gray-500">
-                  Click inside the preview window, To exit, press Esc key twice
+                  Click inside the preview window. To exit, press Esc twice
                 </p>
                 {showPreview && (
                   <button
@@ -819,13 +1229,16 @@ const handleEnd = async () => {
           </div>
         </div>
 
-        {/* Experiment Results & Configurations Section */}
+        {/* Results */}
         {result && (
           <section className="border border-gray-300 rounded-xl p-5 mb-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-medium flex items-center gap-2">
                 <CheckCircle2 size={20} className="text-indigo-600" />
-                <span>Captured Experiment Results</span>
+                <span>
+                  Results — {currentParticipantCode} · Attempt{" "}
+                  {currentAttemptNumber}
+                </span>
               </h2>
               {result.duration && (
                 <span className="text-sm bg-gray-100 px-3 py-1 rounded-full text-gray-600">
@@ -835,7 +1248,6 @@ const handleEnd = async () => {
             </div>
 
             <div className="space-y-6">
-              {/* Configurations block (if available) */}
               {result.configurations && (
                 <div>
                   <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
@@ -845,33 +1257,12 @@ const handleEnd = async () => {
                 </div>
               )}
 
-              {/* Experimental Results block (if available) */}
               {result.experimentalResults && (
                 <div>
                   <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
                     Experimental Results & Metrics
                   </h3>
                   {renderDynamicDataNode(result.experimentalResults)}
-                </div>
-              )}
-
-              {/* Fallback general keys if custom structures aren't matched */}
-              {Object.keys(result).filter(
-                (k) =>
-                  !["id", "progressId", "experimentId", "experimentName", "blockId", "groupId", "userId", "studentId", "configurations", "experimentalResults", "logs", "timestamp", "startedAt", "completedAt", "duration", "durationSeconds", "completionStatus"].includes(k)
-              ).length > 0 && (
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
-                    Additional Parameters
-                  </h3>
-                  {renderDynamicDataNode(
-                    Object.fromEntries(
-                      Object.entries(result).filter(
-                        ([k]) =>
-                          !["id", "progressId", "experimentId", "experimentName", "blockId", "groupId", "userId", "studentId", "configurations", "experimentalResults", "logs", "timestamp", "startedAt", "completedAt", "duration", "durationSeconds", "completionStatus"].includes(k)
-                      )
-                    )
-                  )}
                 </div>
               )}
             </div>
@@ -891,7 +1282,7 @@ const handleEnd = async () => {
 
           {!isConnected ? (
             <p className="text-gray-500 text-sm">
-              Connect a VR device to start receiving logs.
+              Start a participant to begin receiving logs.
             </p>
           ) : logs.length === 0 ? (
             <p className="text-gray-500 text-sm">
@@ -919,19 +1310,78 @@ const handleEnd = async () => {
           )}
         </section>
 
-        {/* Export (only when ended) */}
-        {isEnded && (
-          <section className="border border-gray-300 rounded-xl p-5">
-            <h2 className="text-lg font-medium mb-4">Export Data</h2>
+        {/* Mark data collection done (this group only) */}
+        <section className="border border-gray-300 rounded-xl p-5 mb-6">
+          <h2 className="text-lg font-medium mb-2">Data collection</h2>
+
+          {!resolvedGroupId && (
+            <p className="text-sm text-amber-700 mb-3">
+              No group resolved for your account. Mark as done needs a group
+              assignment.
+            </p>
+          )}
+
+          {isDataCollectionDone ? (
+            <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 flex items-center gap-2 text-green-800">
+              <CheckCircle2 size={18} />
+              <div>
+                <p className="font-medium">Your group is marked as done</p>
+                <p className="text-sm text-green-700">
+                  Only your group is finished. Other groups on this experiment
+                  are not affected. The instructor can see your group status.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <p className="text-sm text-gray-500 mb-3">
+                When your group has finished all participants, mark data
+                collection as done. This only applies to your group — other
+                groups assigned to this experiment can keep running.
+              </p>
+              <button
+                onClick={handleMarkDataCollectionDone}
+                disabled={markingDone || !resolvedGroupId}
+                className="flex items-center justify-center gap-2 bg-gray-900 hover:bg-black text-white rounded-lg px-5 py-2.5 transition disabled:opacity-60"
+              >
+                {markingDone ? (
+                  <Loader2 size={18} className="animate-spin" />
+                ) : (
+                  <CheckCircle2 size={18} />
+                )}
+                <span>Mark my group as done</span>
+              </button>
+            </>
+          )}
+        </section>
+
+        {/* Export */}
+        <section className="border border-gray-300 rounded-xl p-5">
+          <h2 className="text-lg font-medium mb-4">Export Data</h2>
+          <div className="flex flex-wrap gap-3">
             <button
-              onClick={handleDownloadResults}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 border border-gray-300 hover:bg-gray-50 rounded-lg px-5 py-2.5 transition"
+              onClick={handleDownloadJamoviCSV}
+              className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-5 py-2.5 transition"
             >
               <Download size={18} />
-              <span>Download Results</span>
+              <span>Download Jamovi CSV (all attempts)</span>
             </button>
-          </section>
-        )}
+
+            {isConnected && (
+              <button
+                onClick={handleDownloadJSON}
+                className="flex items-center justify-center gap-2 border border-gray-300 hover:bg-gray-50 rounded-lg px-5 py-2.5 transition"
+              >
+                <Download size={18} />
+                <span>Download current attempt (JSON)</span>
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            CSV contains one row per completed attempt for your group, ready
+            for jamovi.
+          </p>
+        </section>
       </main>
     </div>
   );

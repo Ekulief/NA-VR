@@ -86,7 +86,7 @@ Odd_Item_Detection: [
   "oddItem_WrongItemFeedback",
   "oddItem_RandomizeTarget",
   "oddItem_SelectedTarget",
-  "oddItem_RaycastDistance",
+ // "oddItem_RaycastDistance",
   "oddItem_SearchTimeLimitSeconds",
 ],
 };
