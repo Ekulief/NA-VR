@@ -15,6 +15,7 @@ import {
 
 import { db } from "../../config/firebase-config";
 import { useAuth } from "../../context/AuthContext";
+import { getFunctions, httpsCallable } from "firebase/functions";
 
 import { ArrowLeft, Plus, Box, X, Save, Loader2, Trash2 } from "lucide-react";
 
@@ -260,16 +261,11 @@ export default function InstructorExperimentBuilder() {
     const getVrDevices = async () => {
       try {
         if (!user?.uid) return;
-        const snapshot = await getDocs(
-          query(
-            collection(db, "vrDevices"),
-            where("assignedInstructorId", "==", user.uid),
-          ),
-        );
-        const list = snapshot.docs.map((d) => ({
-          id: d.id,
-          ...d.data(),
-        }));
+        // Call a trusted function so the builder does not need permission to
+        // read hardware IDs or publisher UIDs from the full VR inventory.
+        const listAvailable = httpsCallable(getFunctions(), "listVrDevicesForInstructor");
+        const reply = await listAvailable();
+        const list = Array.isArray(reply.data?.devices) ? reply.data.devices : [];
         list.sort((a, b) => (a.vrId || a.id).localeCompare(b.vrId || b.id));
         setVrDevices(list);
       } catch (error) {
@@ -1410,15 +1406,16 @@ export default function InstructorExperimentBuilder() {
         <section className="bg-white border border-gray-200 rounded-xl p-6 mb-6 shadow-sm">
           <h2 className="text-lg font-medium mb-3">Assign VR Devices</h2>
           <p className="text-sm text-gray-500 mb-3">
-            Select the VR devices allowed to conduct this experiment. Only
-            devices assigned to your instructor account are listed. Each device
-            still requires a separately pinned experimentProgress session before
-            it can stream.
+            Select registered VR devices for this experiment. Available headsets can
+            be reused; when a student connects, the headset is automatically
+            linked to the instructor and class. A student session is still required
+            before video begins.
           </p>
           {vrDevices.length === 0 ? (
             <p className="text-sm text-amber-700">
-              No VR devices are assigned to your account. Pair and assign them
-              in Firestore first.
+              No available registered headsets were found. Start the Unity app
+              on a headset to register its VR document and publisher UID
+              automatically, then reopen the experiment builder.
             </p>
           ) : (
             <div className="flex flex-wrap gap-3">

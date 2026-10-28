@@ -439,29 +439,30 @@ public class ExperimentConfig : ScriptableObject
         {
             FirebaseFirestore db = FirebaseFirestore.DefaultInstance;
 
-            // 1. Get hardware ID 
-            string deviceId = SystemInfo.deviceUniqueIdentifier;
-            string vrId = fallbackVrId;
-            DocumentSnapshot deviceDoc = null;
-
-            QuerySnapshot deviceSnap = await db.Collection("vrDevices")
-                .WhereEqualTo("deviceId", deviceId)
-                .WhereEqualTo("publisherAuthUid", FirebaseManager.AuthUid)
-                .Limit(1)
-                .GetSnapshotAsync();
-
-            if (deviceSnap.Count > 0)
+            // 1. Reuse the exact hardware-linked document resolved on startup.
+            if (!FirebaseManager.IsInitialized ||
+                string.IsNullOrEmpty(FirebaseManager.RegisteredDeviceDocumentId))
             {
-                foreach (var doc in deviceSnap.Documents)
-                {
-                    deviceDoc = doc;
-                    break;
-                }
-
-                if (deviceDoc != null && deviceDoc.ContainsField("vrId"))
-                {
-                    vrId = deviceDoc.GetValue<string>("vrId") ?? fallbackVrId;
-                }
+                Debug.LogError("[ExperimentConfig] VR registration is not ready.");
+                return;
+            }
+            DocumentSnapshot deviceDoc = await db.Collection("vrDevices")
+                .Document(FirebaseManager.RegisteredDeviceDocumentId).GetSnapshotAsync();
+            if (!deviceDoc.Exists ||
+                !deviceDoc.ContainsField("publisherAuthUid") ||
+                deviceDoc.GetValue<string>("publisherAuthUid") != FirebaseManager.AuthUid ||
+                !deviceDoc.ContainsField("deviceId") ||
+                deviceDoc.GetValue<string>("deviceId") != SystemInfo.deviceUniqueIdentifier)
+            {
+                Debug.LogError("[ExperimentConfig] Registered headset ownership does not match.");
+                return;
+            }
+            string vrId = deviceDoc.ContainsField("vrId")
+                ? deviceDoc.GetValue<string>("vrId") : "";
+            if (string.IsNullOrEmpty(vrId))
+            {
+                Debug.LogError("[ExperimentConfig] Registered headset is missing vrId.");
+                return;
             }
 
             // 2. Extract currentProgressId from the matched device document
@@ -473,16 +474,11 @@ public class ExperimentConfig : ScriptableObject
 
             if (string.IsNullOrEmpty(currentProgressId))
             {
-                Debug.LogWarning("[ExperimentConfig] No active 'currentProgressId' found on paired device.");
+                Debug.LogWarning("[ExperimentConfig] No currentProgressId is pinned on this headset yet.");
                 return;
             }
 
-            // Bind this config to the paired VR device, never to a fallback ID.
-            if (deviceDoc == null)
-            {
-                Debug.LogError("[ExperimentConfig] VR device has not been paired with its anonymous UID.");
-                return;
-            }
+            // Bind this config only to the automatically registered VR document.
             vrId = deviceDoc.GetValue<string>("vrId");
             this.vrId = vrId;
             progressId = currentProgressId;

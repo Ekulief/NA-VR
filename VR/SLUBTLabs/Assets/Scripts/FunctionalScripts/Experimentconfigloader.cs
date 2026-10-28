@@ -7,7 +7,7 @@ using Firebase.Firestore;
 
 /// <summary>
 /// Loads session IDs from experimentProgress and applies experiment.configuration.
-/// Uses only the currentProgressId pinned on this paired device.
+/// Uses only the currentProgressId pinned to this automatically registered headset.
 /// Never chooses a different device's session or the first active session.
 /// </summary>
 public class ExperimentConfigLoader : MonoBehaviour
@@ -15,7 +15,7 @@ public class ExperimentConfigLoader : MonoBehaviour
     [Tooltip("Drag your ExperimentConfig asset here.")]
     public ExperimentConfig config;
 
-    [Tooltip("Legacy editor value; remote-config mode REQUIRES a paired vrDevices document.")]
+    [Tooltip("Legacy local config fallback. Remote mode resolves VR from automatic Firebase registration.")]
     public string fallbackVrId = "VR-01";
 
     public static ExperimentConfig Current { get; private set; }
@@ -46,7 +46,12 @@ public class ExperimentConfigLoader : MonoBehaviour
         }
 
         Debug.Log("[ConfigLoader] Waiting for Firebase initialization...");
-        yield return new WaitUntil(() => FirebaseManager.IsInitialized);
+        yield return new WaitUntil(() => FirebaseManager.IsInitialized || FirebaseManager.InitializationFailed);
+        if (FirebaseManager.InitializationFailed)
+        {
+            Debug.LogError("[ConfigLoader] Firebase authentication or automatic device registration failed.");
+            yield break;
+        }
 
         Debug.Log("[ConfigLoader] Resolving device identity and loading config...");
         var task = FetchProgressAndConfigAsync();
@@ -77,47 +82,25 @@ public class ExperimentConfigLoader : MonoBehaviour
 
         FirebaseFirestore db = FirebaseFirestore.DefaultInstance;
 
-        string deviceId = SystemInfo.deviceUniqueIdentifier;
-        Debug.Log($"[ConfigLoader] This device hardware ID = {deviceId}");
+        string registeredDocumentId = FirebaseManager.RegisteredDeviceDocumentId;
+        if (string.IsNullOrEmpty(registeredDocumentId))
+            throw new System.InvalidOperationException("The Firebase VR publisher has not registered.");
 
-        string vrId = fallbackVrId;
-        DocumentSnapshot deviceDoc = null;
+        DocumentSnapshot deviceDoc = await db.Collection("vrDevices")
+            .Document(registeredDocumentId).GetSnapshotAsync();
+        if (!deviceDoc.Exists ||
+            GetFieldString(deviceDoc, "deviceId") != SystemInfo.deviceUniqueIdentifier ||
+            GetFieldString(deviceDoc, "publisherAuthUid") != FirebaseManager.AuthUid)
+            throw new System.InvalidOperationException("The registered VR device identity no longer matches this Unity session.");
 
-        QuerySnapshot deviceSnap = await db.Collection("vrDevices")
-            .WhereEqualTo("deviceId", deviceId)
-            .WhereEqualTo("publisherAuthUid", FirebaseManager.AuthUid)
-            .Limit(1)
-            .GetSnapshotAsync();
-
-        if (deviceSnap.Count > 0)
-        {
-            foreach (var doc in deviceSnap.Documents)
-            {
-                deviceDoc = doc;
-                break;
-            }
-
-            if (deviceDoc != null && deviceDoc.ContainsField("vrId"))
-            {
-                vrId = deviceDoc.GetValue<string>("vrId") ?? fallbackVrId;
-                Debug.Log($"[ConfigLoader] Found matching device → assigned vrId = {vrId}");
-            }
-            else
-            {
-                Debug.LogWarning("[ConfigLoader] Device found but has no 'vrId'. Using fallback.");
-            }
-        }
-        else
-        {
-            Debug.LogError($"[ConfigLoader] No paired vrDevices document for deviceId={deviceId}, auth UID={FirebaseManager.AuthUid}. Pair the Unity installation in the Firebase console.");
-            throw new System.InvalidOperationException("Unpaired VR device");
-        }
+        string vrId = GetFieldString(deviceDoc, "vrId");
+        if (string.IsNullOrEmpty(vrId))
+            throw new System.InvalidOperationException("Registered VR document has no vrId.");
 
         var loader = FindAnyObjectByType<ExperimentLoader>();
-        if (loader == null || loader.vrDeviceDocumentId != deviceDoc.Id)
-            throw new System.InvalidOperationException(
-                $"ExperimentLoader.vrDeviceDocumentId must equal paired Firestore document ID '{deviceDoc.Id}'.");
-
+        if (loader == null)
+            throw new System.InvalidOperationException("ExperimentLoader not found.");
+        loader.vrDeviceDocumentId = deviceDoc.Id; // Filled automatically, no inspector pairing.
         ResolvedVrId = vrId;
 
         DocumentSnapshot progressDoc = await ResolveProgressDocAsync(db, deviceDoc, vrId);

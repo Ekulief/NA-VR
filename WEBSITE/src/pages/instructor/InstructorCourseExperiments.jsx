@@ -14,6 +14,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 
+import { getAuth } from "firebase/auth";
 import { db } from "../../config/firebase-config";
 import { useAuth } from "../../context/AuthContext";
 
@@ -30,6 +31,7 @@ import {
   ArrowLeft,
   Users,
   UserPlus,
+  Radio,
   Upload,
   X,
   Download,
@@ -1042,6 +1044,15 @@ export default function InstructorCourseExperiments() {
             <User size={23} />
             Students
           </button>
+
+          <button
+            type="button"
+            onClick={() => navigate(`/instructor/course/${blockId}/live`)}
+            className="flex items-center gap-3 pb-4 text-xl text-gray-500 transition hover:text-black"
+          >
+            <Radio size={23} />
+            Live Experiments
+          </button>
         </div>
       </div>
 
@@ -1142,12 +1153,7 @@ export default function InstructorCourseExperiments() {
                     py-5
                     hover:shadow-sm
                     transition
-                    cursor-pointer
                   "
-                onClick={
-                  () => navigate(`/instructor/course/${blockId}/live`)
-                  //navigate(`/instructor/experiment/${experiment.id}`)
-                }
               >
                 <div
                   className="
@@ -1234,6 +1240,16 @@ export default function InstructorCourseExperiments() {
                         gap-6
                       "
                   >
+                    <button
+                      type="button"
+                      disabled
+                      aria-label="Play experiment (coming soon)"
+                      title="Play experiment (coming soon)"
+                      className="cursor-not-allowed text-gray-400"
+                    >
+                      <Play size={30} strokeWidth={2} />
+                    </button>
+
                     <button
                       onClick={(event) => {
                         event.stopPropagation();

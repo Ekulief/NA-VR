@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
-using Firebase.Firestore;
+using Firebase.Functions;
 using Unity.XR.CoreUtils;
 using UnityEngine.XR.Management;
 
@@ -43,7 +43,6 @@ public class ExperimentLoader : MonoBehaviour
     private Scene _loadedScene;
     private bool _experimentSceneLoaded = false;
     private string _currentSceneName = "";
-    private FirebaseFirestore _db;
 
     private void Awake()
     {
@@ -95,10 +94,16 @@ public class ExperimentLoader : MonoBehaviour
 
         if (!FirebaseManager.IsInitialized)
         {
-            yield return new WaitUntil(() => FirebaseManager.IsInitialized);
+            yield return new WaitUntil(() => FirebaseManager.IsInitialized || FirebaseManager.InitializationFailed);
         }
-
-        _db = FirebaseFirestore.DefaultInstance;
+        if (FirebaseManager.InitializationFailed)
+        {
+            Debug.LogError("[ExperimentLoader] Firebase startup or VR registration failed.");
+            if (loadingText != null) loadingText.text = "Cannot register VR headset.";
+            yield break;
+        }
+        // No inspector pairing: use the document ID verified during startup.
+        vrDeviceDocumentId = FirebaseManager.RegisteredDeviceDocumentId;
 
         if (loadingText != null)
             loadingText.text = "Loading Experiment Configuration...";
@@ -346,80 +351,37 @@ public class ExperimentLoader : MonoBehaviour
         string status,
         string experimentSceneName)
     {
-        if (_db == null)
-        {
-            throw new System.InvalidOperationException("[ExperimentLoader] Firestore is not initialized.");
-        }
-
-        if (string.IsNullOrWhiteSpace(vrDeviceDocumentId))
-        {
-            throw new System.InvalidOperationException(
-                "[ExperimentLoader] VR device document ID is missing."
-            );
-        }
+        if (!FirebaseManager.IsInitialized || string.IsNullOrWhiteSpace(vrDeviceDocumentId))
+            throw new System.InvalidOperationException("[ExperimentLoader] VR publisher is not registered.");
 
         bool inUse = status == "In Use";
-
         if (inUse && (config == null || string.IsNullOrWhiteSpace(config.experimentId) ||
                       string.IsNullOrWhiteSpace(config.progressId) ||
                       string.IsNullOrWhiteSpace(config.blockId)))
-        {
-            throw new System.InvalidOperationException(
-                "[ExperimentLoader] Cannot stream without experimentId, progressId and blockId.");
-        }
+            throw new System.InvalidOperationException("[ExperimentLoader] Missing active session IDs.");
 
-        string studentId = config != null ? config.studentId : "";
-        string groupId = config != null ? config.groupId : "";
-        string blockId = config != null ? config.blockId : "";
-        string progressId = config != null ? config.progressId : "";
-
-        if (string.IsNullOrEmpty(groupId))
+        // Server-side callable validates the anonymous publisher UID, the pinned
+        // student session, and the course. No anonymous Firestore writes are needed.
+        var payload = new Dictionary<string, object>
         {
-            Debug.LogWarning("[ExperimentLoader] groupId is null or empty.");
-        }
-        else
-        {
-            Debug.Log($"[ExperimentLoader] groupId is valid: '{groupId}'");
-        }
-
-        if (string.IsNullOrEmpty(studentId))
-        {
-            Debug.LogWarning("[ExperimentLoader] studentId is null or empty.");
-        }
-
-        // Keep the room naming convention consistent with the
-        // backend and website.
-        string roomName = inUse &&
-                          !string.IsNullOrWhiteSpace(blockId)
-            ? $"slubt-{blockId}-{vrDeviceDocumentId}"
-            : "";
-
-        var update = new Dictionary<string, object>
-        {
+            { "vrDeviceId", vrDeviceDocumentId },
             { "status", status },
-            { "currentExperimentId", inUse ? config.experimentId : "" },
-            { "currentSceneName", inUse ? experimentSceneName : "" },
-            { "currentModuleId", inUse ? config.moduleId : "" },
-            { "currentBlockId", inUse ? blockId : "" },
-            { "currentProgressId", inUse ? progressId : "" },
-            { "streamRoomName", roomName },
-            { "currentUserId", inUse ? studentId : "" },
-            { "currentGroupId", inUse ? groupId : "" },
-            { "currentSessionStart", inUse
-                ? FieldValue.ServerTimestamp
-                : FieldValue.Delete }
+            { "experimentId", inUse ? config.experimentId : "" },
+            { "progressId", inUse ? config.progressId : "" },
+            { "blockId", inUse ? config.blockId : "" },
+            { "sceneName", inUse ? experimentSceneName : "" },
         };
 
         try
         {
-            await _db.Collection("vrDevices").Document(vrDeviceDocumentId).UpdateAsync(update);
-
-            Debug.Log($"[ExperimentLoader] Device status updated to '{status}'.");
+            var callable = FirebaseFunctions.DefaultInstance
+                .GetHttpsCallable("setVrExperimentSceneStatus");
+            await callable.CallAsync(payload);
+            Debug.Log($"[ExperimentLoader] Server updated VR status to '{status}'.");
         }
         catch (System.Exception ex)
         {
-            Debug.LogError($"[ExperimentLoader] Failed to update device status: {ex}");
-            // Let the coroutine know the update failed.
+            Debug.LogError($"[ExperimentLoader] Failed to update VR status: {ex}");
             throw;
         }
     }

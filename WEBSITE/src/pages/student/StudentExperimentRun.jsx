@@ -9,14 +9,13 @@ import {
   where,
   updateDoc,
   onSnapshot,
-  limit,
   serverTimestamp,
   getDocs,
-  runTransaction,
 } from "firebase/firestore";
 
 import { db } from "../../config/firebase-config";
 import { useAuth } from "../../context/AuthContext";
+import { getFunctions, httpsCallable } from "firebase/functions";
 
 import {
   ArrowLeft,
@@ -403,80 +402,23 @@ export default function StudentExperimentRun() {
     try {
       setConnecting(true);
 
-      const deviceQuery = query(
-        collection(db, "vrDevices"),
-        where("vrId", "==", vrId),
-        limit(1)
-      );
-      const deviceSnap = await getDocs(deviceQuery);
-
-      if (deviceSnap.empty) {
-        alert(`Headset "${vrId}" is not registered.`);
-        return;
-      }
-
-      const deviceRef = deviceSnap.docs[0].ref;
-
-      const newProgressId = await runTransaction(db, async (transaction) => {
-        const deviceDoc = await transaction.get(deviceRef);
-        const data = deviceDoc.data() || {};
-
-        if (data.currentProgressId) {
-          const existingRef = doc(
-            db,
-            "experimentProgress",
-            data.currentProgressId
-          );
-          const existing = await transaction.get(existingRef);
-
-          if (existing.exists()) {
-            const status = existing.data().completionStatus;
-            const control = existing.data().sessionControl;
-            if (status === "In Progress" && control !== "ended") {
-              throw new Error("BUSY");
-            }
-          }
-        }
-
-        const progressRef = doc(collection(db, "experimentProgress"));
-
-        const progressData = {
-          blockId: blockId || null,
-          experimentId,
-          studentId: user.uid,
-          groupId: resolvedGroupId,
-          vrId,
-          participantCode,
-          attemptNumber,
-          sessionControl: "idle",
-          completionStatus: "In Progress",
-          elapsedSeconds: 0,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        };
-
-        transaction.set(progressRef, progressData);
-
-        transaction.update(deviceRef, {
-          currentProgressId: progressRef.id,
-          currentExperimentId: experimentId,
-          currentGroupId: resolvedGroupId,
-          currentUserId: user.uid,
-          status: "In Use",
-          updatedAt: serverTimestamp(),
-        });
-
-        return progressRef.id;
+      // A trusted callable creates progress and sets assignedInstructorId +
+      // currentBlockId from the actual block owner in a single transaction.
+      const startSession = httpsCallable(getFunctions(), "startVrExperimentSession");
+      const reply = await startSession({
+        blockId,
+        experimentId,
+        groupId: resolvedGroupId,
+        vrId,
+        participantCode,
+        attemptNumber,
       });
-
-      setActiveProgressId(newProgressId);
+      setActiveProgressId(reply.data.progressId);
     } catch (err) {
-      if (err.message === "BUSY") {
-        alert("This VR headset is currently in use.");
-      } else {
-        console.error(err);
-        alert("Unable to start participant / attempt.");
-      }
+      console.error("Cannot connect VR:", err);
+      alert(err?.code === "functions/already-exists"
+        ? "This VR headset is currently in use."
+        : err?.message || "Unable to start participant / attempt.");
     } finally {
       setConnecting(false);
     }
@@ -549,38 +491,14 @@ export default function StudentExperimentRun() {
     }
   };
 
-  const releaseVrLock = async (progressId, vrId) => {
-    if (!vrId || !progressId) return;
-
+  const releaseVrLock = async (progressId) => {
+    if (!progressId) return;
     try {
-      const deviceQuery = query(
-        collection(db, "vrDevices"),
-        where("vrId", "==", vrId),
-        limit(1)
-      );
-
-      const deviceSnap = await getDocs(deviceQuery);
-      if (deviceSnap.empty) return;
-
-      const deviceRef = deviceSnap.docs[0].ref;
-
-      await runTransaction(db, async (transaction) => {
-        const deviceDoc = await transaction.get(deviceRef);
-        const data = deviceDoc.data() || {};
-
-        if (data.currentProgressId === progressId) {
-          transaction.update(deviceRef, {
-            currentProgressId: null,
-            currentExperimentId: null,
-            currentGroupId: null,
-            currentUserId: null,
-            status: "available",
-            updatedAt: serverTimestamp(),
-          });
-        }
-      });
+      const releaseSession = httpsCallable(getFunctions(), "releaseVrExperimentSession");
+      await releaseSession({ progressId });
     } catch (err) {
-      console.error("Failed to release VR lock:", err);
+      console.error("Failed to release VR session:", err);
+      alert(err?.message || "Unable to release the VR headset.");
     }
   };
 
