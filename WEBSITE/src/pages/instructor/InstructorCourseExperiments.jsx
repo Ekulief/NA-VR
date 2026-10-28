@@ -24,7 +24,6 @@ import {
   FileText,
   User,
   Search,
-  Play,
   Pencil,
   Trash2,
   Plus,
@@ -1145,13 +1144,31 @@ export default function InstructorCourseExperiments() {
             {filteredExperiments.map((experiment) => (
               <div
                 key={experiment.id}
+                role="button"
+                tabIndex={0}
+                onClick={() =>
+                  navigate(
+                    `/instructor/course/${blockId}/experiment/${experiment.id}`,
+                  )
+                }
+                onKeyDown={(event) => {
+                  if (event.target !== event.currentTarget) return;
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    navigate(
+                      `/instructor/course/${blockId}/experiment/${experiment.id}`,
+                    );
+                  }
+                }}
                 className="
                     border
                     border-gray-300
                     rounded-2xl
                     px-5
                     py-5
-                    hover:shadow-sm
+                    cursor-pointer
+                    hover:shadow-md
+                    hover:border-indigo-300
                     transition
                   "
               >
@@ -1240,16 +1257,6 @@ export default function InstructorCourseExperiments() {
                         gap-6
                       "
                   >
-                    <button
-                      type="button"
-                      disabled
-                      aria-label="Play experiment (coming soon)"
-                      title="Play experiment (coming soon)"
-                      className="cursor-not-allowed text-gray-400"
-                    >
-                      <Play size={30} strokeWidth={2} />
-                    </button>
-
                     <button
                       onClick={(event) => {
                         event.stopPropagation();

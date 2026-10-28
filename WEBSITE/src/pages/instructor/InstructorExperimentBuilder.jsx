@@ -1018,7 +1018,7 @@ export default function InstructorExperimentBuilder() {
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
               {getOrderedConfigurationKeys().map((key) => {
                 const value = configuration[key];
-
+                const label = formatConfigLabel(key);
                 // Memory targets
                 if (key === "targets" && Array.isArray(value)) {
                   return (
@@ -1103,7 +1103,89 @@ export default function InstructorExperimentBuilder() {
                     </div>
                   );
                 }
+if (
+    key === "ab_AvailableAudioClips" ||
+    key === "ab_FurnitureList" ||
+    key === "targets"
+  ) {
+    return null;
+  }
 
+  // 1. Audio Clip Selection Dropdown
+  if (key === "ab_SpecificAudioClipName") {
+    const isRandomAudio = configuration.ab_UseRandomAudioClip === true;
+    const availableClips = Array.isArray(configuration.ab_AvailableAudioClips)
+      ? configuration.ab_AvailableAudioClips
+      : [];
+
+    return (
+      <div key={key} className="space-y-1.5">
+        <label className="block text-sm font-medium text-gray-700">
+          {label}
+        </label>
+        <select
+          value={value ?? ""}
+          disabled={isRandomAudio || saving}
+          onChange={(e) => updateConfigValue([key], e.target.value)}
+          className={`w-full rounded-lg border p-2.5 text-sm outline-none transition ${
+            isRandomAudio
+              ? "bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200"
+              : "bg-white text-gray-900 border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+          }`}
+        >
+          <option value="">Select an audio clip...</option>
+          {availableClips.map((clipName, idx) => (
+            <option key={idx} value={clipName}>
+              {clipName}
+            </option>
+          ))}
+        </select>
+        {isRandomAudio && (
+          <p className="text-xs text-gray-500 italic">
+            Disabled because "Use Random Audio Clip" is enabled.
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  // 2. Specific Fade Target Dropdown (matches your furniture items list)
+  if (key === "ab_SpecificFadeTarget") {
+    const isRandomFade = configuration.ab_UseRandomFadeTarget === true;
+    const furnitureList = Array.isArray(configuration.ab_FurnitureList)
+      ? configuration.ab_FurnitureList
+      : [];
+
+    return (
+      <div key={key} className="space-y-1.5">
+        <label className="block text-sm font-medium text-gray-700">
+          {label}
+        </label>
+        <select
+          value={value ?? ""}
+          disabled={isRandomFade || saving}
+          onChange={(e) => updateConfigValue([key], e.target.value)}
+          className={`w-full rounded-lg border p-2.5 text-sm outline-none transition ${
+            isRandomFade
+              ? "bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200"
+              : "bg-white text-gray-900 border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+          }`}
+        >
+          <option value="">Select a fade target...</option>
+          {furnitureList.map((itemName, idx) => (
+            <option key={idx} value={itemName}>
+              {itemName}
+            </option>
+          ))}
+        </select>
+        {isRandomFade && (
+          <p className="text-xs text-gray-500 italic">
+            Disabled because "Use Random Fade Target" is enabled.
+          </p>
+        )}
+      </div>
+    );
+  }
                 if (
                   key === "ab_FurnitureList" ||
                   key === "oddItem_AvailableTargets" ||
