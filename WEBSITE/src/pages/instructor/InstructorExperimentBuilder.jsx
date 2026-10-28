@@ -19,7 +19,7 @@ import { useAuth } from "../../context/AuthContext";
 import { ArrowLeft, Plus, Box, X, Save, Loader2, Trash2 } from "lucide-react";
 
 const CONFIGURATION_ORDER = {
-Attentional_Blindness: [
+  Attentional_Blindness: [
     "ab_AwarenessQuestionText",
     "ab_FadeDelaySeconds",
     "ab_FadeDurationSeconds",
@@ -40,7 +40,7 @@ Attentional_Blindness: [
     "globalInstructionDelay",
   ],
 
-Depth_Perception: [
+  Depth_Perception: [
     "depth_ActualHeightMeters",
     "depth_MaxHeightMeters",
     "depth_MinHeightMeters",
@@ -81,15 +81,15 @@ Depth_Perception: [
     "targets",
   ],
 
-Odd_Item_Detection: [
-  "globalInstructionDelay",
-  "oddItem_InstructionText",
-  "oddItem_WrongItemFeedback",
-  "oddItem_RandomizeTarget",
-  "oddItem_SelectedTarget",
- // "oddItem_RaycastDistance",
-  "oddItem_SearchTimeLimitSeconds",
-],
+  Odd_Item_Detection: [
+    "globalInstructionDelay",
+    "oddItem_InstructionText",
+    "oddItem_WrongItemFeedback",
+    "oddItem_RandomizeTarget",
+    "oddItem_SelectedTarget",
+    // "oddItem_RaycastDistance",
+    "oddItem_SearchTimeLimitSeconds",
+  ],
 };
 
 const ENVIRONMENT_OPTIONS = [
@@ -164,7 +164,6 @@ const formatConfigLabel = (key) => {
   return label.replace(/\b\w/g, (character) => character.toUpperCase()).trim();
 };
 
-
 export default function InstructorExperimentBuilder() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -208,7 +207,9 @@ export default function InstructorExperimentBuilder() {
     if (!selectedModuleId) return null;
 
     try {
-      const moduleSnap = await getDoc(doc(db, "experimentModule", selectedModuleId));
+      const moduleSnap = await getDoc(
+        doc(db, "experimentModule", selectedModuleId),
+      );
 
       if (!moduleSnap || !moduleSnap.exists()) {
         console.error(`Experiment module "${selectedModuleId}" was not found.`);
@@ -256,24 +257,27 @@ export default function InstructorExperimentBuilder() {
     }
   };
   useEffect(() => {
-  const getVrDevices = async () => {
-    try {
-      if (!user?.uid) return;
-      const snapshot = await getDocs(query(collection(db, "vrDevices"),
-        where("assignedInstructorId", "==", user.uid)));
-      const list = snapshot.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-      }));
-      list.sort((a, b) => (a.vrId || a.id).localeCompare(b.vrId || b.id));
-      setVrDevices(list);
-    } catch (error) {
-      console.error("Error loading VR devices:", error);
-    }
-  };
-  getVrDevices();
-}, [user?.uid]);
-
+    const getVrDevices = async () => {
+      try {
+        if (!user?.uid) return;
+        const snapshot = await getDocs(
+          query(
+            collection(db, "vrDevices"),
+            where("assignedInstructorId", "==", user.uid),
+          ),
+        );
+        const list = snapshot.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+        }));
+        list.sort((a, b) => (a.vrId || a.id).localeCompare(b.vrId || b.id));
+        setVrDevices(list);
+      } catch (error) {
+        console.error("Error loading VR devices:", error);
+      }
+    };
+    getVrDevices();
+  }, [user?.uid]);
 
   useEffect(() => {
     const getGroups = async () => {
@@ -313,52 +317,57 @@ export default function InstructorExperimentBuilder() {
     return () => clearTimeout(timeout);
   }, [newTargetIndex, configuration.targets]);
 
- useEffect(() => {
-  const getExperiment = async () => {
-    if (!experimentId) {
-      setLoading(false);
-      setModuleLoading(false);
-      return;
-    }
-
-    try {
-      setLoading(true);
-
-      const experimentRef = doc(db, "experiment", experimentId);
-      const experimentSnap = await getDoc(experimentRef);
-
-      if (!experimentSnap.exists()) {
-        alert("Experiment not found.");
-        navigate(-1);
+  useEffect(() => {
+    const getExperiment = async () => {
+      if (!experimentId) {
+        setLoading(false);
+        setModuleLoading(false);
         return;
       }
 
-      const data = experimentSnap.data();
+      try {
+        setLoading(true);
 
-      setSelectedVrIds(Array.isArray(data.vrIds) && data.vrIds.length
-        ? data.vrIds : (data.vrId ? [data.vrId] : []));
-      setExperimentName(data.experimentName || "");
-      setInstructions(data.instructions || "");
-      setEnvironment(data.environment || "");
-      setModuleId(data.moduleId || "");
-      setModuleName(data.moduleName || "");
-      setSceneId(data.sceneId || "");
-      setModuleDescription(data.moduleDescription || "");
-      setConfiguration(cloneConfig(data.configuration || {}));
-      setSelectedGroups(data.groupIds || []);
-      setAllowStudentExperiments(data.allowStudentExperiments === true);
-    } catch (error) {
-      console.error("Error getting experiment:", error);
-      alert("Unable to load the experiment.");
-      navigate(-1);
-    } finally {
-      setLoading(false);
-      setModuleLoading(false);
-    }
-  };
+        const experimentRef = doc(db, "experiment", experimentId);
+        const experimentSnap = await getDoc(experimentRef);
 
-  getExperiment();
-}, [experimentId, navigate]);
+        if (!experimentSnap.exists()) {
+          alert("Experiment not found.");
+          navigate(-1);
+          return;
+        }
+
+        const data = experimentSnap.data();
+
+        setSelectedVrIds(
+          Array.isArray(data.vrIds) && data.vrIds.length
+            ? data.vrIds
+            : data.vrId
+              ? [data.vrId]
+              : [],
+        );
+        setExperimentName(data.experimentName || "");
+        setInstructions(data.instructions || "");
+        setEnvironment(data.environment || "");
+        setModuleId(data.moduleId || "");
+        setModuleName(data.moduleName || "");
+        setSceneId(data.sceneId || "");
+        setModuleDescription(data.moduleDescription || "");
+        setConfiguration(cloneConfig(data.configuration || {}));
+        setSelectedGroups(data.groupIds || []);
+        setAllowStudentExperiments(data.allowStudentExperiments === true);
+      } catch (error) {
+        console.error("Error getting experiment:", error);
+        alert("Unable to load the experiment.");
+        navigate(-1);
+      } finally {
+        setLoading(false);
+        setModuleLoading(false);
+      }
+    };
+
+    getExperiment();
+  }, [experimentId, navigate]);
 
   const updateConfigValue = (path, value) => {
     setConfiguration((previous) => {
@@ -476,38 +485,63 @@ export default function InstructorExperimentBuilder() {
   const validateMemoryQuestions = () => {
     if (moduleId !== "Memory2" && moduleId !== "Memory") return true;
 
-    const targets = Array.isArray(configuration.targets) ? configuration.targets : [];
+    const targets = Array.isArray(configuration.targets)
+      ? configuration.targets
+      : [];
 
     for (let targetIndex = 0; targetIndex < targets.length; targetIndex += 1) {
       const target = targets[targetIndex];
-      const questions = target && Array.isArray(target.questions) ? target.questions : [];
+      const questions =
+        target && Array.isArray(target.questions) ? target.questions : [];
 
-      for (let questionIndex = 0; questionIndex < questions.length; questionIndex += 1) {
+      for (
+        let questionIndex = 0;
+        questionIndex < questions.length;
+        questionIndex += 1
+      ) {
         const question = questions[questionIndex];
 
         if (!question || typeof question !== "object") {
-          alert(`Target ${targetIndex + 1}, Question ${questionIndex + 1} is invalid.`);
+          alert(
+            `Target ${targetIndex + 1}, Question ${questionIndex + 1} is invalid.`,
+          );
           return false;
         }
 
-        if (typeof question.questionText !== "string" || !question.questionText.trim()) {
-          alert(`Please enter question text for Target ${targetIndex + 1}, Question ${questionIndex + 1}.`);
+        if (
+          typeof question.questionText !== "string" ||
+          !question.questionText.trim()
+        ) {
+          alert(
+            `Please enter question text for Target ${targetIndex + 1}, Question ${questionIndex + 1}.`,
+          );
           return false;
         }
 
-        if (typeof question.correctAnswer !== "string" || !question.correctAnswer.trim()) {
-          alert(`Please enter correct answer for Target ${targetIndex + 1}, Question ${questionIndex + 1}.`);
+        if (
+          typeof question.correctAnswer !== "string" ||
+          !question.correctAnswer.trim()
+        ) {
+          alert(
+            `Please enter correct answer for Target ${targetIndex + 1}, Question ${questionIndex + 1}.`,
+          );
           return false;
         }
 
         if (question.questionType === "MultipleChoice") {
-          const options = Array.isArray(question.multipleChoiceOptions) ? question.multipleChoiceOptions : [];
+          const options = Array.isArray(question.multipleChoiceOptions)
+            ? question.multipleChoiceOptions
+            : [];
           if (options.length === 0) {
-            alert(`Please add options for Target ${targetIndex + 1}, Question ${questionIndex + 1}.`);
+            alert(
+              `Please add options for Target ${targetIndex + 1}, Question ${questionIndex + 1}.`,
+            );
             return false;
           }
           if (options.some((opt) => typeof opt !== "string" || !opt.trim())) {
-            alert(`Please fill all choice options for Target ${targetIndex + 1}, Question ${questionIndex + 1}.`);
+            alert(
+              `Please fill all choice options for Target ${targetIndex + 1}, Question ${questionIndex + 1}.`,
+            );
             return false;
           }
         }
@@ -555,41 +589,49 @@ export default function InstructorExperimentBuilder() {
     });
   };
 
-const handleSaveExperiment = async (event) => {
-  event.preventDefault();
+  const handleSaveExperiment = async (event) => {
+    event.preventDefault();
 
-  if (!experimentName.trim()) {
-    alert("Please enter an experiment name.");
-    return;
-  }
+    if (!experimentName.trim()) {
+      alert("Please enter an experiment name.");
+      return;
+    }
 
-  if (!moduleId) {
-    alert("Please select an environment / module.");
-    return;
-  }
-if (selectedVrIds.length === 0) {
+    if (!moduleId) {
+      alert("Please select an environment / module.");
+      return;
+    }
+    if (selectedVrIds.length === 0) {
       alert("Please select a VR device assignment.");
       return;
     }
-  if (moduleId === "Attentional_Blindness") {
-    const isRandom = configuration.ab_UseRandomFadeTarget === true;
-    if (!isRandom && !configuration.ab_SpecificFadeTarget) {
-      alert("Please select a Fade Target (or enable Use Random Fade Target).");
+    if (!Array.isArray(selectedGroups) || selectedGroups.length === 0) {
+      alert(
+        "Please select at least one student group before publishing the experiment.",
+      );
       return;
     }
-  }
+    if (moduleId === "Attentional_Blindness") {
+      const isRandom = configuration.ab_UseRandomFadeTarget === true;
+      if (!isRandom && !configuration.ab_SpecificFadeTarget) {
+        alert(
+          "Please select a Fade Target (or enable Use Random Fade Target).",
+        );
+        return;
+      }
+    }
 
- if (moduleId === "Odd_Item_Detection") {
-  const isRandom = configuration.oddItem_RandomizeTarget === true;
-  if (!isRandom && !configuration.oddItem_SelectedTarget) {
-    alert("Please select a Target (or enable Randomize Target).");
-    return;
-  }
-}
+    if (moduleId === "Odd_Item_Detection") {
+      const isRandom = configuration.oddItem_RandomizeTarget === true;
+      if (!isRandom && !configuration.oddItem_SelectedTarget) {
+        alert("Please select a Target (or enable Randomize Target).");
+        return;
+      }
+    }
 
-  if (!validateMemoryQuestions()) {
-    return;
-  }
+    if (!validateMemoryQuestions()) {
+      return;
+    }
 
     setSaving(true);
 
@@ -602,7 +644,7 @@ if (selectedVrIds.length === 0) {
         moduleId: moduleId || "",
         moduleName: moduleName || "",
         vrId: selectedVrIds[0] || "", // legacy compatibility
-        vrIds: selectedVrIds,       // multiple assigned VR devices
+        vrIds: selectedVrIds, // multiple assigned VR devices
         sceneId: sceneId || "",
         moduleDescription: moduleDescription || "",
         configuration: configuration || {},
@@ -650,13 +692,18 @@ if (selectedVrIds.length === 0) {
         ) : (
           <div className="md:col-span-2 space-y-4">
             {questions.map((question, index) => (
-              <div key={`${path.join(".")}-${index}`} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+              <div
+                key={`${path.join(".")}-${index}`}
+                className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm"
+              >
                 <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-4 py-3">
                   <div className="flex items-center gap-3">
                     <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100 text-sm font-semibold text-indigo-700">
                       {index + 1}
                     </div>
-                    <p className="text-sm font-semibold text-gray-900">Question {index + 1}</p>
+                    <p className="text-sm font-semibold text-gray-900">
+                      Question {index + 1}
+                    </p>
                   </div>
                   <button
                     type="button"
@@ -670,10 +717,17 @@ if (selectedVrIds.length === 0) {
 
                 <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2">
                   <div className="md:col-span-2">
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700">Question Text</label>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                      Question Text
+                    </label>
                     <textarea
                       value={question.questionText ?? ""}
-                      onChange={(e) => updateConfigValue([...path, index, "questionText"], e.target.value)}
+                      onChange={(e) =>
+                        updateConfigValue(
+                          [...path, index, "questionText"],
+                          e.target.value,
+                        )
+                      }
                       rows={2}
                       placeholder="Enter the question..."
                       className="w-full rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
@@ -681,13 +735,26 @@ if (selectedVrIds.length === 0) {
                   </div>
 
                   <div>
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700">Question Type</label>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                      Question Type
+                    </label>
                     <select
-                      value={question.questionType === "YesNo" ? "YesNo" : "MultipleChoice"}
+                      value={
+                        question.questionType === "YesNo"
+                          ? "YesNo"
+                          : "MultipleChoice"
+                      }
                       onChange={(e) => {
                         const newType = e.target.value;
-                        updateConfigValue([...path, index, "questionType"], newType);
-                        const optionsPath = [...path, index, "multipleChoiceOptions"];
+                        updateConfigValue(
+                          [...path, index, "questionType"],
+                          newType,
+                        );
+                        const optionsPath = [
+                          ...path,
+                          index,
+                          "multipleChoiceOptions",
+                        ];
                         if (newType === "MultipleChoice") {
                           if (!Array.isArray(question.multipleChoiceOptions)) {
                             updateConfigValue(optionsPath, ["", ""]);
@@ -704,11 +771,18 @@ if (selectedVrIds.length === 0) {
                   </div>
 
                   <div>
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700">Correct Answer</label>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                      Correct Answer
+                    </label>
                     <input
                       type="text"
                       value={question.correctAnswer ?? ""}
-                      onChange={(e) => updateConfigValue([...path, index, "correctAnswer"], e.target.value)}
+                      onChange={(e) =>
+                        updateConfigValue(
+                          [...path, index, "correctAnswer"],
+                          e.target.value,
+                        )
+                      }
                       placeholder="Correct answer..."
                       className="w-full rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                     />
@@ -717,12 +791,21 @@ if (selectedVrIds.length === 0) {
                   {question.questionType === "MultipleChoice" && (
                     <div className="md:col-span-2">
                       <div className="mb-2 flex items-center justify-between">
-                        <label className="block text-sm font-medium text-gray-700">Options</label>
+                        <label className="block text-sm font-medium text-gray-700">
+                          Options
+                        </label>
                         <button
                           type="button"
                           onClick={() => {
-                            const options = Array.isArray(question.multipleChoiceOptions) ? question.multipleChoiceOptions : [];
-                            updateConfigValue([...path, index, "multipleChoiceOptions"], [...options, ""]);
+                            const options = Array.isArray(
+                              question.multipleChoiceOptions,
+                            )
+                              ? question.multipleChoiceOptions
+                              : [];
+                            updateConfigValue(
+                              [...path, index, "multipleChoiceOptions"],
+                              [...options, ""],
+                            );
                           }}
                           className="flex items-center gap-1 rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
                         >
@@ -731,34 +814,50 @@ if (selectedVrIds.length === 0) {
                       </div>
 
                       <div className="space-y-2">
-                        {(question.multipleChoiceOptions || []).map((opt, optIndex) => (
-                          <div key={optIndex} className="flex items-center gap-2">
-                            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-xs font-medium text-indigo-700">
-                              {optIndex + 1}
-                            </span>
-                            <input
-                              type="text"
-                              value={opt ?? ""}
-                              onChange={(e) => {
-                                const nextOpts = [...question.multipleChoiceOptions];
-                                nextOpts[optIndex] = e.target.value;
-                                updateConfigValue([...path, index, "multipleChoiceOptions"], nextOpts);
-                              }}
-                              placeholder={`Option ${optIndex + 1}`}
-                              className="w-full rounded-lg border border-gray-300 p-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const nextOpts = question.multipleChoiceOptions.filter((_, i) => i !== optIndex);
-                                updateConfigValue([...path, index, "multipleChoiceOptions"], nextOpts);
-                              }}
-                              className="p-2 text-gray-400 hover:text-red-600"
+                        {(question.multipleChoiceOptions || []).map(
+                          (opt, optIndex) => (
+                            <div
+                              key={optIndex}
+                              className="flex items-center gap-2"
                             >
-                              <X size={16} />
-                            </button>
-                          </div>
-                        ))}
+                              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-xs font-medium text-indigo-700">
+                                {optIndex + 1}
+                              </span>
+                              <input
+                                type="text"
+                                value={opt ?? ""}
+                                onChange={(e) => {
+                                  const nextOpts = [
+                                    ...question.multipleChoiceOptions,
+                                  ];
+                                  nextOpts[optIndex] = e.target.value;
+                                  updateConfigValue(
+                                    [...path, index, "multipleChoiceOptions"],
+                                    nextOpts,
+                                  );
+                                }}
+                                placeholder={`Option ${optIndex + 1}`}
+                                className="w-full rounded-lg border border-gray-300 p-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const nextOpts =
+                                    question.multipleChoiceOptions.filter(
+                                      (_, i) => i !== optIndex,
+                                    );
+                                  updateConfigValue(
+                                    [...path, index, "multipleChoiceOptions"],
+                                    nextOpts,
+                                  );
+                                }}
+                                className="p-2 text-gray-400 hover:text-red-600"
+                              >
+                                <X size={16} />
+                              </button>
+                            </div>
+                          ),
+                        )}
                       </div>
                     </div>
                   )}
@@ -798,10 +897,13 @@ if (selectedVrIds.length === 0) {
 
         {/* Environment Selection */}
         <section className="bg-white border border-gray-200 rounded-xl p-6 mb-6 shadow-sm">
-          <h2 className="text-lg font-medium mb-3">Select Environment / Module</h2>
+          <h2 className="text-lg font-medium mb-3">
+            Select Environment / Module
+          </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {ENVIRONMENT_OPTIONS.map((opt) => {
-              const isSelected = moduleId === opt.moduleId || environment === opt.name;
+              const isSelected =
+                moduleId === opt.moduleId || environment === opt.name;
               return (
                 <button
                   key={opt.moduleId}
@@ -813,8 +915,12 @@ if (selectedVrIds.length === 0) {
                       : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
                   }`}
                 >
-                  <p className="font-medium text-sm text-gray-900">{opt.name}</p>
-                  <p className="text-xs text-gray-500 mt-1">{opt.description}</p>
+                  <p className="font-medium text-sm text-gray-900">
+                    {opt.name}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {opt.description}
+                  </p>
                 </button>
               );
             })}
@@ -853,7 +959,7 @@ if (selectedVrIds.length === 0) {
           </div>
         </section>
 
-{/* VR Environment Preview */}
+        {/* VR Environment Preview */}
         {moduleId && (
           <section className="bg-white border border-gray-200 rounded-xl p-6 mb-6 shadow-sm">
             <div className="flex items-center justify-between mb-4">
@@ -882,10 +988,13 @@ if (selectedVrIds.length === 0) {
                 >
                   <Box size={48} className="mb-3 text-indigo-600" />
                   <p className="font-medium text-lg text-gray-900">
-                    {previewSceneName ? "Click to Load 3D Preview" : "Preview not available"}
+                    {previewSceneName
+                      ? "Click to Load 3D Preview"
+                      : "Preview not available"}
                   </p>
                   <p className="text-sm text-gray-500 mt-1">
-                    Loads real-time WebGL view of {environment || "selected environment"}
+                    Loads real-time WebGL view of{" "}
+                    {environment || "selected environment"}
                   </p>
                 </button>
               ) : (
@@ -899,14 +1008,17 @@ if (selectedVrIds.length === 0) {
             </div>
 
             <p className="text-sm text-gray-500 mt-3">
-              (Note: Preview shows only the base environment and not configured variables)
+              (Note: Preview shows only the base environment and not configured
+              variables)
             </p>
           </section>
         )}
         {/* Configuration Parameters */}
         {moduleId && Object.keys(configuration).length > 0 && (
           <section className="bg-white border border-gray-200 rounded-xl p-6 mb-6 shadow-sm">
-            <h2 className="text-lg font-medium mb-4">Module Configuration Parameters</h2>
+            <h2 className="text-lg font-medium mb-4">
+              Module Configuration Parameters
+            </h2>
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
               {getOrderedConfigurationKeys().map((key) => {
                 const value = configuration[key];
@@ -914,9 +1026,14 @@ if (selectedVrIds.length === 0) {
                 // Memory targets
                 if (key === "targets" && Array.isArray(value)) {
                   return (
-                    <div key={key} className="md:col-span-2 space-y-4 pt-4 border-t border-gray-200">
+                    <div
+                      key={key}
+                      className="md:col-span-2 space-y-4 pt-4 border-t border-gray-200"
+                    >
                       <div className="flex items-center justify-between">
-                        <h3 className="text-md font-semibold text-gray-800">Memory Scan Targets</h3>
+                        <h3 className="text-md font-semibold text-gray-800">
+                          Memory Scan Targets
+                        </h3>
                         <button
                           type="button"
                           onClick={addMemoryTarget}
@@ -961,7 +1078,10 @@ if (selectedVrIds.length === 0) {
                                     type="text"
                                     value={target[tKey] ?? ""}
                                     onChange={(e) =>
-                                      updateConfigValue(["targets", targetIdx, tKey], e.target.value)
+                                      updateConfigValue(
+                                        ["targets", targetIdx, tKey],
+                                        e.target.value,
+                                      )
                                     }
                                     className="w-full rounded-lg border border-gray-300 p-2 text-sm bg-white"
                                   />
@@ -975,7 +1095,11 @@ if (selectedVrIds.length === 0) {
                               <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500">
                                 Target Questions
                               </h4>
-                              {renderMemoryQuestions(target.questions, ["targets", targetIdx, "questions"])}
+                              {renderMemoryQuestions(target.questions, [
+                                "targets",
+                                targetIdx,
+                                "questions",
+                              ])}
                             </div>
                           )}
                         </div>
@@ -984,136 +1108,150 @@ if (selectedVrIds.length === 0) {
                   );
                 }
 
-               if (
-  key === "ab_FurnitureList" ||
-  key === "oddItem_AvailableTargets" ||
-  key === "oddItem_TargetDisplayName" ||
-  key === "depth_StepAmount" ||
-  key === "depth_MaxHeightMeters" ||
-  key === "depth_MinHeightMeters" ||
-  key === "distance_MinDistanceMeters" ||
-  key === "distance_MaxDistanceMeters" ||
-  key === "globalInstructionDelay" ||
-  key === "ab_AvailableAudioClips" ||          
-  key === "ab_SpecificAudioClipIndex"
-) {
-  return null;
-}
+                if (
+                  key === "ab_FurnitureList" ||
+                  key === "oddItem_AvailableTargets" ||
+                  key === "oddItem_TargetDisplayName" ||
+                  key === "depth_StepAmount" ||
+                  key === "depth_MaxHeightMeters" ||
+                  key === "depth_MinHeightMeters" ||
+                  key === "distance_MinDistanceMeters" ||
+                  key === "distance_MaxDistanceMeters" ||
+                  key === "globalInstructionDelay" ||
+                  key === "ab_AvailableAudioClips" ||
+                  key === "ab_SpecificAudioClipIndex"
+                ) {
+                  return null;
+                }
 
-// Attentional Blindness – Selected Fade Target
-if (key === "ab_SpecificFadeTarget") {
-  const isRandom = configuration.ab_UseRandomFadeTarget === true;
-  const furniture = Array.isArray(configuration.ab_FurnitureList)
-    ? configuration.ab_FurnitureList
-    : [];
+                // Attentional Blindness – Selected Fade Target
+                if (key === "ab_SpecificFadeTarget") {
+                  const isRandom =
+                    configuration.ab_UseRandomFadeTarget === true;
+                  const furniture = Array.isArray(
+                    configuration.ab_FurnitureList,
+                  )
+                    ? configuration.ab_FurnitureList
+                    : [];
 
-  return (
-    <div key={key}>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        Selected Fade Target
-      </label>
-      <select
-        value={configuration[key] ?? ""}
-        disabled={isRandom}
-        onChange={(e) => updateConfigValue([key], e.target.value)}
-        className={`w-full rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 ${
-          isRandom
-            ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-            : "bg-white"
-        }`}
-      >
-        <option value="">— Select a target —</option>
-        {furniture.map((item) => (
-          <option key={item} value={item}>
-            {item}
-          </option>
-        ))}
-      </select>
-      {isRandom && (
-        <p className="mt-1 text-xs text-gray-500">
-          Disabled while “Use Random Fade Target” is enabled.
-        </p>
-      )}
-    </div>
-  );
-}
+                  return (
+                    <div key={key}>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Selected Fade Target
+                      </label>
+                      <select
+                        value={configuration[key] ?? ""}
+                        disabled={isRandom}
+                        onChange={(e) =>
+                          updateConfigValue([key], e.target.value)
+                        }
+                        className={`w-full rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 ${
+                          isRandom
+                            ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                            : "bg-white"
+                        }`}
+                      >
+                        <option value="">— Select a target —</option>
+                        {furniture.map((item) => (
+                          <option key={item} value={item}>
+                            {item}
+                          </option>
+                        ))}
+                      </select>
+                      {isRandom && (
+                        <p className="mt-1 text-xs text-gray-500">
+                          Disabled while “Use Random Fade Target” is enabled.
+                        </p>
+                      )}
+                    </div>
+                  );
+                }
 
-// Attentional Blindness – Selected Audio Clip (Dropdown)
-// Attentional Blindness – Selected Audio Clip (Dropdown)
-if (key === "ab_SpecificAudioClip") {
-  const isRandom = configuration.ab_UseRandomAudioClip === true;
-  const availableClips = Array.isArray(configuration.ab_AvailableAudioClips)
-    ? configuration.ab_AvailableAudioClips
-    : [];
+                // Attentional Blindness – Selected Audio Clip (Dropdown)
+                // Attentional Blindness – Selected Audio Clip (Dropdown)
+                if (key === "ab_SpecificAudioClip") {
+                  const isRandom = configuration.ab_UseRandomAudioClip === true;
+                  const availableClips = Array.isArray(
+                    configuration.ab_AvailableAudioClips,
+                  )
+                    ? configuration.ab_AvailableAudioClips
+                    : [];
 
-  return (
-    <div key={key}>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        Selected Audio Clip
-      </label>
-      <select
-        value={configuration[key] ?? ""}
-        disabled={isRandom}
-        onChange={(e) => updateConfigValue([key], e.target.value)}
-        className={`w-full rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 ${
-          isRandom
-            ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-            : "bg-white"
-        }`}
-      >
-        <option value="">— Select a sound —</option>
-        {availableClips.map((clip) => (
-          <option key={clip} value={clip}>
-            {clip}
-          </option>
-        ))}
-      </select>
-      {isRandom && (
-        <p className="mt-1 text-xs text-gray-500">
-          Disabled while “Use Random Audio Clip” is enabled.
-        </p>
-      )}
-    </div>
-  );
-}
+                  return (
+                    <div key={key}>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Selected Audio Clip
+                      </label>
+                      <select
+                        value={configuration[key] ?? ""}
+                        disabled={isRandom}
+                        onChange={(e) =>
+                          updateConfigValue([key], e.target.value)
+                        }
+                        className={`w-full rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 ${
+                          isRandom
+                            ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                            : "bg-white"
+                        }`}
+                      >
+                        <option value="">— Select a sound —</option>
+                        {availableClips.map((clip) => (
+                          <option key={clip} value={clip}>
+                            {clip}
+                          </option>
+                        ))}
+                      </select>
+                      {isRandom && (
+                        <p className="mt-1 text-xs text-gray-500">
+                          Disabled while “Use Random Audio Clip” is enabled.
+                        </p>
+                      )}
+                    </div>
+                  );
+                }
                 // Odd Item Detection - Selected Target (Dropdown)
-// Odd Item Detection - Selected Target (Dropdown)
-if (key === "oddItem_SelectedTarget") {
-  const isRandom = configuration.oddItem_RandomizeTarget === true;
-  const available = Array.isArray(configuration.oddItem_AvailableTargets)
-    ? configuration.oddItem_AvailableTargets
-    : [];
+                // Odd Item Detection - Selected Target (Dropdown)
+                if (key === "oddItem_SelectedTarget") {
+                  const isRandom =
+                    configuration.oddItem_RandomizeTarget === true;
+                  const available = Array.isArray(
+                    configuration.oddItem_AvailableTargets,
+                  )
+                    ? configuration.oddItem_AvailableTargets
+                    : [];
 
-  return (
-    <div key={key}>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        Selected Target
-      </label>
-      <select
-        value={value ?? ""}
-        disabled={isRandom}
-        onChange={(e) => updateConfigValue([key], e.target.value)}
-        className={`w-full rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 ${
-          isRandom
-            ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-            : "bg-white"
-        }`}
-      >
-        <option value="">— Select a target —</option>
-        {available.map((item) => (
-          <option key={item} value={item}>
-            {item}  
-          </option>
-        ))}
-      </select>
-      {isRandom && (
-        <p className="mt-1 text-xs text-gray-500">
-          Disabled while “Randomize Target” is enabled.
-        </p>
-      )}
-    </div>
-  );
-}
+                  return (
+                    <div key={key}>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Selected Target
+                      </label>
+                      <select
+                        value={value ?? ""}
+                        disabled={isRandom}
+                        onChange={(e) =>
+                          updateConfigValue([key], e.target.value)
+                        }
+                        className={`w-full rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 ${
+                          isRandom
+                            ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                            : "bg-white"
+                        }`}
+                      >
+                        <option value="">— Select a target —</option>
+                        {available.map((item) => (
+                          <option key={item} value={item}>
+                            {item}
+                          </option>
+                        ))}
+                      </select>
+                      {isRandom && (
+                        <p className="mt-1 text-xs text-gray-500">
+                          Disabled while “Randomize Target” is enabled.
+                        </p>
+                      )}
+                    </div>
+                  );
+                }
 
                 // Boolean
                 if (typeof value === "boolean") {
@@ -1123,80 +1261,93 @@ if (key === "oddItem_SelectedTarget") {
                         type="checkbox"
                         id={key}
                         checked={value}
-                        onChange={(e) => updateConfigValue([key], e.target.checked)}
+                        onChange={(e) =>
+                          updateConfigValue([key], e.target.checked)
+                        }
                         className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                       />
-                      <label htmlFor={key} className="text-sm font-medium text-gray-700 cursor-pointer">
+                      <label
+                        htmlFor={key}
+                        className="text-sm font-medium text-gray-700 cursor-pointer"
+                      >
                         {formatConfigLabel(key)}
                       </label>
                     </div>
                   );
                 }
 
-if (
-  key === "distance_MinDistanceMeters" ||
-  key === "distance_MaxDistanceMeters"
-) {
-  return null;
-}
+                if (
+                  key === "distance_MinDistanceMeters" ||
+                  key === "distance_MaxDistanceMeters"
+                ) {
+                  return null;
+                }
 
-if (key === "distance_ActualDistanceMeters") {
-  const min = Number(configuration.distance_MinDistanceMeters) || 0;
-  const max = Number(configuration.distance_MaxDistanceMeters) || 999;
+                if (key === "distance_ActualDistanceMeters") {
+                  const min =
+                    Number(configuration.distance_MinDistanceMeters) || 0;
+                  const max =
+                    Number(configuration.distance_MaxDistanceMeters) || 999;
 
-  return (
-    <div key={key}>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        {formatConfigLabel(key)}
-      </label>
-      <input
-        type="number"
-        value={value ?? ""}
-        min={min}
-        max={max}
-        onChange={(e) => {
-          let num = Number(e.target.value);
-          if (isNaN(num)) num = min;
-          num = Math.min(Math.max(num, min), max); // clamp
-          updateConfigValue([key], num);
-        }}
-        className="w-full rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-      />
-      <p className="mt-1 text-xs text-gray-500">
-        Must be between {min} m and {max} m
-      </p>
-    </div>
-  );
-}
+                  return (
+                    <div key={key}>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {formatConfigLabel(key)}
+                      </label>
+                      <input
+                        type="number"
+                        value={value ?? ""}
+                        min={min}
+                        max={max}
+                        onChange={(e) => {
+                          let num = Number(e.target.value);
+                          if (isNaN(num)) num = min;
+                          num = Math.min(Math.max(num, min), max); // clamp
+                          updateConfigValue([key], num);
+                        }}
+                        className="w-full rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">
+                        Must be between {min} m and {max} m
+                      </p>
+                    </div>
+                  );
+                }
 
-if (key === "depth_ActualHeightMeters" || key === "depth_MinHeightMeters") {
-  const min = key === "depth_ActualHeightMeters" ? Number(configuration.depth_MinHeightMeters) || 10 : 0;
-  const max = Number(configuration.depth_MaxHeightMeters) || 28;
+                if (
+                  key === "depth_ActualHeightMeters" ||
+                  key === "depth_MinHeightMeters"
+                ) {
+                  const min =
+                    key === "depth_ActualHeightMeters"
+                      ? Number(configuration.depth_MinHeightMeters) || 10
+                      : 0;
+                  const max = Number(configuration.depth_MaxHeightMeters) || 28;
 
-  return (
-    <div key={key}>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        {formatConfigLabel(key)}
-      </label>
-      <input
-        type="number"
-        value={value ?? ""}
-        min={min}
-        max={max}
-        onChange={(e) => {
-          let num = Number(e.target.value);
-          if (isNaN(num)) num = min;
-          num = Math.min(Math.max(num, min), max);
-          updateConfigValue([key], num);
-        }}
-        className="w-full rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-      />
-      <p className="mt-1 text-xs text-gray-500">
-        Must be between {min} m and {max} m
-      </p>
-    </div>
-  );
-}
+                  return (
+                    <div key={key}>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {formatConfigLabel(key)}
+                      </label>
+                      <input
+                        type="number"
+                        value={value ?? ""}
+                        min={min}
+                        max={max}
+                        onChange={(e) => {
+                          let num = Number(e.target.value);
+                          if (isNaN(num)) num = min;
+                          num = Math.min(Math.max(num, min), max);
+                          updateConfigValue([key], num);
+                        }}
+                        className="w-full rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">
+                        Must be between {min} m and {max} m
+                      </p>
+                    </div>
+                  );
+                }
                 // Default
                 return (
                   <div key={key}>
@@ -1209,7 +1360,9 @@ if (key === "depth_ActualHeightMeters" || key === "depth_MinHeightMeters") {
                       onChange={(e) =>
                         updateConfigValue(
                           [key],
-                          typeof value === "number" ? Number(e.target.value) : e.target.value,
+                          typeof value === "number"
+                            ? Number(e.target.value)
+                            : e.target.value,
                         )
                       }
                       className="w-full rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
@@ -1233,7 +1386,9 @@ if (key === "depth_ActualHeightMeters" || key === "depth_MinHeightMeters") {
                     key={group.id}
                     onClick={() => toggleGroup(group.id)}
                     className={`flex items-center gap-3 border rounded-lg p-3 cursor-pointer transition ${
-                      isChecked ? "border-indigo-600 bg-indigo-50/50" : "border-gray-200 hover:bg-gray-50"
+                      isChecked
+                        ? "border-indigo-600 bg-indigo-50/50"
+                        : "border-gray-200 hover:bg-gray-50"
                     }`}
                   >
                     <input
@@ -1251,32 +1406,47 @@ if (key === "depth_ActualHeightMeters" || key === "depth_MinHeightMeters") {
             </div>
           </section>
         )}
-{/* VR Device Assignment */}
-<section className="bg-white border border-gray-200 rounded-xl p-6 mb-6 shadow-sm">
-  <h2 className="text-lg font-medium mb-3">Assign VR Devices</h2>
-  <p className="text-sm text-gray-500 mb-3">
-    Select the VR devices allowed to conduct this experiment. Only devices assigned
-    to your instructor account are listed. Each device still requires a separately
-    pinned experimentProgress session before it can stream.
-  </p>
-  {vrDevices.length === 0 ? (
-    <p className="text-sm text-amber-700">No VR devices are assigned to your account. Pair and assign them in Firestore first.</p>
-  ) : (
-    <div className="flex flex-wrap gap-3">
-      {vrDevices.map((device) => {
-        const vrId = device.vrId || device.id;
-        return (
-          <label key={device.id} className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-300 p-3 text-sm">
-            <input type="checkbox" checked={selectedVrIds.includes(vrId)}
-              onChange={(e) => setSelectedVrIds((previous) => e.target.checked
-                ? [...previous, vrId] : previous.filter((id) => id !== vrId))} />
-            {vrId} {device.status ? `(${device.status})` : ""}
-          </label>
-        );
-      })}
-    </div>
-  )}
-</section>
+        {/* VR Device Assignment */}
+        <section className="bg-white border border-gray-200 rounded-xl p-6 mb-6 shadow-sm">
+          <h2 className="text-lg font-medium mb-3">Assign VR Devices</h2>
+          <p className="text-sm text-gray-500 mb-3">
+            Select the VR devices allowed to conduct this experiment. Only
+            devices assigned to your instructor account are listed. Each device
+            still requires a separately pinned experimentProgress session before
+            it can stream.
+          </p>
+          {vrDevices.length === 0 ? (
+            <p className="text-sm text-amber-700">
+              No VR devices are assigned to your account. Pair and assign them
+              in Firestore first.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-3">
+              {vrDevices.map((device) => {
+                const vrId = device.vrId || device.id;
+                return (
+                  <label
+                    key={device.id}
+                    className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-300 p-3 text-sm"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedVrIds.includes(vrId)}
+                      onChange={(e) =>
+                        setSelectedVrIds((previous) =>
+                          e.target.checked
+                            ? [...previous, vrId]
+                            : previous.filter((id) => id !== vrId),
+                        )
+                      }
+                    />
+                    {vrId} {device.status ? `(${device.status})` : ""}
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </section>
         {/* Permissions */}
         <section className="bg-white border border-gray-200 rounded-xl p-6 mb-8 shadow-sm">
           <h2 className="text-lg font-medium mb-3">Permissions</h2>
@@ -1307,8 +1477,14 @@ if (key === "depth_ActualHeightMeters" || key === "depth_MinHeightMeters") {
             disabled={saving}
             className="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 font-medium text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
           >
-            {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-            <span>{isEditing ? "Update Experiment" : "Publish Experiment"}</span>
+            {saving ? (
+              <Loader2 size={18} className="animate-spin" />
+            ) : (
+              <Save size={18} />
+            )}
+            <span>
+              {isEditing ? "Update Experiment" : "Publish Experiment"}
+            </span>
           </button>
         </div>
       </main>

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 
-import { db } from "../../config/firebase-config";
-
+import { auth, db } from "../../config/firebase-config";
+import { onAuthStateChanged } from "firebase/auth";
 import {
   doc,
   getDoc,
@@ -28,7 +28,7 @@ export default function StudentCourseExperiments() {
   const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
-    const getCourseData = async () => {
+    const getCourseData = async (studentId) => {
       try {
         setLoading(true);
 
@@ -38,6 +38,8 @@ export default function StudentCourseExperiments() {
         if (!courseSnap.exists()) {
           console.log("Course doesn't exist.");
           setCourse(null);
+          setExperiments([]);
+          setStudents([]);
           return;
         }
 
@@ -64,38 +66,63 @@ export default function StudentCourseExperiments() {
           }),
         );
 
-        setExperiments(experimentsList);
-
-        const studentIds = courseData.studentIds || [];
-
-        if (studentIds.length === 0) {
-          setStudents([]);
-          return;
-        }
-
         const groupsRef = collection(db, "group");
 
         const groupQuery = query(groupsRef, where("blockId", "==", blockId));
 
         const groupSnapshot = await getDocs(groupQuery);
 
+        const studentGroupIds = groupSnapshot.docs
+          .filter((groupDoc) => {
+            const groupData = groupDoc.data();
+            const groupStudentIds = groupData.studentIds || [];
+
+            return groupStudentIds.includes(studentId);
+          })
+          .map((groupDoc) => groupDoc.id);
+
+        const visibleExperiments = experimentsList
+          .filter((experiment) => {
+            const assignedGroupIds = experiment.groupIds || [];
+
+            return (
+              Array.isArray(assignedGroupIds) &&
+              assignedGroupIds.some((groupId) =>
+                studentGroupIds.includes(groupId),
+              )
+            );
+          })
+          .sort((a, b) => {
+            const timeA = a.createdAt?.toMillis?.() ?? 0;
+            const timeB = b.createdAt?.toMillis?.() ?? 0;
+
+            return timeB - timeA;
+          });
+
+        setExperiments(visibleExperiments);
+
+        const studentIds = courseData.studentIds || [];
+
         const studentGroupMap = {};
 
         groupSnapshot.docs.forEach((groupDoc) => {
           const groupData = groupDoc.data();
-
-          const groupName = groupData.groupName || groupData.name || `Group`;
+          const groupName = groupData.groupName || groupData.name || "Group";
 
           const groupStudentIds = groupData.studentIds || [];
 
-          groupStudentIds.forEach((studentId) => {
-            studentGroupMap[studentId] = groupName;
+          groupStudentIds.forEach((id) => {
+            studentGroupMap[id] = groupName;
           });
         });
 
-        const studentPromises = studentIds.map(async (studentId) => {
-          const studentRef = doc(db, "user", studentId);
+        if (studentIds.length === 0) {
+          setStudents([]);
+          return;
+        }
 
+        const studentPromises = studentIds.map(async (id) => {
+          const studentRef = doc(db, "user", id);
           const studentSnapshot = await getDoc(studentRef);
 
           if (!studentSnapshot.exists()) {
@@ -133,7 +160,18 @@ export default function StudentCourseExperiments() {
       }
     };
 
-    getCourseData();
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        getCourseData(user.uid);
+      } else {
+        setExperiments([]);
+        setStudents([]);
+        setCourse(null);
+        setLoading(false);
+      }
+    });
+
+    return () => unsubscribe();
   }, [blockId]);
 
   const filteredStudents = useMemo(() => {

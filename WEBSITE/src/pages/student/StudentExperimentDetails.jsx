@@ -213,7 +213,7 @@ export default function StudentExperimentDetails() {
 
   return (
     <div className="font-google min-h-screen bg-white text-black">
-      <main className="pt-20 px-5 pb-10">
+      <main className="pt-20 px-70 pb-10">
         <button
           onClick={handleBack}
           className="
@@ -230,10 +230,6 @@ export default function StudentExperimentDetails() {
 
           <span className="text-lg">Back to Course</span>
         </button>
-
-        <h1 className="text-3xl font-medium mb-4">
-          {course.name || course.courseName || course.title || "Final Project"}
-        </h1>
 
         {course.instructions && (
           <div className="mb-6">
@@ -276,8 +272,6 @@ export default function StudentExperimentDetails() {
             mt-5
           "
         >
-          <h2 className="text-2xl font-medium mb-4">Experiment</h2>
-
           {!experiment ? (
             <p className="text-gray-500">
               No experiment has been created for this activity yet.
@@ -285,12 +279,30 @@ export default function StudentExperimentDetails() {
           ) : (
             <>
               <div className="mb-6">
-                <h3 className="text-2xl font-medium mb-3">
+                <p
+                  className="
+                        text-lg
+                        text-gray-600
+                        whitespace-pre-line
+                        leading-relaxed
+                      "
+                >
+                  {experiment.createdAt
+                    ? experiment.createdAt
+                        .toDate()
+                        .toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })
+                    : "No due date"}
+                </p>
+                <h3 className="text-2xl font-medium">
                   {experiment.experimentName || "Untitled Experiment"}
                 </h3>
 
                 {experiment.instructions && (
-                  <div className="mb-5">
+                  <div>
                     <p
                       className="
                         text-lg

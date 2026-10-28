@@ -188,16 +188,35 @@ export default function InstructorCourseExperiments() {
     }
   }, [blockId, user?.uid]);
 
-  const filteredExperiments = experiments.filter((experiment) => {
-    const searchTerm = experimentSearch.toLowerCase().trim();
+  const getCreationTime = (timestamp) => {
+    if (!timestamp) {
+      return 0;
+    }
 
-    return (
-      experiment.name?.toLowerCase().includes(searchTerm) ||
-      experiment.experimentName?.toLowerCase().includes(searchTerm) ||
-      experiment.description?.toLowerCase().includes(searchTerm) ||
-      experiment.environment?.toLowerCase().includes(searchTerm)
-    );
-  });
+    if (typeof timestamp.toMillis === "function") {
+      return timestamp.toMillis();
+    }
+
+    if (typeof timestamp.toDate === "function") {
+      return timestamp.toDate().getTime();
+    }
+
+    const parsedTime = new Date(timestamp).getTime();
+    return Number.isNaN(parsedTime) ? 0 : parsedTime;
+  };
+
+  const filteredExperiments = [...experiments]
+    .sort((a, b) => getCreationTime(b.updatedAt) - getCreationTime(a.updatedAt))
+    .filter((experiment) => {
+      const searchTerm = experimentSearch.toLowerCase().trim();
+
+      return (
+        experiment.name?.toLowerCase().includes(searchTerm) ||
+        experiment.experimentName?.toLowerCase().includes(searchTerm) ||
+        experiment.description?.toLowerCase().includes(searchTerm) ||
+        experiment.environment?.toLowerCase().includes(searchTerm)
+      );
+    });
 
   const filteredStudents = students.filter((student) => {
     const searchTerm = studentSearch.toLowerCase().trim();
@@ -322,7 +341,7 @@ export default function InstructorCourseExperiments() {
   const handleAddIndividualStudent = async () => {
     const firstName = newStudent.firstName.trim();
     const lastName = newStudent.lastName.trim();
-    const email = newStudent.email.trim();
+    const email = newStudent.email.trim().toLowerCase();
     const studentNumber = newStudent.studentNumber.trim();
 
     if (!firstName || !lastName) {
@@ -335,8 +354,13 @@ export default function InstructorCourseExperiments() {
       return;
     }
 
+    if (!defaultPassword || defaultPassword.length < 6) {
+      alert("Please enter a default password of at least 6 characters.");
+      return;
+    }
+
     const duplicateEmail = students.some(
-      (student) => student.email?.toLowerCase().trim() === email.toLowerCase(),
+      (student) => student.email?.toLowerCase().trim() === email,
     );
 
     if (duplicateEmail) {
@@ -360,50 +384,67 @@ export default function InstructorCourseExperiments() {
     try {
       setAddingStudents(true);
 
-      const userRef = await addDoc(collection(db, "user"), {
-        firstName,
-        lastName,
-        email,
-        studentNumber,
-        role: "student",
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+      const currentUser = getAuth().currentUser;
 
-      const courseRef = doc(db, "block", blockId);
+      if (!currentUser) {
+        throw new Error("You must be signed in as an instructor.");
+      }
 
-      const currentStudentIds = course?.studentIds || [];
+      const idToken = await currentUser.getIdToken();
 
-      await updateDoc(courseRef, {
-        studentIds: [...currentStudentIds, userRef.id],
-        defaultStudentPassword: defaultPassword,
-        updatedAt: serverTimestamp(),
-      });
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL || "http://localhost:5000"}/api/users/students`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({
+            blockId,
+            password: defaultPassword,
+            students: [
+              {
+                firstName,
+                lastName,
+                email,
+                studentNumber,
+              },
+            ],
+          }),
+        },
+      );
 
-      const createdStudent = {
-        id: userRef.id,
-        firstName,
-        lastName,
-        email,
-        studentNumber,
-        role: "student",
-      };
+      const result = await response.json();
+
+      if (!response.ok) {
+        const failureMessage =
+          result.failed?.[0]?.error ||
+          result.error ||
+          "Unable to create the student account.";
+
+        throw new Error(failureMessage);
+      }
+
+      const createdStudent = result.created?.[0];
+
+      if (!createdStudent) {
+        throw new Error("The server did not return a created student account.");
+      }
 
       setStudents((current) => [...current, createdStudent]);
 
       setCourse((current) => ({
         ...current,
-        studentIds: [...currentStudentIds, userRef.id],
-        defaultStudentPassword: defaultPassword,
+        studentIds: [...(current?.studentIds || []), createdStudent.id],
       }));
 
-      alert("Student added successfully.");
+      alert("Student account created successfully.");
 
       closeAddStudentModal();
     } catch (error) {
-      console.error("Error adding student:", error);
-
-      alert("Unable to add the student. Please try again.");
+      console.error("Error creating student account:", error);
+      alert(error.message || "Unable to create the student account.");
     } finally {
       setAddingStudents(false);
     }
@@ -564,8 +605,16 @@ export default function InstructorCourseExperiments() {
       return;
     }
 
+    if (!defaultPassword || defaultPassword.length < 6) {
+      alert("Please enter a default password of at least 6 characters.");
+      return;
+    }
+
     const invalidRows = importedStudents.filter(
-      (student) => !student.firstName || !student.lastName || !student.email,
+      (student) =>
+        !student.firstName?.trim() ||
+        !student.lastName?.trim() ||
+        !student.email?.trim(),
     );
 
     if (invalidRows.length > 0) {
@@ -597,13 +646,14 @@ export default function InstructorCourseExperiments() {
       const skippedStudents = [];
 
       for (const student of importedStudents) {
-        const email = student.email.toLowerCase().trim();
+        const email = student.email.trim().toLowerCase();
+        const studentNumber = (student.studentNumber || "").trim();
 
-        const studentNumber = student.studentNumber.toLowerCase().trim();
+        const normalizedNumber = studentNumber.toLowerCase();
 
         if (existingEmails.has(email)) {
           skippedStudents.push(
-            `Row ${student.rowNumber}: ${student.email} already exists`,
+            `Row ${student.rowNumber}: ${email} is already enrolled`,
           );
           continue;
         }
@@ -615,14 +665,14 @@ export default function InstructorCourseExperiments() {
           continue;
         }
 
-        if (studentNumber && existingStudentNumbers.has(studentNumber)) {
+        if (normalizedNumber && existingStudentNumbers.has(normalizedNumber)) {
           skippedStudents.push(
-            `Row ${student.rowNumber}: student number ${student.studentNumber} already exists`,
+            `Row ${student.rowNumber}: student number ${studentNumber} already exists`,
           );
           continue;
         }
 
-        if (studentNumber && batchStudentNumbers.has(studentNumber)) {
+        if (normalizedNumber && batchStudentNumbers.has(normalizedNumber)) {
           skippedStudents.push(
             `Row ${student.rowNumber}: duplicate student number in import`,
           );
@@ -631,85 +681,113 @@ export default function InstructorCourseExperiments() {
 
         batchEmails.add(email);
 
-        if (studentNumber) {
-          batchStudentNumbers.add(studentNumber);
+        if (normalizedNumber) {
+          batchStudentNumbers.add(normalizedNumber);
         }
 
-        studentsToAdd.push(student);
+        studentsToAdd.push({
+          firstName: student.firstName.trim(),
+          lastName: student.lastName.trim(),
+          email,
+          studentNumber,
+        });
       }
 
       if (studentsToAdd.length === 0) {
         alert(
-          "No new students were added. All imported students already exist or are duplicates.",
+          "No new students were submitted. All imported students were duplicates or invalid.",
         );
-
-        setAddingStudents(false);
         return;
       }
 
-      const createdStudents = [];
+      const currentUser = getAuth().currentUser;
 
-      for (const student of studentsToAdd) {
-        const userRef = await addDoc(collection(db, "user"), {
-          firstName: student.firstName,
-          lastName: student.lastName,
-          email: student.email,
-          studentNumber: student.studentNumber,
-          role: "student",
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-
-        createdStudents.push({
-          id: userRef.id,
-          firstName: student.firstName,
-          lastName: student.lastName,
-          email: student.email,
-          studentNumber: student.studentNumber,
-          role: "student",
-        });
+      if (!currentUser) {
+        throw new Error("You must be signed in as an instructor.");
       }
 
-      const newStudentIds = createdStudents.map((student) => student.id);
+      const idToken = await currentUser.getIdToken();
 
-      const currentStudentIds = course?.studentIds || [];
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL || "http://localhost:5000"}/api/users/students`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({
+            blockId,
+            password: defaultPassword,
+            students: studentsToAdd,
+          }),
+        },
+      );
 
-      const courseRef = doc(db, "block", blockId);
+      const result = await response.json();
 
-      await updateDoc(courseRef, {
-        studentIds: [...currentStudentIds, ...newStudentIds],
-        defaultStudentPassword: defaultPassword,
-        updatedAt: serverTimestamp(),
-      });
+      if (!response.ok && (!result.created || result.created.length === 0)) {
+        const failureDetails = (result.failed || [])
+          .slice(0, 5)
+          .map(
+            (student) =>
+              `${student.email || "Unknown email"}: ${student.error}`,
+          )
+          .join("\n");
 
-      setStudents((current) => [...current, ...createdStudents]);
-
-      setCourse((current) => ({
-        ...current,
-        studentIds: [...currentStudentIds, ...newStudentIds],
-        defaultStudentPassword: defaultPassword,
-      }));
-
-      let message = `${createdStudents.length} student(s) imported successfully.`;
-
-      if (skippedStudents.length > 0) {
-        message += `\n\n${skippedStudents.length} row(s) were skipped:\n\n${skippedStudents
-          .slice(0, 10)
-          .join("\n")}`;
-
-        if (skippedStudents.length > 10) {
-          message += `\n...and ${skippedStudents.length - 10} more.`;
-        }
+        throw new Error(
+          [result.error || "Unable to import student accounts.", failureDetails]
+            .filter(Boolean)
+            .join("\n"),
+        );
       }
 
-      alert(message);
+      const createdStudents = result.created || [];
+      const failedStudents = result.failed || [];
 
-      closeAddStudentModal();
+      if (createdStudents.length > 0) {
+        setStudents((current) => [...current, ...createdStudents]);
+
+        setCourse((current) => ({
+          ...current,
+          studentIds: [
+            ...(current?.studentIds || []),
+            ...createdStudents.map((student) => student.id),
+          ],
+        }));
+      }
+
+      const messages = [
+        `${createdStudents.length} student account(s) created successfully.`,
+      ];
+
+      const allSkipped = [
+        ...skippedStudents,
+        ...failedStudents.map(
+          (student) => `${student.email || "Unknown email"}: ${student.error}`,
+        ),
+      ];
+
+      if (allSkipped.length > 0) {
+        messages.push(
+          `\n${allSkipped.length} row(s) skipped or failed:\n` +
+            allSkipped.slice(0, 10).join("\n") +
+            (allSkipped.length > 10
+              ? `\n...and ${allSkipped.length - 10} more.`
+              : ""),
+        );
+      }
+
+      alert(messages.join("\n"));
+
+      if (createdStudents.length > 0) {
+        closeAddStudentModal();
+      }
     } catch (error) {
-      console.error("Error importing students:", error);
+      console.error("Error importing student accounts:", error);
 
       alert(
-        "An error occurred while importing the students. Some students may have already been added. Please check the student list before trying again.",
+        error.message || "An error occurred while importing student accounts.",
       );
     } finally {
       setAddingStudents(false);
@@ -1064,7 +1142,12 @@ export default function InstructorCourseExperiments() {
                     py-5
                     hover:shadow-sm
                     transition
+                    cursor-pointer
                   "
+                onClick={
+                  () => navigate(`/instructor/course/${blockId}/live`)
+                  //navigate(`/instructor/experiment/${experiment.id}`)
+                }
               >
                 <div
                   className="
@@ -1122,7 +1205,8 @@ export default function InstructorCourseExperiments() {
                           mt-3
                         "
                     >
-                      {experiment.description || "No description available."}
+                      {experiment.moduleDescription ||
+                        "No description available."}
                     </p>
 
                     <div
@@ -1139,15 +1223,6 @@ export default function InstructorCourseExperiments() {
                         Environment: {experiment.environment || "N/A"}
                       </span>
 
-                      <span>
-                        Stimuli:{" "}
-                        {Array.isArray(experiment.stimuli)
-                          ? experiment.stimuli.length
-                          : (experiment.stimuli ?? 0)}
-                      </span>
-
-                      <span>Duration: {experiment.duration ?? 0} mins</span>
-
                       <span>Modified: {formatDate(experiment.updatedAt)}</span>
                     </div>
                   </div>
@@ -1160,42 +1235,25 @@ export default function InstructorCourseExperiments() {
                       "
                   >
                     <button
-                      onClick={() =>
-                        navigate(`/instructor/course/${blockId}/live/${experiment.id}`)
-                        //navigate(`/instructor/experiment/${experiment.id}`)
-                      }
-                      title="View Experiment"
-                      className="
-                          hover:text-indigo-800
-                          transition
-                        "
-                    >
-                      <Play size={30} strokeWidth={2} />
-                    </button>
-
-                    <button
-                      onClick={() =>
+                      onClick={(event) => {
+                        event.stopPropagation();
                         navigate(
                           `/instructor/course/${blockId}/experiment/${experiment.id}/edit`,
-                        )
-                      }
+                        );
+                      }}
                       title="Edit Experiment"
-                      className="
-                          hover:text-indigo-800
-                          transition
-                        "
+                      className="hover:text-indigo-800 transition"
                     >
                       <Pencil size={30} strokeWidth={2} />
                     </button>
 
                     <button
-                      onClick={() => handleDelete(experiment.id)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleDelete(experiment.id);
+                      }}
                       title="Delete Experiment"
-                      className="
-                          text-red-500
-                          hover:text-red-700
-                          transition
-                        "
+                      className="text-red-500 hover:text-red-700 transition"
                     >
                       <Trash2 size={30} strokeWidth={2} />
                     </button>
@@ -1407,28 +1465,6 @@ export default function InstructorCourseExperiments() {
                     >
                       {student.firstName || ""} {student.lastName || ""}
                     </p>
-
-                    {student.studentNumber && (
-                      <p
-                        className="
-                            text-sm
-                            text-gray-500
-                          "
-                      >
-                        {student.studentNumber}
-                      </p>
-                    )}
-
-                    {student.email && (
-                      <p
-                        className="
-                            text-sm
-                            text-gray-500
-                          "
-                      >
-                        {student.email}
-                      </p>
-                    )}
                   </div>
                 </div>
 

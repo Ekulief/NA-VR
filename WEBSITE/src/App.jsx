@@ -15,7 +15,7 @@ import InstructorCourseExperiments from "./pages/instructor/InstructorCourseExpe
 import InstructorExperimentBuilder from "./pages/instructor/InstructorExperimentBuilder";
 import InstructorLiveExperiments from "./pages/instructor/InstructorLiveExperiments";
 import AdminDashboard from "./pages/admin/AdminDashboard";
-
+import UserAccount from "./pages/UserAccount";
 function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -59,6 +59,11 @@ function App() {
         <Route
           path="/admin"
           element={user ? <AdminDashboard /> : <Navigate to="/login" replace />}
+        />
+
+        <Route
+          path="/account"
+          element={user ? <UserAccount /> : <Navigate to="/login" replace />}
         />
 
         <Route
@@ -155,7 +160,7 @@ function App() {
             )
           }
         />
-        
+
         <Route
           path="/instructor/course/:blockId/live/:experimentId"
           element={

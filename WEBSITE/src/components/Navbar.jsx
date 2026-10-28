@@ -1,15 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-
 import { auth, db } from "../config/firebase-config";
-
 import { doc, getDoc } from "firebase/firestore";
-
 import { signOut } from "firebase/auth";
-
 import { UserCircle, Settings, LogOut } from "lucide-react";
-
 import { useAuth } from "../context/AuthContext";
+import logo from "../assets/NA-VR_Logo_White.png";
 
 export default function Navbar() {
   const navigate = useNavigate();
@@ -74,12 +70,9 @@ export default function Navbar() {
         z-50
       "
     >
-      <h1
-        className="
-          text-white
-          text-4xl
-          cursor-pointer
-        "
+      <img
+        src={logo}
+        className="w-25 cursor-pointer"
         onClick={() => {
           if (userData?.role === "student") {
             navigate("/student");
@@ -87,9 +80,7 @@ export default function Navbar() {
             navigate("/instructor");
           }
         }}
-      >
-        SLUBT Labs
-      </h1>
+      />
       <div
         ref={profileRef}
         className="
@@ -194,29 +185,6 @@ export default function Navbar() {
               <span>My Account</span>
             </button>
 
-            <button
-              onClick={() => {
-                setShowProfile(false);
-
-                navigate("/settings");
-              }}
-              className="
-                w-full
-                flex
-                items-center
-                gap-3
-                py-3
-                text-left
-                text-lg
-                hover:bg-gray-100
-                rounded-md
-                transition
-              "
-            >
-              <Settings size={22} strokeWidth={2} />
-
-              <span>Settings</span>
-            </button>
             <div
               className="
                 border-t
