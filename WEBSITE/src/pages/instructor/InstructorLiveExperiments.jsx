@@ -1,108 +1,115 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { collection, doc, getDoc, onSnapshot, query, where } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { LiveKitRoom, VideoTrack, useTracks } from "@livekit/components-react";
 import { Track } from "livekit-client";
-import { ArrowLeft, Radio } from "lucide-react";
+import { ArrowLeft, RefreshCw, Radio, AlertTriangle, MonitorPlay } from "lucide-react";
 import "@livekit/components-styles";
-import { db } from "../../config/firebase-config";
 import { useAuth } from "../../context/AuthContext";
+
+// The server verifies block ownership before returning ANY VR device metadata.
+// This page doesn't need Firestore composite indexes or direct vrDevices read rules.
+const POLL_INTERVAL_MS = 10000;
 
 function StreamVideo({ deviceId, onHasVideo }) {
   const tracks = useTracks([Track.Source.Camera], { onlySubscribed: true });
-  const videoTrack = tracks.find((track) => track.participant?.identity === `vr-${deviceId}`);
-
-  useEffect(() => {
-    onHasVideo(Boolean(videoTrack));
-  }, [onHasVideo, videoTrack]);
-
-  if (!videoTrack) {
-    return <div className="flex h-full items-center justify-center p-5 text-center text-gray-300">
-      Connected. Waiting for the VR camera to publish video...
+  const track = tracks.find((t) => t.participant?.identity === `vr-${deviceId}`);
+  useEffect(() => { onHasVideo(Boolean(track)); }, [track, onHasVideo]);
+  if (!track) {
+    return <div className="flex h-full items-center justify-center p-5 text-center text-sm text-gray-300">
+      Viewer connected. Waiting for the Unity headset camera track. Check LiveKitVrPublisher on the headset.
     </div>;
   }
   return <div className="h-full w-full [&_video]:h-full [&_video]:w-full [&_video]:object-contain">
-    <VideoTrack trackRef={videoTrack} />
+    <VideoTrack trackRef={track} />
   </div>;
 }
 
-function LiveStreamCard({ blockId, device, experimentName }) {
+function LiveStreamCard({ blockId, device }) {
   const [tokenInfo, setTokenInfo] = useState(null);
   const [error, setError] = useState("");
   const [phase, setPhase] = useState("Requesting viewer token...");
   const [retry, setRetry] = useState(0);
   const [hasVideo, setHasVideo] = useState(false);
+  const canView = device.state === "ready";
   const experimentId = device.currentExperimentId;
+  const progressId = device.currentProgressId;
 
   useEffect(() => {
-    let canceled = false;
-    async function connectViewer() {
+    if (!canView) {
       setTokenInfo(null);
-      setError("");
-      setPhase("Requesting viewer token...");
       setHasVideo(false);
+      return;
+    }
+    let canceled = false;
+    setTokenInfo(null);
+    setError("");
+    setPhase("Requesting viewer token...");
+    setHasVideo(false);
+    (async () => {
       try {
-        const createToken = httpsCallable(getFunctions(), "createLiveStreamToken");
-        const reply = await createToken({
-          blockId,
-          experimentId,
-          vrDeviceId: device.id,
-          role: "viewer",
-        });
+        const call = httpsCallable(getFunctions(), "createLiveStreamToken");
+        const reply = await call({ blockId, vrDeviceId: device.id, experimentId, role: "viewer" });
         if (!canceled) {
           setTokenInfo(reply.data);
           setPhase("Connecting to LiveKit...");
         }
       } catch (err) {
-        console.error("[Live VR] Viewer token failed:", err);
-        if (!canceled) setError(err?.message || "Unable to join the VR stream.");
+        console.error("[Live VR] Viewer token error:", err);
+        if (!canceled) setError(err?.message || "Could not request a viewer token.");
       }
-    }
-    connectViewer();
+    })();
     return () => { canceled = true; };
-  }, [blockId, experimentId, device.id, device.currentProgressId, retry]);
+  }, [blockId, device.id, experimentId, progressId, canView, retry]);
+
+  const textColor = hasVideo ? "text-green-700" : device.state === "needs-attention" ? "text-amber-700" : "text-gray-600";
+  const stateLabel = hasVideo ? "LIVE VIDEO" : canView ? "SCENE ACTIVE" : device.state === "waiting-vr" ? "WAITING FOR VR" : device.state === "needs-attention" ? "NEEDS ATTENTION" : "IDLE";
 
   return <article className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
     <div className="flex items-start justify-between gap-3 border-b border-gray-200 p-4">
       <div className="min-w-0">
         <h2 className="font-semibold text-gray-900">{device.vrId || device.id}</h2>
-        <p className="mt-1 truncate text-sm text-gray-700">{experimentName}</p>
-        <p className="text-xs text-gray-500">{device.currentSceneName || "Starting experiment..."}</p>
-        <p className="text-xs text-gray-500">Group: {device.currentGroupId || "Unassigned"}</p>
+        <p className="mt-1 text-sm text-gray-700">{device.experimentName || "No active experiment"}</p>
+        <p className="text-xs text-gray-500">{device.currentSceneName || "No experiment scene reported"}</p>
+        {device.currentGroupId && <p className="text-xs text-gray-500">Group: {device.currentGroupId}</p>}
       </div>
-      <span className={`shrink-0 text-right text-xs font-medium ${hasVideo ? "text-green-700" : "text-gray-500"}`}>
-        {hasVideo ? "LIVE" : "Connecting"}
-      </span>
+      <span className={`shrink-0 text-right text-xs font-semibold ${textColor}`}>{stateLabel}</span>
     </div>
     <div className="aspect-video bg-gray-950 text-white">
-      {error ? (
+      {!canView ? (
+        <div className="flex h-full flex-col items-center justify-center gap-3 p-5 text-center text-sm">
+          {device.state === "needs-attention" ? <AlertTriangle size={25} /> : <MonitorPlay size={25} />}
+          <p>{device.message}</p>
+          {!device.publisherRegistered && <p className="text-xs text-amber-300">Start the Unity app to register publisherAuthUid.</p>}
+        </div>
+      ) : error ? (
         <div className="flex h-full flex-col items-center justify-center gap-3 p-4 text-center text-sm">
           <p>{error}</p>
           <button type="button" onClick={() => setRetry((n) => n + 1)}
-            className="rounded bg-white px-3 py-2 text-gray-900">Retry connection</button>
+            className="rounded bg-white px-3 py-2 text-gray-900">Retry viewer connection</button>
         </div>
       ) : tokenInfo ? (
         <LiveKitRoom
-          key={`${device.id}-${experimentId}-${device.currentProgressId}-${retry}`}
+          key={`${device.id}-${experimentId}-${progressId}-${retry}`}
           serverUrl={tokenInfo.serverUrl}
           token={tokenInfo.token}
           connect
           audio={false}
           video={false}
-          onConnected={() => setPhase("Connected; waiting for VR video...")}
+          onConnected={() => setPhase("Connected. Waiting for the headset video track...")}
           onDisconnected={() => { setHasVideo(false); setPhase("LiveKit disconnected"); }}
           onError={(err) => { setHasVideo(false); setError(err?.message || "LiveKit connection failed"); }}
         >
           <StreamVideo deviceId={device.id} onHasVideo={setHasVideo} />
         </LiveKitRoom>
-      ) : <div className="flex h-full items-center justify-center p-3 text-sm text-gray-300">
-        {phase}
-      </div>}
+      ) : (
+        <div className="flex h-full items-center justify-center p-5 text-center text-sm text-gray-300">{phase}</div>
+      )}
     </div>
-    <div className="px-4 py-3 text-xs text-gray-500">
-      <span>Progress: {device.currentProgressId || "None"}</span>
-      <span className="ml-2">{hasVideo ? "Receiving camera video" : phase}</span>
+    <div className="space-y-1 px-4 py-3 text-xs text-gray-500">
+      <p>Firestore status: {device.rawStatus || "(missing)"} · Unity registered: {device.publisherRegistered ? "Yes" : "No"}</p>
+      {device.currentProgressId && <p>Progress: {device.currentProgressId}</p>}
+      {canView && !hasVideo && <p>{phase}</p>}
     </div>
   </article>;
 }
@@ -112,101 +119,92 @@ export default function InstructorLiveExperiments() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [courseName, setCourseName] = useState("");
-  const [experimentNames, setExperimentNames] = useState({});
   const [devices, setDevices] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [checkedAt, setCheckedAt] = useState(null);
+  const [refreshVersion, setRefreshVersion] = useState(0);
 
   useEffect(() => {
     if (!user?.uid || !blockId) {
-      setError("Sign in as an instructor and select a class.");
+      setError("Sign in as an instructor and open a course first.");
       setLoading(false);
       return;
     }
-
-    let stopped = false;
-    let unsubscribeDevices = () => {};
-    let unsubscribeExperiments = () => {};
-
-    async function start() {
+    let disposed = false;
+    let pending = false;
+    const fetchOverview = async () => {
+      if (pending || disposed) return;
+      pending = true;
+      setRefreshing(true);
       try {
-        setLoading(true);
+        const call = httpsCallable(getFunctions(), "getInstructorLiveOverview");
+        const reply = await call({ blockId });
+        if (disposed) return;
+        setDevices(Array.isArray(reply.data?.devices) ? reply.data.devices : []);
+        setCourseName(reply.data?.courseName || blockId);
+        setCheckedAt(new Date());
         setError("");
-        const blockSnap = await getDoc(doc(db, "block", blockId));
-        if (!blockSnap.exists() || blockSnap.data().instructorId !== user.uid) {
-          throw new Error("This class does not belong to your instructor account.");
-        }
-        if (stopped) return;
-        setCourseName(blockSnap.data().className || blockSnap.data().classCode || blockId);
-
-        unsubscribeExperiments = onSnapshot(
-          query(collection(db, "experiment"), where("blockId", "==", blockId)),
-          (snap) => {
-            if (stopped) return;
-            const names = {};
-            snap.forEach((experiment) => {
-              const data = experiment.data();
-              names[experiment.id] = data.experimentName || data.name || experiment.id;
-            });
-            setExperimentNames(names);
-          },
-          (err) => console.error("[Live VR] Cannot load experiment labels:", err),
-        );
-
-        // Query by instructor and block; Firebase rules should additionally enforce ownership.
-        // Filter active status on the client to avoid a third composite-index field.
-        const deviceQuery = query(
-          collection(db, "vrDevices"),
-          where("assignedInstructorId", "==", user.uid),
-          where("currentBlockId", "==", blockId),
-        );
-        unsubscribeDevices = onSnapshot(deviceQuery, (snap) => {
-          if (stopped) return;
-          const active = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
-            .filter((d) => d.status === "In Use" &&
-              d.currentExperimentId && d.currentProgressId &&
-              d.streamRoomName === `slubt-${blockId}-${d.id}`)
-            .sort((a, b) => (a.vrId || a.id).localeCompare(b.vrId || b.id));
-          setDevices(active);
-          setLoading(false);
-        }, (err) => {
-          console.error("[Live VR] Device listener failed:", err);
-          if (!stopped) { setError(err?.message || "Unable to read live VR devices."); setLoading(false); }
-        });
       } catch (err) {
-        if (!stopped) { setError(err?.message || "Unable to open live experiments."); setLoading(false); }
+        console.error("[Live VR] Overview request failed:", err);
+        if (!disposed) {
+          const message = err?.code === "functions/not-found"
+            ? "getInstructorLiveOverview is not deployed. Update WEBSITE/functions/index.js and deploy Firebase Functions."
+            : err?.message || "Unable to load the live stream overview.";
+          setError(message);
+        }
+      } finally {
+        pending = false;
+        if (!disposed) { setLoading(false); setRefreshing(false); }
       }
-    }
+    };
+    fetchOverview();
+    const timer = setInterval(fetchOverview, POLL_INTERVAL_MS);
+    return () => { disposed = true; clearInterval(timer); };
+  }, [user?.uid, blockId, refreshVersion]);
 
-    start();
-    return () => { stopped = true; unsubscribeDevices(); unsubscribeExperiments(); };
-  }, [blockId, user?.uid]);
+  const liveCount = devices.filter((d) => d.state === "ready").length;
+  const warningCount = devices.filter((d) => d.state === "needs-attention").length;
+  const waitingCount = devices.filter((d) => d.state === "waiting-vr").length;
 
   return <main className="mx-auto min-h-screen max-w-7xl px-5 pb-12 pt-24 text-gray-900">
     <button type="button" onClick={() => navigate(`/instructor/course/${blockId}`)}
       className="mb-5 flex items-center gap-2 text-sm text-gray-600 hover:underline">
       <ArrowLeft size={17} /> Back to Course
     </button>
-    <h1 className="flex items-center gap-3 text-2xl font-semibold"><Radio size={25} /> Live Experiments</h1>
-    <p className="mt-2 text-gray-600">{courseName || "Course"} — All currently active VR experiment streams for this class.</p>
-    <p className="mb-6 mt-1 text-sm text-gray-500">
-      Streams appear when a student connects a VR device and the headset starts its experiment camera.
-    </p>
-    {loading && <p>Checking active VR sessions...</p>}
-    {error && <p role="alert" className="my-4 text-red-700">{error}</p>}
-    {!loading && !error && devices.length === 0 &&
-      <div className="rounded-xl border border-gray-200 p-8 text-center text-gray-500">
-        No active VR experiment streams in this class yet.
-      </div>}
-    {!error && devices.length > 0 &&
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-        {devices.map((device) =>
-          <LiveStreamCard
-            key={`${device.id}-${device.currentProgressId}-${device.currentExperimentId}`}
-            blockId={blockId}
-            device={device}
-            experimentName={experimentNames[device.currentExperimentId] || device.currentSceneName || "Experiment"}
-          />)}
-      </div>}
+    <div className="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <h1 className="flex items-center gap-3 text-2xl font-semibold"><Radio size={25} /> Live Experiments</h1>
+        <p className="mt-2 text-gray-600">{courseName || "Course"} — all headsets linked to this course's experiments.</p>
+      </div>
+      <button type="button" onClick={() => setRefreshVersion((n) => n + 1)} disabled={refreshing}
+        className="flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50 disabled:opacity-50">
+        <RefreshCw size={16} /> {refreshing ? "Checking..." : "Refresh now"}
+      </button>
+    </div>
+    <p className="mb-5 mt-2 text-sm text-gray-500">Updates approximately every 10 seconds. A headset needs an active student session and must enter an experiment scene before video can appear.</p>
+    {checkedAt && <p className="mb-3 text-xs text-gray-500">Last checked: {checkedAt.toLocaleTimeString()}</p>}
+    {error && <div role="alert" className="mb-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+      <strong>Unable to refresh streams:</strong> {error}
+    </div>}
+    {loading ? <p>Checking available and active VR headsets...</p> : (
+      <>
+        <p className="mb-5 text-sm text-gray-700">
+          {devices.length} headset(s) found · {liveCount} scene(s) ready · {waitingCount} waiting for VR · {warningCount} needing attention
+        </p>
+        {devices.length === 0 ? (
+          <div className="rounded-xl border border-gray-200 p-7 text-gray-600">
+            No VR headset is currently associated with this course. Assign at least one registered headset to an experiment, then have a student start a session. If one is already assigned, verify its <code>vrId</code> matches <code>vrDevices</code>.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {devices.map((device) => <LiveStreamCard
+              key={`${device.id}-${device.currentProgressId || "none"}-${device.currentExperimentId || "none"}`}
+              blockId={blockId} device={device} />)}
+          </div>
+        )}
+      </>
+    )}
   </main>;
 }

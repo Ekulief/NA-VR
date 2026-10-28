@@ -16,6 +16,8 @@ import InstructorExperimentBuilder from "./pages/instructor/InstructorExperiment
 import InstructorLiveExperiments from "./pages/instructor/InstructorLiveExperiments";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import UserAccount from "./pages/UserAccount";
+
+//Comment
 function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -162,15 +164,10 @@ function App() {
         />
 
         <Route
-          path="/instructor/course/:blockId/live/:experimentId"
-          element={
-            user ? (
-              <InstructorLiveExperiments />
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          }
+          path="/instructor/course/:blockId/live"
+          element={user ? ( <InstructorLiveExperiments /> ) : ( <Navigate to="/login" replace />)}
         />
+
         <Route
           path="*"
           element={<Navigate to={user ? "/" : "/login"} replace />}
