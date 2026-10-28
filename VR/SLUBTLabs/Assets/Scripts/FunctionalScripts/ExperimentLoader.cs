@@ -215,6 +215,7 @@ public class ExperimentLoader : MonoBehaviour
             Debug.LogError("[ExperimentLoader] Firestore status update failed. Live streaming will not start.");
 
             _isLoading = false;
+            yield return StartCoroutine(Fade(1f, 0f));
             yield break;
         }
 
@@ -359,6 +360,14 @@ public class ExperimentLoader : MonoBehaviour
 
         bool inUse = status == "In Use";
 
+        if (inUse && (config == null || string.IsNullOrWhiteSpace(config.experimentId) ||
+                      string.IsNullOrWhiteSpace(config.progressId) ||
+                      string.IsNullOrWhiteSpace(config.blockId)))
+        {
+            throw new System.InvalidOperationException(
+                "[ExperimentLoader] Cannot stream without experimentId, progressId and blockId.");
+        }
+
         string studentId = config != null ? config.studentId : "";
         string groupId = config != null ? config.groupId : "";
         string blockId = config != null ? config.blockId : "";
@@ -388,8 +397,9 @@ public class ExperimentLoader : MonoBehaviour
         var update = new Dictionary<string, object>
         {
             { "status", status },
-            { "currentExperimentId", experimentSceneName },
+            { "currentExperimentId", inUse ? config.experimentId : "" },
             { "currentSceneName", inUse ? experimentSceneName : "" },
+            { "currentModuleId", inUse ? config.moduleId : "" },
             { "currentBlockId", inUse ? blockId : "" },
             { "currentProgressId", inUse ? progressId : "" },
             { "streamRoomName", roomName },

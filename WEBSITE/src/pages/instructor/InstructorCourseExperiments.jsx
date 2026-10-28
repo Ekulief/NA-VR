@@ -15,6 +15,7 @@ import {
 } from "firebase/firestore";
 
 import { db } from "../../config/firebase-config";
+import { useAuth } from "../../context/AuthContext";
 
 import * as XLSX from "xlsx";
 
@@ -37,6 +38,7 @@ import {
 export default function InstructorCourseExperiments() {
   const navigate = useNavigate();
   const { blockId } = useParams();
+  const { user } = useAuth();
 
   const [course, setCourse] = useState(null);
   const [experiments, setExperiments] = useState([]);
@@ -110,6 +112,10 @@ export default function InstructorCourseExperiments() {
         }
 
         const courseData = courseSnapshot.data();
+        if (courseData.instructorId !== user?.uid) {
+          setError("This class is not assigned to your instructor account.");
+          return;
+        }
 
         const courseObject = {
           id: courseSnapshot.id,
@@ -180,7 +186,7 @@ export default function InstructorCourseExperiments() {
     if (blockId) {
       getData();
     }
-  }, [blockId]);
+  }, [blockId, user?.uid]);
 
   const filteredExperiments = experiments.filter((experiment) => {
     const searchTerm = experimentSearch.toLowerCase().trim();
@@ -1155,7 +1161,7 @@ export default function InstructorCourseExperiments() {
                   >
                     <button
                       onClick={() =>
-                        navigate(`/instructor/course/${blockId}/live`)
+                        navigate(`/instructor/course/${blockId}/live/${experiment.id}`)
                         //navigate(`/instructor/experiment/${experiment.id}`)
                       }
                       title="View Experiment"

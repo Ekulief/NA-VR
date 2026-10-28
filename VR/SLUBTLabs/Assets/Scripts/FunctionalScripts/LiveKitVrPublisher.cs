@@ -12,7 +12,7 @@ public class LiveKitVrPublisher : MonoBehaviour
     [SerializeField] private Camera xrCamera;
 
     private Room _room;
-    private CameraVideoSource _videoSource;
+    private ScreenVideoSource _videoSource;
     private LocalVideoTrack _videoTrack;
 
     private bool _isStarting;
@@ -73,6 +73,21 @@ public class LiveKitVrPublisher : MonoBehaviour
             yield break;
         }
 
+        // The session may have loaded before auth finished; never request an unauthenticated token.
+        if (!FirebaseManager.IsInitialized || !FirebaseManager.IsAuthenticated)
+        {
+            Debug.LogError("[LiveKit] Firebase anonymous sign-in has not completed.");
+            _isStarting = false;
+            yield break;
+        }
+
+        if (string.IsNullOrWhiteSpace(config.experimentId))
+        {
+            Debug.LogError("[LiveKit] Missing Firestore experiment document ID.");
+            _isStarting = false;
+            yield break;
+        }
+
         // 4. Request a publisher token from Firebase.
         // Never put your LiveKit API secret in the Unity project.
         var callable = FirebaseFunctions.DefaultInstance
@@ -83,6 +98,7 @@ public class LiveKitVrPublisher : MonoBehaviour
             {
                 { "blockId", config.blockId },
                 { "vrDeviceId", loader.vrDeviceDocumentId },
+                { "experimentId", config.experimentId },
                 { "role", "publisher" }
             }
         );
@@ -134,6 +150,9 @@ public class LiveKitVrPublisher : MonoBehaviour
             yield break;
         }
 
+        if (response.TryGetValue("roomName", out var roomObj))
+            Debug.Log("[LiveKit] Assigned room = " + roomObj);
+
         // 6. Connect to the LiveKit room.
         _room = new Room();
 
@@ -159,7 +178,7 @@ public class LiveKitVrPublisher : MonoBehaviour
         }
 
         // 7. Create a video source from the XR camera.
-        _videoSource = new CameraVideoSource(xrCamera);
+        _videoSource = new ScreenVideoSource();
 
         _videoTrack = LocalVideoTrack.CreateVideoTrack(
             "vr-first-person",

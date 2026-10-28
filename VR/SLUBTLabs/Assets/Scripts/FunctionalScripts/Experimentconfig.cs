@@ -427,6 +427,14 @@ public class ExperimentConfig : ScriptableObject
 
     public async Task FetchActiveSessionFromFirestore(string fallbackVrId = "VR-01")
     {
+        // Never reuse an old session if the new web assignment is missing/invalid.
+        progressId = "";
+        experimentId = "";
+        blockId = "";
+        studentId = "";
+        groupId = "";
+        moduleId = "";
+        sceneId = "";
         try
         {
             FirebaseFirestore db = FirebaseFirestore.DefaultInstance;
@@ -438,6 +446,7 @@ public class ExperimentConfig : ScriptableObject
 
             QuerySnapshot deviceSnap = await db.Collection("vrDevices")
                 .WhereEqualTo("deviceId", deviceId)
+                .WhereEqualTo("publisherAuthUid", FirebaseManager.AuthUid)
                 .Limit(1)
                 .GetSnapshotAsync();
 
@@ -464,10 +473,18 @@ public class ExperimentConfig : ScriptableObject
 
             if (string.IsNullOrEmpty(currentProgressId))
             {
-                Debug.LogWarning("[ExperimentConfig] No active 'currentProgressId' found on device document.");
+                Debug.LogWarning("[ExperimentConfig] No active 'currentProgressId' found on paired device.");
                 return;
             }
 
+            // Bind this config to the paired VR device, never to a fallback ID.
+            if (deviceDoc == null)
+            {
+                Debug.LogError("[ExperimentConfig] VR device has not been paired with its anonymous UID.");
+                return;
+            }
+            vrId = deviceDoc.GetValue<string>("vrId");
+            this.vrId = vrId;
             progressId = currentProgressId;
 
             // 3. Read experimentProgressto get experimentId
@@ -477,6 +494,18 @@ public class ExperimentConfig : ScriptableObject
                 Debug.LogError($"[ExperimentConfig] Progress document '{progressId}' not found!");
                 return;
             }
+            if (!progressSnap.ContainsField("vrId") ||
+                progressSnap.GetValue<string>("vrId") != vrId)
+            {
+                Debug.LogError("[ExperimentConfig] The pinned progress belongs to another VR.");
+                return;
+            }
+
+            // Refresh IDs for the new session. A previous session's blockId must
+            // never be reused when the instructor switches experiments/classes.
+            studentId = progressSnap.ContainsField("studentId") ? progressSnap.GetValue<string>("studentId") : "";
+            groupId = progressSnap.ContainsField("groupId") ? progressSnap.GetValue<string>("groupId") : "";
+            blockId = progressSnap.ContainsField("blockId") ? progressSnap.GetValue<string>("blockId") : "";
 
             experimentId = progressSnap.ContainsField("experimentId") ? progressSnap.GetValue<string>("experimentId") : "";
             if (string.IsNullOrEmpty(experimentId))
@@ -496,8 +525,19 @@ public class ExperimentConfig : ScriptableObject
                 return;
             }
 
+            var experimentBlockId = expSnap.ContainsField("blockId") ? expSnap.GetValue<string>("blockId") : "";
+            if (string.IsNullOrEmpty(blockId)) blockId = experimentBlockId;
+            if (blockId != experimentBlockId)
+            {
+                Debug.LogError("[ExperimentConfig] Progress block does not match selected experiment's class.");
+                return;
+            }
             moduleId = expSnap.ContainsField("moduleId") ? expSnap.GetValue<string>("moduleId") : "";
             sceneId = expSnap.ContainsField("sceneId") ? expSnap.GetValue<string>("sceneId") : "";
+            if (expSnap.TryGetValue("configuration", out Dictionary<string, object> activeConfig))
+                ApplyConfigurationMap(activeConfig);
+            else if (expSnap.TryGetValue("defaultConfig", out Dictionary<string, object> defaultConfig))
+                ApplyConfigurationMap(defaultConfig);
 
             Debug.Log(sfxLog($"Refreshed Session Chain -> Module: {moduleId} | Scene: {sceneId} | Progress: {progressId}"));
 

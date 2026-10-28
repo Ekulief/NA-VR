@@ -157,7 +157,7 @@ function App() {
         />
         
         <Route
-          path="/instructor/course/:blockId/live"
+          path="/instructor/course/:blockId/live/:experimentId"
           element={
             user ? (
               <InstructorLiveExperiments />

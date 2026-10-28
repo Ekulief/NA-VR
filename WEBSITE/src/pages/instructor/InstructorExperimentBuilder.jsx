@@ -14,6 +14,7 @@ import {
 } from "firebase/firestore";
 
 import { db } from "../../config/firebase-config";
+import { useAuth } from "../../context/AuthContext";
 
 import { ArrowLeft, Plus, Box, X, Save, Loader2, Trash2 } from "lucide-react";
 
@@ -166,6 +167,7 @@ const formatConfigLabel = (key) => {
 
 export default function InstructorExperimentBuilder() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { blockId, experimentId } = useParams();
 
   const isEditing = Boolean(experimentId);
@@ -184,7 +186,7 @@ export default function InstructorExperimentBuilder() {
   const [groups, setGroups] = useState([]);
   const [selectedGroups, setSelectedGroups] = useState([]);
   const [vrDevices, setVrDevices] = useState([]);
-  const [selectedVrId, setSelectedVrId] = useState("");
+  const [selectedVrIds, setSelectedVrIds] = useState([]);
   const [allowStudentExperiments, setAllowStudentExperiments] = useState(false);
 
   const [saving, setSaving] = useState(false);
@@ -256,7 +258,9 @@ export default function InstructorExperimentBuilder() {
   useEffect(() => {
   const getVrDevices = async () => {
     try {
-      const snapshot = await getDocs(collection(db, "vrDevices"));
+      if (!user?.uid) return;
+      const snapshot = await getDocs(query(collection(db, "vrDevices"),
+        where("assignedInstructorId", "==", user.uid)));
       const list = snapshot.docs.map((d) => ({
         id: d.id,
         ...d.data(),
@@ -268,7 +272,7 @@ export default function InstructorExperimentBuilder() {
     }
   };
   getVrDevices();
-}, []);
+}, [user?.uid]);
 
 
   useEffect(() => {
@@ -331,16 +335,18 @@ export default function InstructorExperimentBuilder() {
 
       const data = experimentSnap.data();
 
-      // ← put it here
-      setSelectedVrId(data.vrId || "");
-
+      setSelectedVrIds(Array.isArray(data.vrIds) && data.vrIds.length
+        ? data.vrIds : (data.vrId ? [data.vrId] : []));
       setExperimentName(data.experimentName || "");
       setInstructions(data.instructions || "");
       setEnvironment(data.environment || "");
+      setModuleId(data.moduleId || "");
+      setModuleName(data.moduleName || "");
+      setSceneId(data.sceneId || "");
+      setModuleDescription(data.moduleDescription || "");
+      setConfiguration(cloneConfig(data.configuration || {}));
       setSelectedGroups(data.groupIds || []);
       setAllowStudentExperiments(data.allowStudentExperiments === true);
-
-      // ... rest of the existing code
     } catch (error) {
       console.error("Error getting experiment:", error);
       alert("Unable to load the experiment.");
@@ -561,7 +567,7 @@ const handleSaveExperiment = async (event) => {
     alert("Please select an environment / module.");
     return;
   }
-if (!selectedVrId) {
+if (selectedVrIds.length === 0) {
       alert("Please select a VR device assignment.");
       return;
     }
@@ -595,7 +601,8 @@ if (!selectedVrId) {
         environment: environment || "",
         moduleId: moduleId || "",
         moduleName: moduleName || "",
-        vrId: selectedVrId || "",
+        vrId: selectedVrIds[0] || "", // legacy compatibility
+        vrIds: selectedVrIds,       // multiple assigned VR devices
         sceneId: sceneId || "",
         moduleDescription: moduleDescription || "",
         configuration: configuration || {},
@@ -1246,29 +1253,30 @@ if (key === "depth_ActualHeightMeters" || key === "depth_MinHeightMeters") {
         )}
 {/* VR Device Assignment */}
 <section className="bg-white border border-gray-200 rounded-xl p-6 mb-6 shadow-sm">
-  <h2 className="text-lg font-medium mb-3">Assign VR Device</h2>
+  <h2 className="text-lg font-medium mb-3">Assign VR Devices</h2>
   <p className="text-sm text-gray-500 mb-3">
-    Select the physical headset this experiment will run on.
+    Select the VR devices allowed to conduct this experiment. Only devices assigned
+    to your instructor account are listed. Each device still requires a separately
+    pinned experimentProgress session before it can stream.
   </p>
-
-<select
-    value={selectedVrId}
-    onChange={(e) => setSelectedVrId(e.target.value)}
-    required
-    className="w-full max-w-xs rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 bg-white"
-  >
-    <option value="" disabled>— Select a VR device —</option>
-    {vrDevices.map((device) => {
-      const label = device.vrId || device.id;
-      const status = device.Status || device.status || "";
-      return (
-        <option key={device.id} value={device.vrId || device.id}>
-          {label}{status ? ` (${status})` : ""}
-        </option>
-      );
-    })}
-  </select>
-  </section>
+  {vrDevices.length === 0 ? (
+    <p className="text-sm text-amber-700">No VR devices are assigned to your account. Pair and assign them in Firestore first.</p>
+  ) : (
+    <div className="flex flex-wrap gap-3">
+      {vrDevices.map((device) => {
+        const vrId = device.vrId || device.id;
+        return (
+          <label key={device.id} className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-300 p-3 text-sm">
+            <input type="checkbox" checked={selectedVrIds.includes(vrId)}
+              onChange={(e) => setSelectedVrIds((previous) => e.target.checked
+                ? [...previous, vrId] : previous.filter((id) => id !== vrId))} />
+            {vrId} {device.status ? `(${device.status})` : ""}
+          </label>
+        );
+      })}
+    </div>
+  )}
+</section>
         {/* Permissions */}
         <section className="bg-white border border-gray-200 rounded-xl p-6 mb-8 shadow-sm">
           <h2 className="text-lg font-medium mb-3">Permissions</h2>

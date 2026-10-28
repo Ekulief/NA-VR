@@ -3,19 +3,19 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 using Firebase.Firestore;
 
 /// <summary>
 /// Loads session IDs from experimentProgress and applies experiment.configuration.
-/// Prefers device currentProgressId, then sceneId match, then first In Progress.
+/// Uses only the currentProgressId pinned on this paired device.
+/// Never chooses a different device's session or the first active session.
 /// </summary>
 public class ExperimentConfigLoader : MonoBehaviour
 {
     [Tooltip("Drag your ExperimentConfig asset here.")]
     public ExperimentConfig config;
 
-    [Tooltip("Fallback vrId if device is not found in vrDevices.")]
+    [Tooltip("Legacy editor value; remote-config mode REQUIRES a paired vrDevices document.")]
     public string fallbackVrId = "VR-01";
 
     public static ExperimentConfig Current { get; private set; }
@@ -52,8 +52,11 @@ public class ExperimentConfigLoader : MonoBehaviour
         var task = FetchProgressAndConfigAsync();
         yield return new WaitUntil(() => task.IsCompleted);
 
-        if (task.IsFaulted)
+        if (task.IsFaulted || task.IsCanceled)
+        {
             Debug.LogError($"[ConfigLoader] Failed to load config: {task.Exception}");
+            yield break;
+        }
 
         IsReady = true;
         Debug.Log($"[ConfigLoader] Config ready. Resolved vrId = {ResolvedVrId}");
@@ -61,6 +64,17 @@ public class ExperimentConfigLoader : MonoBehaviour
 
     private async Task FetchProgressAndConfigAsync()
     {
+        // ScriptableObject values survive play-mode reloads in some editor setups.
+        // Do not carry over another experiment's session when no session is pinned.
+        config.studentId = "";
+        config.groupId = "";
+        config.blockId = "";
+        config.experimentId = "";
+        config.progressId = "";
+        config.moduleId = "";
+        config.sceneId = "";
+        config.vrId = "";
+
         FirebaseFirestore db = FirebaseFirestore.DefaultInstance;
 
         string deviceId = SystemInfo.deviceUniqueIdentifier;
@@ -71,6 +85,7 @@ public class ExperimentConfigLoader : MonoBehaviour
 
         QuerySnapshot deviceSnap = await db.Collection("vrDevices")
             .WhereEqualTo("deviceId", deviceId)
+            .WhereEqualTo("publisherAuthUid", FirebaseManager.AuthUid)
             .Limit(1)
             .GetSnapshotAsync();
 
@@ -94,8 +109,14 @@ public class ExperimentConfigLoader : MonoBehaviour
         }
         else
         {
-            Debug.LogWarning($"[ConfigLoader] No vrDevices row for deviceId={deviceId}. Using fallback vrId={fallbackVrId}");
+            Debug.LogError($"[ConfigLoader] No paired vrDevices document for deviceId={deviceId}, auth UID={FirebaseManager.AuthUid}. Pair the Unity installation in the Firebase console.");
+            throw new System.InvalidOperationException("Unpaired VR device");
         }
+
+        var loader = FindAnyObjectByType<ExperimentLoader>();
+        if (loader == null || loader.vrDeviceDocumentId != deviceDoc.Id)
+            throw new System.InvalidOperationException(
+                $"ExperimentLoader.vrDeviceDocumentId must equal paired Firestore document ID '{deviceDoc.Id}'.");
 
         ResolvedVrId = vrId;
 
@@ -171,8 +192,6 @@ public class ExperimentConfigLoader : MonoBehaviour
        DocumentSnapshot deviceDoc,
        string vrId)
     {
-        string currentScene = SceneManager.GetActiveScene().name;
-
         if (deviceDoc != null && deviceDoc.ContainsField("currentProgressId"))
         {
             string pinnedId = deviceDoc.GetValue<string>("currentProgressId") ?? "";
@@ -182,98 +201,20 @@ public class ExperimentConfigLoader : MonoBehaviour
                     .Document(pinnedId)
                     .GetSnapshotAsync();
 
-                if (pinned.Exists)
+                if (pinned.Exists && GetFieldString(pinned, "vrId") == vrId &&
+                    (GetFieldString(pinned, "experimentId") != "" ||
+                     GetFieldString(pinned, "exeprimentId") != ""))
                 {
                     Debug.Log($"[ConfigLoader] Using pinned currentProgressId={pinnedId}");
                     return pinned;
                 }
 
-                Debug.LogWarning($"[ConfigLoader] currentProgressId={pinnedId} missing. Falling back.");
+                Debug.LogWarning($"[ConfigLoader] currentProgressId={pinnedId} is missing, incomplete, or assigned to another VR.");
             }
         }
 
-        QuerySnapshot progressSnap = await db.Collection("experimentProgress")
-            .WhereEqualTo("vrId", vrId)
-            .WhereEqualTo("completionStatus", "In Progress")
-            .GetSnapshotAsync();
-
-        if (progressSnap.Count == 0)
-            return null;
-
-        Debug.Log($"[ConfigLoader] Active scene='{currentScene}', In Progress count={progressSnap.Count}");
-
-        foreach (DocumentSnapshot progressDoc in progressSnap.Documents)
-        {
-            string experimentId = GetFieldString(progressDoc, "experimentId");
-            if (string.IsNullOrEmpty(experimentId))
-                experimentId = GetFieldString(progressDoc, "exeprimentId");
-
-            if (string.IsNullOrEmpty(experimentId))
-                continue;
-
-            DocumentSnapshot experimentDoc = await db.Collection("experiment")
-                .Document(experimentId)
-                .GetSnapshotAsync();
-
-            if (!experimentDoc.Exists)
-                continue;
-
-            string sceneId = GetFieldString(experimentDoc, "sceneId");
-            string moduleId = GetFieldString(experimentDoc, "moduleId");
-
-            if (SceneMatches(currentScene, sceneId, moduleId))
-            {
-                Debug.Log($"[ConfigLoader] Scene match → progress={progressDoc.Id}, experiment={experimentId}, sceneId={sceneId}");
-                return progressDoc;
-            }
-        }
-
-        foreach (DocumentSnapshot progressDoc in progressSnap.Documents)
-        {
-            Debug.LogWarning($"[ConfigLoader] No scene match for '{currentScene}'. Using first In Progress: {progressDoc.Id}");
-            return progressDoc;
-        }
-
+        Debug.LogWarning("[ConfigLoader] Device has no currentProgressId. Assign an experiment session from the web first; refusing to select another session.");
         return null;
-    }
-
-    private static bool SceneMatches(string currentScene, string sceneId, string moduleId = null)
-    {
-        if (string.IsNullOrEmpty(currentScene))
-            return false;
-
-        string Clean(string input)
-        {
-            if (string.IsNullOrEmpty(input)) return "";
-            return input
-                .Replace(" ", "")
-                .Replace("_", "")
-                .Replace("Scene", "")
-                .Replace("scene", "")
-                .Trim();
-        }
-
-        string cleanCurrent = Clean(currentScene);
-
-        if (!string.IsNullOrEmpty(sceneId))
-        {
-            string cleanTarget = Clean(sceneId);
-            if (string.Equals(cleanCurrent, cleanTarget, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        if (!string.IsNullOrEmpty(moduleId))
-        {
-            string cleanModule = Clean(moduleId);
-            if (string.Equals(cleanCurrent, cleanModule, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private static string GetFieldString(DocumentSnapshot snap, string field)
