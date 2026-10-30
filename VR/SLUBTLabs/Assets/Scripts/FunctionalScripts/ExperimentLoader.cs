@@ -194,6 +194,7 @@ public class ExperimentLoader : MonoBehaviour
         _experimentSceneLoaded = true;
 
         SceneManager.SetActiveScene(_loadedScene);
+        DynamicGI.UpdateEnvironment();
         SetMainSceneVisible(false);
 
         GameObject spawnPoint = FindSpawnPointInScene(_loadedScene);

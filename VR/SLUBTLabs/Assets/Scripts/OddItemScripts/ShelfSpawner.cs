@@ -97,7 +97,7 @@ public class ShelfSpawner : MonoBehaviour
     /// Destroys whatever distractor was in that slot and replaces it with the target.
     /// Returns the spawned target instance — OddItemManager holds this reference.
     /// </summary>
-    public GameObject InjectTarget(GameObject targetPrefabToInject)
+    public GameObject InjectTarget(GameObject targetPrefabToInject, Transform viewer = null)
     {
         if (_spawnedItems.Count == 0)
         {
@@ -105,14 +105,11 @@ public class ShelfSpawner : MonoBehaviour
             return null;
         }
 
-        // Pick a random slot to replace with the target
-        int slot = Random.Range(0, _spawnedItems.Count);
+        int slot = PickVisibleSlot(viewer);
 
-        // Destroy the distractor that was there
         if (_spawnedItems[slot] != null)
             Destroy(_spawnedItems[slot]);
 
-        // Spawn target at the same position parented under the holder
         Vector3 position = GetSlotPosition(slot);
         Quaternion rotation = Quaternion.Euler(
             0f,
@@ -130,6 +127,55 @@ public class ShelfSpawner : MonoBehaviour
                       $"on '{gameObject.name}' — world pos: {position}");
 
         return target;
+    }
+
+    /// <summary>
+    /// Chooses a random slot from the row/column nearest the viewer so the target
+    /// is never directly behind another item. Falls back to any slot if no viewer is given.
+    /// </summary>
+    private int PickVisibleSlot(Transform viewer)
+    {
+        int total = _spawnedItems.Count;
+        if (viewer == null) return Random.Range(0, total);
+
+        Vector3 center = _bounds.bounds.center;
+        Vector3 toViewer = viewer.position - center;
+        toViewer.y = 0f;
+        if (toViewer.sqrMagnitude < 0.0001f) return Random.Range(0, total);
+        toViewer.Normalize();
+
+        // Score each slot by how far it sits toward the viewer
+        var scored = new List<(int slot, float score)>();
+        for (int s = 0; s < total; s++)
+        {
+            Vector3 offset = GetSlotBasePosition(s) - center;
+            offset.y = 0f;
+            scored.Add((s, Vector3.Dot(offset, toViewer)));
+        }
+        scored.Sort((a, b) => b.score.CompareTo(a.score));
+
+        // Front line = one full row (viewer along Z) or one full column (viewer along X)
+        int frontCount = Mathf.Abs(toViewer.z) >= Mathf.Abs(toViewer.x) ? columns : rows;
+        frontCount = Mathf.Clamp(frontCount, 1, total);
+
+        return scored[Random.Range(0, frontCount)].slot;
+    }
+
+    // Slot center without random jitter (used for scoring only)
+    private Vector3 GetSlotBasePosition(int slot)
+    {
+        Bounds b = _bounds.bounds;
+        float spacingX = b.size.x / Mathf.Max(columns, 1);
+        float spacingZ = b.size.z / Mathf.Max(rows, 1);
+
+        int col = slot % columns;
+        int row = slot / columns;
+
+        return new Vector3(
+            b.min.x + spacingX * 0.5f + col * spacingX,
+            b.max.y,
+            b.min.z + spacingZ * 0.5f + row * spacingZ
+        );
     }
 
     /// <summary>Returns all currently spawned items on this shelf.</summary>

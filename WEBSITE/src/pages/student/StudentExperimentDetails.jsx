@@ -149,6 +149,123 @@ export default function StudentExperimentDetails() {
     }
   };
 
+  // "oddItem_WrongItemFeedback" -> "odd Item Wrong Item Feedback"
+  const formatLabel = (key) =>
+    key
+      .replace(/_/g, " ")
+      .replace(/([A-Z])/g, " $1")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  // Configuration fields that should not be shown (compared ignoring case and underscores)
+  const HIDDEN_CONFIG_KEYS = new Set([
+    "globalinstructiondelay",
+    "odditemavailabletargets",
+    "odditemtargetdisplayname",
+    "abfurniturelist",
+    "abavailableaudioclips",
+    "abspecificaudioclipindex",
+  ]);
+
+  const filterConfiguration = (value) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return value;
+    }
+
+    return Object.fromEntries(
+      Object.entries(value).filter(
+        ([key]) =>
+          !HIDDEN_CONFIG_KEYS.has(key.replace(/_/g, "").toLowerCase()),
+      ),
+    );
+  };
+
+  // Configuration may be stored as a single-item array
+  const normalizeConfiguration = (value) => {
+    if (
+      Array.isArray(value) &&
+      value.length === 1 &&
+      typeof value[0] === "object"
+    ) {
+      return value[0];
+    }
+
+    return value;
+  };
+
+  const hasConfiguration = (value) => {
+    if (value === null || value === undefined) {
+      return false;
+    }
+
+    if (typeof value === "object") {
+      return Object.keys(value).length > 0;
+    }
+
+    return true;
+  };
+
+  const renderDynamicDataNode = (data) => {
+    if (data === null || data === undefined) {
+      return <span className="text-gray-400">—</span>;
+    }
+
+    if (Array.isArray(data)) {
+      if (data.length === 0) {
+        return <span className="text-gray-400">Empty list</span>;
+      }
+
+      return (
+        <div className="space-y-3 w-full">
+          {data.map((item, idx) => (
+            <div
+              key={idx}
+              className="bg-gray-50 border border-gray-200 rounded-lg p-3"
+            >
+              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">
+                Item #{idx + 1}
+              </span>
+              {renderDynamicDataNode(item)}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    if (typeof data === "object") {
+      return (
+        <div className="grid grid-cols-1 sm:grid-cols-2 items-start gap-3 w-full">
+          {Object.entries(data).map(([key, value]) => (
+            <div
+              key={key}
+              className="bg-white border border-gray-200 rounded-lg p-3 flex flex-col justify-between"
+            >
+              <span className="text-xs font-medium text-gray-500 capitalize mb-1">
+                {formatLabel(key)}
+              </span>
+              <div className="text-sm font-medium text-gray-900 break-words">
+                {typeof value === "object"
+                  ? renderDynamicDataNode(value)
+                  : String(value) === ""
+                    ? "—"
+                    : String(value)}
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    return <span>{String(data)}</span>;
+  };
+
+  const experimentConfiguration = filterConfiguration(
+    normalizeConfiguration(experiment?.configuration),
+  );
+  const studentConfiguration = filterConfiguration(
+    normalizeConfiguration(studentExperiment?.configuration),
+  );
+
   const handleBack = () => {
     navigate(`/student/course/${blockId}`);
   };
@@ -383,6 +500,14 @@ export default function StudentExperimentDetails() {
                     </p>
                   )}
                 </div>
+
+                {hasConfiguration(experimentConfiguration) && (
+                  <div className="mt-6">
+                    <h3 className="text-xl font-medium mb-3">Configuration</h3>
+
+                    {renderDynamicDataNode(experimentConfiguration)}
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center gap-3">
@@ -537,6 +662,14 @@ export default function StudentExperimentDetails() {
                 </p>
               )}
             </div>
+
+            {hasConfiguration(studentConfiguration) && (
+              <div className="mb-6">
+                <h3 className="text-xl font-medium mb-3">Configuration</h3>
+
+                {renderDynamicDataNode(studentConfiguration)}
+              </div>
+            )}
 
             <div className="flex flex-wrap items-center gap-3">
               <button

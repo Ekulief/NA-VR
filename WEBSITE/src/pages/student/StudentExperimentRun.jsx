@@ -608,12 +608,9 @@ export default function StudentExperimentRun() {
     return value;
   };
 
-  const handleDownloadJamoviCSV = async () => {
+  const exportJamoviCSV = async (attempts, fileSuffix = "jamovi") => {
     try {
-      const completed = allProgress.filter(
-        (p) =>
-          p.completionStatus === "Completed" || p.sessionControl === "ended"
-      );
+      const completed = attempts;
 
       if (completed.length === 0) {
         alert("No completed attempts to export yet.");
@@ -726,7 +723,7 @@ export default function StudentExperimentRun() {
       link.download = `${(experiment?.experimentName || "results").replace(
         /\s+/g,
         "_"
-      )}_jamovi.csv`;
+      )}_${fileSuffix}.csv`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -737,53 +734,28 @@ export default function StudentExperimentRun() {
     }
   };
 
-  const handleDownloadJSON = () => {
-    const payload = {
-      experimentName: experiment?.experimentName || "Untitled Experiment",
-      vrId: experiment?.vrId,
-      progressId: progress?.id,
-      participantCode: progress?.participantCode,
-      attemptNumber: progress?.attemptNumber,
-      durationSeconds:
-        result?.durationSeconds != null
-          ? result.durationSeconds
-          : elapsedSeconds,
-      duration:
-        result?.duration ||
-        formatTime(
-          result?.durationSeconds != null
-            ? result.durationSeconds
-            : elapsedSeconds
-        ),
-      sessionControl: progress?.sessionControl,
-      completionStatus: progress?.completionStatus,
-      configurations: result?.configurations || null,
-      experimentalResults: result?.experimentalResults || null,
-      logs: logs,
-      startedAt: result?.startedAt || null,
-      completedAt:
-        result?.completedAt ||
-        result?.timestamp ||
-        progress?.completionAt ||
-        new Date().toISOString(),
-    };
+  // All completed attempts for the group
+  const handleDownloadJamoviCSV = () => {
+    const completed = allProgress.filter(
+      (p) => p.completionStatus === "Completed" || p.sessionControl === "ended"
+    );
+    return exportJamoviCSV(completed);
+  };
 
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${(payload.experimentName || "results").replace(
-      /\s+/g,
-      "_"
-    )}_${progress?.participantCode || "P"}_A${
-      progress?.attemptNumber || 1
-    }.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+  // Current attempt only
+  const handleDownloadCurrentAttemptCSV = () => {
+    if (!progress) {
+      alert("No attempt selected.");
+      return;
+    }
+    if (!result) {
+      alert("No results for this attempt yet.");
+      return;
+    }
+    const suffix = `${progress.participantCode || "P"}_A${
+      progress.attemptNumber || 1
+    }_jamovi`;
+    return exportJamoviCSV([progress], suffix);
   };
 
   // ---------- Render helpers ----------
@@ -1166,15 +1138,6 @@ export default function StudentExperimentRun() {
             </div>
 
             <div className="space-y-6">
-              {result.configurations && (
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
-                    Configurations
-                  </h3>
-                  {renderDynamicDataNode(result.configurations)}
-                </div>
-              )}
-
               {result.experimentalResults && (
                 <div>
                   <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
@@ -1287,11 +1250,11 @@ export default function StudentExperimentRun() {
 
             {isConnected && (
               <button
-                onClick={handleDownloadJSON}
+                onClick={handleDownloadCurrentAttemptCSV}
                 className="flex items-center justify-center gap-2 border border-gray-300 hover:bg-gray-50 rounded-lg px-5 py-2.5 transition"
               >
                 <Download size={18} />
-                <span>Download current attempt (JSON)</span>
+                <span>Download this attempt (Jamovi CSV)</span>
               </button>
             )}
           </div>

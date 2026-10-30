@@ -186,7 +186,9 @@ public class OddItemManager : MonoBehaviour
             Debug.Log($"Shelf '{shelf.gameObject.name}' has {shelf.GetSpawnedItems().Count} items");
 
         ShelfSpawner chosenShelf = allShelves[UnityEngine.Random.Range(0, allShelves.Length)];
-        _targetInstance = chosenShelf.InjectTarget(_chosenOddItemPrefab);
+
+        Transform viewer = Camera.main != null ? Camera.main.transform : null;
+        _targetInstance = chosenShelf.InjectTarget(_chosenOddItemPrefab, viewer);
 
         if (_targetInstance == null)
         {
