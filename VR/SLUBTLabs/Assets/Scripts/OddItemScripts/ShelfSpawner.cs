@@ -6,17 +6,16 @@ using UnityEngine;
 /// Attach to an invisible cube (Box Collider, no Mesh Renderer) placed on top of your shelf.
 /// Resize the Box Collider to cover the shelf surface — items spawn evenly across its top face.
 ///
+/// Items are now placed using their real size:
+///   - their base always sits on the shelf (works whatever the prefab pivot is)
+///   - random offset is limited to the free space inside the item's own cell,
+///     so neighbouring items can never overlap
+///   - physics is frozen on spawned items so they cannot be pushed or tilted
+///
 /// MULTI-SHELF SETUP:
 ///   Place this script on each shelf. Leave targetPrefab empty on all shelves.
 ///   OddItemManager calls InjectTarget() on one randomly chosen shelf
 ///   to place the unique odd item among the distractors.
-///
-/// SETUP:
-///   a) Create an empty GameObject, name it "ShelfSpawner".
-///   b) Add a Box Collider. Resize it to match your shelf surface. Check Is Trigger.
-///   c) Attach this script.
-///   d) Assign distractor prefabs in the Inspector.
-///   e) Leave targetPrefab empty.
 /// </summary>
 [RequireComponent(typeof(BoxCollider))]
 public class ShelfSpawner : MonoBehaviour
@@ -31,6 +30,14 @@ public class ShelfSpawner : MonoBehaviour
     public int rows = 2;
     public float randomPositionOffset = 0.04f;
     public float randomRotationOffset = 15f;
+
+    [Header("Placement")]
+    [Tooltip("Freeze Rigidbodies on spawned items so overlapping colliders can't shove or tilt them.")]
+    public bool freezePhysics = true;
+    [Tooltip("Tiny gap between the item base and the shelf surface (metres).")]
+    public float surfaceOffset = 0.003f;
+    [Tooltip("Log a warning when an item is larger than its grid cell.")]
+    public bool warnWhenItemTooBig = true;
 
     [Header("Items")]
     [Tooltip("Drag all your distractor prefabs here.")]
@@ -47,6 +54,7 @@ public class ShelfSpawner : MonoBehaviour
     private int _targetSlotIndex = -1;
     private BoxCollider _bounds;
     private GameObject _itemHolder;
+    private readonly HashSet<string> _warnedPrefabs = new();
 
     // ── Unity lifecycle ───────────────────────────────────────────────────────
     private void Start()
@@ -54,7 +62,6 @@ public class ShelfSpawner : MonoBehaviour
         _bounds = GetComponent<BoxCollider>();
         _bounds.isTrigger = true;
 
-        // Apply config overrides if assigned
         // Apply config overrides only when useConfigGrid is enabled
         ExperimentConfig cfg = config;
         if (cfg != null && useConfigGrid)
@@ -64,7 +71,6 @@ public class ShelfSpawner : MonoBehaviour
             randomPositionOffset = cfg.shelf_RandomPositionOffset;
             randomRotationOffset = cfg.shelf_RandomRotationOffset;
         }
-        // else: keep the Columns / Rows / offsets set in the Inspector
 
         // All spawned items are parented under this holder so they get
         // destroyed automatically when the scene unloads
@@ -93,9 +99,10 @@ public class ShelfSpawner : MonoBehaviour
     }
 
     /// <summary>
-    /// Injects a unique target prefab into a random slot on this shelf.
+    /// Injects a unique target prefab into a slot on this shelf.
+    /// If a viewer is given, the slot is chosen from the row/column nearest the viewer
+    /// so the target is not hidden behind another item.
     /// Destroys whatever distractor was in that slot and replaces it with the target.
-    /// Returns the spawned target instance — OddItemManager holds this reference.
     /// </summary>
     public GameObject InjectTarget(GameObject targetPrefabToInject, Transform viewer = null)
     {
@@ -110,72 +117,18 @@ public class ShelfSpawner : MonoBehaviour
         if (_spawnedItems[slot] != null)
             Destroy(_spawnedItems[slot]);
 
-        Vector3 position = GetSlotPosition(slot);
-        Quaternion rotation = Quaternion.Euler(
-            0f,
-            Random.Range(-randomRotationOffset, randomRotationOffset),
-            0f
-        );
-
-        GameObject target = Instantiate(targetPrefabToInject, position, rotation, _itemHolder.transform);
+        GameObject target = Instantiate(targetPrefabToInject, _itemHolder.transform);
         target.tag = "SpawnedItem";
+        PlaceInSlot(target, slot);
+
         _spawnedItems[slot] = target;
         _targetSlotIndex = slot;
 
         if (logTargetPosition)
             Debug.Log($"[ShelfSpawner] Target '{targetPrefabToInject.name}' injected at slot {slot} " +
-                      $"on '{gameObject.name}' — world pos: {position}");
+                      $"on '{gameObject.name}' — world pos: {target.transform.position}");
 
         return target;
-    }
-
-    /// <summary>
-    /// Chooses a random slot from the row/column nearest the viewer so the target
-    /// is never directly behind another item. Falls back to any slot if no viewer is given.
-    /// </summary>
-    private int PickVisibleSlot(Transform viewer)
-    {
-        int total = _spawnedItems.Count;
-        if (viewer == null) return Random.Range(0, total);
-
-        Vector3 center = _bounds.bounds.center;
-        Vector3 toViewer = viewer.position - center;
-        toViewer.y = 0f;
-        if (toViewer.sqrMagnitude < 0.0001f) return Random.Range(0, total);
-        toViewer.Normalize();
-
-        // Score each slot by how far it sits toward the viewer
-        var scored = new List<(int slot, float score)>();
-        for (int s = 0; s < total; s++)
-        {
-            Vector3 offset = GetSlotBasePosition(s) - center;
-            offset.y = 0f;
-            scored.Add((s, Vector3.Dot(offset, toViewer)));
-        }
-        scored.Sort((a, b) => b.score.CompareTo(a.score));
-
-        // Front line = one full row (viewer along Z) or one full column (viewer along X)
-        int frontCount = Mathf.Abs(toViewer.z) >= Mathf.Abs(toViewer.x) ? columns : rows;
-        frontCount = Mathf.Clamp(frontCount, 1, total);
-
-        return scored[Random.Range(0, frontCount)].slot;
-    }
-
-    // Slot center without random jitter (used for scoring only)
-    private Vector3 GetSlotBasePosition(int slot)
-    {
-        Bounds b = _bounds.bounds;
-        float spacingX = b.size.x / Mathf.Max(columns, 1);
-        float spacingZ = b.size.z / Mathf.Max(rows, 1);
-
-        int col = slot % columns;
-        int row = slot / columns;
-
-        return new Vector3(
-            b.min.x + spacingX * 0.5f + col * spacingX,
-            b.max.y,
-            b.min.z + spacingZ * 0.5f + row * spacingZ
-        );
     }
 
     /// <summary>Returns all currently spawned items on this shelf.</summary>
@@ -219,6 +172,7 @@ public class ShelfSpawner : MonoBehaviour
 
             GameObject spawned = Instantiate(prefab, pos, rot, _itemHolder.transform);
             spawned.tag = "SpawnedItem";
+            FreezePhysics(spawned);
             _spawnedItems.Add(spawned);
 
             if (itemSnap.isOddItem)
@@ -229,6 +183,8 @@ public class ShelfSpawner : MonoBehaviour
                   $"{_spawnedItems.Count} items reconstructed.");
     }
 
+    // ── Spawning ──────────────────────────────────────────────────────────────
+
     private void SpawnShelf()
     {
         if (distractorPrefabs == null || distractorPrefabs.Count == 0)
@@ -237,68 +193,156 @@ public class ShelfSpawner : MonoBehaviour
             return;
         }
 
-        Bounds bounds = _bounds.bounds;
-        float topY = bounds.max.y;
+        int totalSlots = Mathf.Max(columns, 1) * Mathf.Max(rows, 1);
 
-        float spacingX = bounds.size.x / Mathf.Max(columns, 1);
-        float spacingZ = bounds.size.z / Mathf.Max(rows, 1);
-        float startX = bounds.min.x + spacingX * 0.5f;
-        float startZ = bounds.min.z + spacingZ * 0.5f;
-
-        int totalSlots = columns * rows;
-
-        for (int row = 0; row < rows; row++)
+        for (int slot = 0; slot < totalSlots; slot++)
         {
-            for (int col = 0; col < columns; col++)
-            {
-                Vector3 basePosition = new Vector3(
-                    startX + col * spacingX,
-                    topY,
-                    startZ + row * spacingZ
-                );
+            GameObject prefab = distractorPrefabs[Random.Range(0, distractorPrefabs.Count)];
 
-                Vector3 randomOffset = new Vector3(
-                    Random.Range(-randomPositionOffset, randomPositionOffset),
-                    0f,
-                    Random.Range(-randomPositionOffset, randomPositionOffset)
-                );
-
-                Quaternion spawnRotation = Quaternion.Euler(
-                    0f,
-                    Random.Range(-randomRotationOffset, randomRotationOffset),
-                    0f
-                );
-
-                GameObject prefab = distractorPrefabs[Random.Range(0, distractorPrefabs.Count)];
-
-                GameObject spawned = Instantiate(prefab, basePosition + randomOffset, spawnRotation, _itemHolder.transform);
-                spawned.tag = "SpawnedItem";
-                _spawnedItems.Add(spawned);
-            }
+            GameObject spawned = Instantiate(prefab, _itemHolder.transform);
+            spawned.tag = "SpawnedItem";
+            PlaceInSlot(spawned, slot);
+            _spawnedItems.Add(spawned);
         }
 
         if (logTargetPosition)
             Debug.Log($"[ShelfSpawner] '{gameObject.name}' spawned {totalSlots} distractor items.");
     }
 
-    private Vector3 GetSlotPosition(int slot)
+    /// <summary>
+    /// Places an item inside its grid cell using its real size, so it sits on the
+    /// shelf and never pokes into a neighbouring cell.
+    /// </summary>
+    private void PlaceInSlot(GameObject item, int slot)
     {
-        Bounds bounds = _bounds.bounds;
-        float topY = bounds.max.y;
+        Bounds area = _bounds.bounds;
+        float cellX = area.size.x / Mathf.Max(columns, 1);
+        float cellZ = area.size.z / Mathf.Max(rows, 1);
+        Vector3 cell = GetSlotBasePosition(slot);
 
-        float spacingX = bounds.size.x / Mathf.Max(columns, 1);
-        float spacingZ = bounds.size.z / Mathf.Max(rows, 1);
-        float startX = bounds.min.x + spacingX * 0.5f;
-        float startZ = bounds.min.z + spacingZ * 0.5f;
+        FreezePhysics(item);
 
-        int col = slot % columns;
-        int row = slot / columns;
+        // 1. Random yaw only (never tilted)
+        float yaw = Random.Range(-randomRotationOffset, randomRotationOffset);
+        item.transform.SetPositionAndRotation(cell, Quaternion.Euler(0f, yaw, 0f));
+
+        Bounds b = GetItemBounds(item);
+
+        // 2. If the rotated footprint doesn't fit the cell, try without rotation
+        if (b.size.x > cellX || b.size.z > cellZ)
+        {
+            item.transform.rotation = Quaternion.identity;
+            b = GetItemBounds(item);
+
+            if (warnWhenItemTooBig && (b.size.x > cellX || b.size.z > cellZ) &&
+                _warnedPrefabs.Add(item.name))
+            {
+                Debug.LogWarning(
+                    $"[ShelfSpawner] '{gameObject.name}': item '{item.name}' " +
+                    $"({b.size.x:F2} x {b.size.z:F2} m) is larger than a grid cell " +
+                    $"({cellX:F2} x {cellZ:F2} m). It will overlap neighbours — " +
+                    "use fewer columns/rows or a larger shelf area.");
+            }
+        }
+
+        // 3. Base on the shelf surface, centred in the cell (works for any pivot)
+        Vector3 delta = new Vector3(
+            cell.x - b.center.x,
+            (area.max.y + surfaceOffset) - b.min.y,
+            cell.z - b.center.z);
+        item.transform.position += delta;
+
+        // 4. Random shift limited to the free space inside the cell
+        float freeX = Mathf.Max(0f, (cellX - b.size.x) * 0.5f);
+        float freeZ = Mathf.Max(0f, (cellZ - b.size.z) * 0.5f);
+        float jx = Mathf.Min(randomPositionOffset, freeX);
+        float jz = Mathf.Min(randomPositionOffset, freeZ);
+
+        item.transform.position += new Vector3(
+            Random.Range(-jx, jx),
+            0f,
+            Random.Range(-jz, jz));
+    }
+
+    private void FreezePhysics(GameObject item)
+    {
+        if (!freezePhysics) return;
+
+        foreach (Rigidbody rb in item.GetComponentsInChildren<Rigidbody>())
+        {
+            rb.isKinematic = true;
+        }
+    }
+
+    private static Bounds GetItemBounds(GameObject go)
+    {
+        Renderer[] renderers = go.GetComponentsInChildren<Renderer>();
+        if (renderers.Length > 0)
+        {
+            Bounds b = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++)
+                b.Encapsulate(renderers[i].bounds);
+            return b;
+        }
+
+        Collider[] colliders = go.GetComponentsInChildren<Collider>();
+        if (colliders.Length > 0)
+        {
+            Bounds b = colliders[0].bounds;
+            for (int i = 1; i < colliders.Length; i++)
+                b.Encapsulate(colliders[i].bounds);
+            return b;
+        }
+
+        return new Bounds(go.transform.position, Vector3.one * 0.1f);
+    }
+
+    // ── Slot geometry ─────────────────────────────────────────────────────────
+
+    // Centre of a grid cell at shelf-top height (no random offset)
+    private Vector3 GetSlotBasePosition(int slot)
+    {
+        Bounds b = _bounds.bounds;
+        float spacingX = b.size.x / Mathf.Max(columns, 1);
+        float spacingZ = b.size.z / Mathf.Max(rows, 1);
+
+        int col = slot % Mathf.Max(columns, 1);
+        int row = slot / Mathf.Max(columns, 1);
 
         return new Vector3(
-            startX + col * spacingX + Random.Range(-randomPositionOffset, randomPositionOffset),
-            topY,
-            startZ + row * spacingZ + Random.Range(-randomPositionOffset, randomPositionOffset)
-        );
+            b.min.x + spacingX * 0.5f + col * spacingX,
+            b.max.y,
+            b.min.z + spacingZ * 0.5f + row * spacingZ);
+    }
+
+    /// <summary>
+    /// Chooses a random slot from the row/column nearest the viewer so the target
+    /// is never directly behind another item. Falls back to any slot if no viewer is given.
+    /// </summary>
+    private int PickVisibleSlot(Transform viewer)
+    {
+        int total = _spawnedItems.Count;
+        if (viewer == null) return Random.Range(0, total);
+
+        Vector3 center = _bounds.bounds.center;
+        Vector3 toViewer = viewer.position - center;
+        toViewer.y = 0f;
+        if (toViewer.sqrMagnitude < 0.0001f) return Random.Range(0, total);
+        toViewer.Normalize();
+
+        var scored = new List<(int slot, float score)>();
+        for (int s = 0; s < total; s++)
+        {
+            Vector3 offset = GetSlotBasePosition(s) - center;
+            offset.y = 0f;
+            scored.Add((s, Vector3.Dot(offset, toViewer)));
+        }
+        scored.Sort((a, b) => b.score.CompareTo(a.score));
+
+        int frontCount = Mathf.Abs(toViewer.z) >= Mathf.Abs(toViewer.x) ? columns : rows;
+        frontCount = Mathf.Clamp(frontCount, 1, total);
+
+        return scored[Random.Range(0, frontCount)].slot;
     }
 
     private void ClearShelf()

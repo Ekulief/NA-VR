@@ -205,6 +205,8 @@ export default function StudentExperimentDetails() {
     return true;
   };
 
+  const isPrimitive = (v) => v === null || typeof v !== "object";
+
   const renderDynamicDataNode = (data) => {
     if (data === null || data === undefined) {
       return <span className="text-gray-400">—</span>;
@@ -213,6 +215,21 @@ export default function StudentExperimentDetails() {
     if (Array.isArray(data)) {
       if (data.length === 0) {
         return <span className="text-gray-400">Empty list</span>;
+      }
+
+      // Simple lists (numbers, strings) -> plain numbered list
+      if (data.every(isPrimitive)) {
+        return (
+          <ol className="list-decimal list-inside space-y-1 text-sm font-medium text-gray-900 break-words">
+            {data.map((item, idx) => (
+              <li key={idx}>
+                {item === null || item === undefined || String(item) === ""
+                  ? "—"
+                  : String(item)}
+              </li>
+            ))}
+          </ol>
+        );
       }
 
       return (
@@ -234,24 +251,35 @@ export default function StudentExperimentDetails() {
 
     if (typeof data === "object") {
       return (
-        <div className="grid grid-cols-1 sm:grid-cols-2 items-start gap-3 w-full">
-          {Object.entries(data).map(([key, value]) => (
-            <div
-              key={key}
-              className="bg-white border border-gray-200 rounded-lg p-3 flex flex-col justify-between"
-            >
-              <span className="text-xs font-medium text-gray-500 capitalize mb-1">
-                {formatLabel(key)}
-              </span>
-              <div className="text-sm font-medium text-gray-900 break-words">
-                {typeof value === "object"
-                  ? renderDynamicDataNode(value)
-                  : String(value) === ""
-                    ? "—"
-                    : String(value)}
+        <div
+          className="grid items-start gap-3 w-full"
+          style={{
+            gridTemplateColumns: "repeat(auto-fit, minmax(12rem, 1fr))",
+          }}
+        >
+          {Object.entries(data).map(([key, value]) => {
+            const isNested = !isPrimitive(value);
+
+            return (
+              <div
+                key={key}
+                className="bg-white border border-gray-200 rounded-lg p-3 flex flex-col justify-between min-w-0"
+                // Nested lists/objects take the full row so they never get squeezed
+                style={isNested ? { gridColumn: "1 / -1" } : undefined}
+              >
+                <span className="text-xs font-medium text-gray-500 capitalize mb-1">
+                  {formatLabel(key)}
+                </span>
+                <div className="text-sm font-medium text-gray-900 break-words">
+                  {isNested
+                    ? renderDynamicDataNode(value)
+                    : String(value) === ""
+                      ? "—"
+                      : String(value)}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       );
     }
@@ -510,7 +538,8 @@ export default function StudentExperimentDetails() {
                 )}
               </div>
 
-              <div className="flex items-center gap-3">
+              {/* Stays pinned to the bottom of the screen while the experiment is in view */}
+              <div className="sticky bottom-0 z-10 flex items-center gap-3 bg-white py-4 border-t border-gray-200">
                 <button
                   onClick={handleRunExperiment}
                   className="

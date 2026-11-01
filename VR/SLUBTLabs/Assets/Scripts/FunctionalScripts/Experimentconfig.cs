@@ -67,7 +67,7 @@ public class ExperimentConfig : ScriptableObject
     public List<string> oddItem_AvailableTargets = new List<string>();
     public string oddItem_SelectedTarget = "";
     public bool oddItem_RandomizeTarget = false;
-
+    public bool oddItem_RepeatLayout = false;
 
 
     // ── Depth Perception ──────────────────────────────────────────────────────
@@ -225,6 +225,7 @@ public class ExperimentConfig : ScriptableObject
         oddItem_WrongItemFeedback = GetString("oddItem_WrongItemFeedback", oddItem_WrongItemFeedback);
         oddItem_SelectedTarget = GetString("oddItem_SelectedTarget", oddItem_SelectedTarget);
         oddItem_RandomizeTarget = GetBool("oddItem_RandomizeTarget", oddItem_RandomizeTarget);
+        oddItem_RepeatLayout = GetBool("oddItem_RepeatLayout", oddItem_RepeatLayout); 
 
         if (configMap.TryGetValue("oddItem_AvailableTargets", out object targetsObj))
         {

@@ -4,55 +4,33 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 
-/// <summary>
-/// SLUBT Labs — Layout Manager
-/// Captures the shelf layout after spawning, saves it with session results,
-/// and can replay a saved layout so multiple participants see the exact same setup.
-///
-/// SETUP:
-///   a) Attach to the same GameObject as OddItemManager.
-///   b) Assign all ShelfSpawner references in the Inspector.
-///   c) OddItemManager calls CaptureLayout() and SaveSession() — no other wiring needed.
-///
-/// USAGE:
-///   Normal mode  → layout is random each session, saved automatically.
-///   Replay mode  → tick useReplayLayout, click Refresh Session List,
-///                  pick a session from the dropdown, hit Play.
-///                  All participants will see that exact shelf configuration.
-///
-/// SAVE LOCATION:
-///   Application.persistentDataPath/layouts/
-///   Windows editor: %AppData%\..\LocalLow\[Company]\[Product]\layouts\
-/// </summary>
 public class LayoutManager : MonoBehaviour
 {
-    // ── Singleton ─────────────────────────────────────────────────────────────
     public static LayoutManager Instance { get; private set; }
 
     private void Awake()
     {
         if (Instance != null && Instance != this) { Destroy(gameObject); return; }
         Instance = this;
+
+        if (config == null)
+            config = ExperimentConfigLoader.Current;
+
+        if (config != null)
+            useReplayLayout = config.oddItem_RepeatLayout;
     }
 
-    // ── Inspector ─────────────────────────────────────────────────────────────
     [Header("Shelf References")]
-    [Tooltip("Drag all ShelfSpawner GameObjects here.")]
     public List<ShelfSpawner> shelves = new();
 
     [Tooltip("Max saved sessions to keep. 0 = keep all.")]
     public int maxSavedSessions = 50;
 
     [Header("Replay Mode")]
-    [Tooltip("If true, loads a saved layout instead of generating a random one. " +
-             "All participants will see the exact same shelf configuration.")]
+    [Tooltip("If true, loads a saved layout instead of generating a random one.")]
     public bool useReplayLayout = false;
 
-    [Tooltip("Index of the session to replay from the list below. " +
-             "0 = most recent. Use the Editor button to refresh the list.")]
     public int selectedSessionIndex = 0;
-
-    [Tooltip("Read-only list of saved session file names — refreshed by the Editor button.")]
     public List<string> savedSessionNames = new();
 
     [HideInInspector]
@@ -61,15 +39,21 @@ public class LayoutManager : MonoBehaviour
     [Header("Config")]
     public ExperimentConfig config;
 
-    // ── Internal ──────────────────────────────────────────────────────────────
+    public bool IsReplaying => useReplayLayout;
+
     private LayoutSnapshot _currentLayout;
     private string _saveDir;
 
-    // ── Unity lifecycle ───────────────────────────────────────────────────────
     private void Start()
     {
         _saveDir = Path.Combine(Application.persistentDataPath, "layouts");
         Directory.CreateDirectory(_saveDir);
+
+        if (config == null)
+            config = ExperimentConfigLoader.Current;
+
+        if (config != null)
+            useReplayLayout = config.oddItem_RepeatLayout;
 
         RefreshSessionList();
 
@@ -77,12 +61,6 @@ public class LayoutManager : MonoBehaviour
             StartCoroutine(LoadAndApplyReplayLayout());
     }
 
-    // ── Public API ────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Refreshes the saved session list — call this from the Inspector button
-    /// or at runtime to update the dropdown.
-    /// </summary>
     public void RefreshSessionList()
     {
         savedSessionNames.Clear();
@@ -93,7 +71,7 @@ public class LayoutManager : MonoBehaviour
 
         string[] files = Directory.GetFiles(dir, "*.json");
         Array.Sort(files);
-        Array.Reverse(files); // most recent first
+        Array.Reverse(files);
 
         foreach (string file in files)
         {
@@ -104,10 +82,6 @@ public class LayoutManager : MonoBehaviour
         Debug.Log($"[LayoutManager] Found {savedSessionNames.Count} saved sessions.");
     }
 
-    /// <summary>
-    /// Call this from OddItemManager after the target is injected and items are spawned.
-    /// Captures the full shelf layout into memory.
-    /// </summary>
     public void CaptureLayout(GameObject targetInstance, GameObject chosenOddItemPrefab)
     {
         _currentLayout = new LayoutSnapshot
@@ -153,10 +127,6 @@ public class LayoutManager : MonoBehaviour
                   $"odd item: '{chosenOddItemPrefab.name}'");
     }
 
-    /// <summary>
-    /// Call this from OddItemManager when the participant finds the odd item or times out.
-    /// Saves the layout + result to JSON.
-    /// </summary>
     public string SaveSession(float searchTimeSeconds, bool foundItem = true)
     {
         if (_currentLayout == null)
@@ -174,7 +144,6 @@ public class LayoutManager : MonoBehaviour
         string path = Path.Combine(_saveDir, fileName);
         string json = JsonUtility.ToJson(_currentLayout, prettyPrint: true);
 
-        // Prune old sessions if limit set
         if (maxSavedSessions > 0)
         {
             RefreshSessionList();
@@ -201,10 +170,9 @@ public class LayoutManager : MonoBehaviour
         return savedSessionPaths;
     }
 
-    // ── Replay ────────────────────────────────────────────────────────────────
     private IEnumerator LoadAndApplyReplayLayout()
     {
-        yield return null; // wait for ShelfSpawners
+        yield return null;
 
         RefreshSessionList();
 
@@ -214,7 +182,6 @@ public class LayoutManager : MonoBehaviour
             yield break;
         }
 
-        // Clamp index to valid range
         int index = Mathf.Clamp(selectedSessionIndex, 0, savedSessionPaths.Count - 1);
         string path = savedSessionPaths[index];
 
@@ -255,11 +222,8 @@ public class LayoutManager : MonoBehaviour
         Debug.Log("[LayoutManager] Replay layout applied.");
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
     private static SerializableVector3 Vec3(Vector3 v) =>
         new SerializableVector3 { x = v.x, y = v.y, z = v.z };
-
-    // ── Data models ───────────────────────────────────────────────────────────
 
     [Serializable]
     public class LayoutSnapshot

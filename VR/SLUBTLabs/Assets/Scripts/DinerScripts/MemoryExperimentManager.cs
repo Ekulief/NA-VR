@@ -169,6 +169,8 @@ public class MemoryExperimentManager : MonoBehaviour
             yield return null;
         }
         ApplyConfig();
+
+        SceneReadySignal.MarkReady();       
     }
 
     void ApplyConfig()
@@ -663,12 +665,36 @@ public class MemoryExperimentManager : MonoBehaviour
 
     void EnterComplete()
     {
+        if (currentPhase == Phase.Complete) return;
         currentPhase = Phase.Complete;
+
         HideAllUI();
-        if (endPanel != null) endPanel.SetActive(true);
-        SetQuestionText("Experiment complete. Data uploaded.");
+
+        // Build a short summary
+        float accuracy = trials.Count > 0 ? (float)correctCount / trials.Count : 0f;
+        string summary =
+            $"Trials:          {trialResults.Count}\n" +
+            $"Correct:         {correctCount}\n" +
+            $"Accuracy:        {(accuracy * 100f):F0}%\n\n" +
+            $"Study time:      {studyDuration:F0}s\n" +
+            (useDistractorTask ? $"Distractor:      {distractorDuration:F0}s\n" : "") +
+            "\nData has been uploaded.";
+
+        var loader = FindAnyObjectByType<ExperimentLoader>();
+        if (loader != null)
+        {
+            loader.QueueExperimentSummary("Memory – Results", summary);
+            SaveFinalResults();         
+            loader.ReturnToHub();
+        }
+        else
+        {
+            if (endPanel != null) endPanel.SetActive(true);
+            SetQuestionText("Experiment complete. Data uploaded.");
+            SaveFinalResults();
+        }
+
         OnExperimentFinished?.Invoke();
-        SaveFinalResults();
     }
 
 

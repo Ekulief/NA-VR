@@ -206,11 +206,11 @@ public class DepthPerceptionUI : MonoBehaviour
         }
 
         if (instructionPanel != null) instructionPanel.SetActive(true);
-        // existing code …
-        _actualHeight = config != null ? config.depth_ActualHeightMeters : 15f;
 
+        _actualHeight = config != null ? config.depth_ActualHeightMeters : 15f;
         CacheBaseScalesAndPositions();
         ApplyBuildingHeightScale(_actualHeight);
+        SceneReadySignal.MarkReady();        
         // ExperimentLogger.Log("instructions_shown", "Depth Perception instructions displayed");
     }
 
@@ -261,21 +261,24 @@ public class DepthPerceptionUI : MonoBehaviour
     {
         float error = Mathf.Abs(_currentHeight - _actualHeight);
 
-        if (resultsSummaryText != null)
+        string summary =
+            $"Your Estimate:   {_currentHeight:F0} m\n" +
+            $"Actual Height:   {_actualHeight:F0} m\n" +
+            $"Absolute Error:  {error:F1} m\n\n" +
+            (error < 2f
+                ? "Excellent depth estimation accuracy!"
+                : "Your estimate differed from the physical target size.");
+
+        if (_experimentLoader != null)
         {
-            resultsSummaryText.text =
-                $"Trial Complete\n\n" +
-                $"Your Estimate:   {_currentHeight:F0} m\n" +
-                $"Actual Height:   {_actualHeight:F0} m\n" +
-                $"Absolute Error:  {error:F1} m\n\n" +
-                (error < 2f
-                    ? "Excellent depth estimation accuracy!"
-                    : "Your estimate differed from the physical target size.");
+            _experimentLoader.QueueExperimentSummary("Depth Perception – Results", summary);
+            _ = SaveResultsToFirestoreAsync(error);
+            _experimentLoader.ReturnToHub();
         }
-
-        if (resultsPanel != null) resultsPanel.SetActive(true);
-
-        _ = SaveResultsToFirestoreAsync(error);
+        else
+        {
+            _ = SaveResultsToFirestoreAsync(error);
+        }
     }
 
     private async Task SaveResultsToFirestoreAsync(float error)

@@ -464,6 +464,8 @@ public class AttentionalBlindnessManager : MonoBehaviour
         if (instructionPanel != null) instructionPanel.SetActive(true);
         LockLocomotion();
         ExperimentLogger.Log("instructions_shown", "Attentional Blindness instructions displayed");
+
+        SceneReadySignal.MarkReady();    
     }
 
     private void OnStartCounting()
@@ -629,22 +631,27 @@ public class AttentionalBlindnessManager : MonoBehaviour
 
         string fadedName = _fadeTarget != null ? _fadeTarget.name : "(none)";
 
-        if (resultsSummaryText != null)
-        {
-            resultsSummaryText.text =
-                $"Trial Complete\n\n" +
-                $"Your count:       {_participantCount}\n" +
-                $"Actual count:     {_actualCount}\n" +
-                $"Accuracy:         {countAccuracy}\n\n" +
-                $"Noticed anomaly:  {(_noticedAnomaly ? "Yes" : "No")}\n" +
-                $"Faded item:       {fadedName}\n\n" +
-                (_noticedAnomaly
-                    ? "You noticed the furniture item fading —\nyour attention was broadly distributed."
-                    : "You did not notice the fading item.\nThis is the inattentional blindness effect.");
-        }
+        string summary =
+            $"Your count:       {_participantCount}\n" +
+            $"Actual count:     {_actualCount}\n" +
+            $"Accuracy:         {countAccuracy}\n\n" +
+            $"Noticed anomaly:  {(_noticedAnomaly ? "Yes" : "No")}\n" +
+            $"Faded item:       {fadedName}\n\n" +
+            (_noticedAnomaly
+                ? "You noticed the furniture item fading —\nyour attention was broadly distributed."
+                : "You did not notice the fading item.\nThis is the inattentional blindness effect.");
 
-        if (resultsPanel != null) resultsPanel.SetActive(true);
-        SaveResultsToFirestore();
+        var loader = FindAnyObjectByType<ExperimentLoader>();
+        if (loader != null)
+        {
+            loader.QueueExperimentSummary("Attentional Blindness – Results", summary);
+            SaveResultsToFirestore();
+            loader.ReturnToHub();
+        }
+        else
+        {
+            SaveResultsToFirestore();
+        }
     }
 
     // ─────────────────────────────────────────────

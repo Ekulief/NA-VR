@@ -255,6 +255,7 @@ public class ExperimentManager : MonoBehaviour
             yield return null;
 
         ApplyConfig();
+        SceneReadySignal.MarkReady();
     }
     public void OnPlayerEnterRoom(string roomName)
     {
@@ -404,13 +405,40 @@ public class ExperimentManager : MonoBehaviour
 
     public void OnExperimentComplete()
     {
+        if (CurrentState == ExperimentState.Finished) return;
         ChangeState(ExperimentState.Finished);
+
+        int correctCount = 0;
+        foreach (var q in _questionResults)
+        {
+            if (q.TryGetValue("correct", out object c) && c is bool b && b)
+                correctCount++;
+        }
+
+        string summary =
+            $"Rooms completed: {_roomResults.Count}\n" +
+            $"Questions:       {_questionResults.Count}\n" +
+            $"Correct:         {correctCount}\n\n" +
+            $"Time per room:   {timePerRoom:F0}s\n" +
+            (useDistractorTask ? $"Distractor:      {distractorTaskDuration:F0}s\n" : "") +
+            "\nData has been uploaded.";
+
+        var loader = FindAnyObjectByType<ExperimentLoader>();
+        if (loader != null)
+        {
+            loader.QueueExperimentSummary("Memory 2 – Results", summary);
+            SaveResultsToFirestore();      
+            loader.ReturnToHub();
+        }
+        else
+        {
+            // Fallback
+            SaveResultsToFirestore();
+        }
+
         OnExperimentFinished?.Invoke();
-        Debug.Log("[ExperimentManager] Experiment complete.");
-
-        SaveResultsToFirestore();
+        Debug.Log("[ExperimentManager] Experiment complete – returning to hub.");
     }
-
     private void TeleportPlayer(Transform destination)
     {
         if (destination == null) return;

@@ -38,6 +38,10 @@ public class DistancePerceptionUI : MonoBehaviour
     [Header("Navigation")]
     public Vector3 hubReturnPosition = Vector3.zero;
 
+    [Header("Locomotion Lock")]
+    [Tooltip("Optional: leave empty – LocomotionLocker / runtime Find will locate the XR Origin")]
+    public GameObject xrOriginOverride;
+
     private float _currentDistance = 0f;
     private float _actualDistance;
     private float _minDistanceMetres = 0f;
@@ -70,6 +74,9 @@ public class DistancePerceptionUI : MonoBehaviour
 
     private void OnDestroy()
     {
+        // Always unlock if this object is destroyed
+        LocomotionLocker.Unlock();
+
         if (startTestButton != null) startTestButton.onClick.RemoveListener(OnStartTest);
         if (incrementButton != null) incrementButton.onClick.RemoveListener(OnIncrement);
         if (decrementButton != null) decrementButton.onClick.RemoveListener(OnDecrement);
@@ -126,8 +133,11 @@ public class DistancePerceptionUI : MonoBehaviour
                 : "<b>Horizontal Distance Perception Test</b>\n\nObserve the target object ahead and estimate its horizontal distance in meters.\n\nPress <b>Start Test</b> when ready.";
         }
 
+        LocomotionLocker.Lock(LocomotionLocker.LockMode.Full, xrOriginOverride);
+
         if (instructionPanel != null) instructionPanel.SetActive(true);
 
+        SceneReadySignal.MarkReady();        
         //ExperimentLogger.Log("instructions_shown", "Distance Perception instructions displayed");
     }
 
@@ -154,8 +164,8 @@ public class DistancePerceptionUI : MonoBehaviour
     private async void OnSubmit()
     {
         if (IsSessionPaused() || _submitted) return;
-
         _submitted = true;
+
         if (submitButton != null) submitButton.interactable = false;
 
         _completionTime = Time.time - _trialStartTime;
@@ -179,21 +189,24 @@ public class DistancePerceptionUI : MonoBehaviour
     {
         float error = Mathf.Abs(_currentDistance - _actualDistance);
 
-        if (resultsSummaryText != null)
+        string summary =
+            $"Your Estimate:   {_currentDistance:F0} m\n" +
+            $"Actual Distance: {_actualDistance:F0} m\n" +
+            $"Absolute Error:  {error:F1} m\n\n" +
+            (error < 2f
+                ? "Excellent distance estimation accuracy!"
+                : "Your estimate differed from the target position.");
+
+        if (_experimentLoader != null)
         {
-            resultsSummaryText.text =
-                $"Trial Complete\n\n" +
-                $"Your Estimate:   {_currentDistance:F0} m\n" +
-                $"Actual Distance: {_actualDistance:F0} m\n" +
-                $"Absolute Error:  {error:F1} m\n\n" +
-                (error < 2f
-                    ? "Excellent distance estimation accuracy!"
-                    : "Your estimate differed from the target position.");
+            _experimentLoader.QueueExperimentSummary("Distance Perception – Results", summary);
+            await SaveResultsToFirestoreAsync(error);
+            _experimentLoader.ReturnToHub();
         }
-
-        if (resultsPanel != null) resultsPanel.SetActive(true);
-
-        await SaveResultsToFirestoreAsync(error);
+        else
+        {
+            await SaveResultsToFirestoreAsync(error);
+        }
     }
 
     private async Task SaveResultsToFirestoreAsync(float error)
@@ -269,16 +282,6 @@ public class DistancePerceptionUI : MonoBehaviour
             await db.Collection("experimentResults").AddAsync(doc);
             Debug.Log($"[DistancePerception] Saved (duration={durationDisplay}, progressId={progressId})");
 
-           /* ExperimentLogger.Log("experiment_completed",
-                $"Distance Perception completed. Estimate={_currentDistance:F0}m, Actual={_actualDistance:F0}m, Error={error:F1}m",
-                new Dictionary<string, object>
-                {
-                    { "estimatedDistance", _currentDistance },
-                    { "actualDistance", _actualDistance },
-                    { "errorMargin", error },
-                    { "durationSeconds", durationSeconds }
-                }); */
-
             if (!string.IsNullOrEmpty(progressId))
             {
                 await db.Collection("experimentProgress").Document(progressId).UpdateAsync(
@@ -299,7 +302,8 @@ public class DistancePerceptionUI : MonoBehaviour
 
     private void OnReturnHome()
     {
-       // ExperimentLogger.Log("return_to_hub", "Student returned to hub");
+        // Unlock before returning to hub
+        LocomotionLocker.Unlock();
 
         if (_experimentLoader != null)
             _experimentLoader.ReturnToHub(hubReturnPosition);
