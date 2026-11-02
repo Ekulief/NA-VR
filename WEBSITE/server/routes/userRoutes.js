@@ -4,226 +4,286 @@ import { FieldValue } from "firebase-admin/firestore";
 
 const router = express.Router();
 
-const requireInstructor = async (req, res, next) => {
+// Verify the Firebase ID token and require an administrator.
+async function requireAdmin(req, res, next) {
   try {
-    const authHeader = req.headers.authorization || "";
+    const authorization = req.headers.authorization || "";
 
-    if (!authHeader.startsWith("Bearer ")) {
+    if (!authorization.startsWith("Bearer ")) {
       return res.status(401).json({
         error: "Missing Firebase authentication token.",
       });
     }
 
-    const idToken = authHeader.substring(7).trim();
+    const token = authorization.slice(7).trim();
 
-    if (!idToken) {
+    if (!token) {
       return res.status(401).json({
         error: "Missing Firebase authentication token.",
       });
     }
 
-    const decodedToken = await adminAuth.verifyIdToken(idToken);
+    const decoded = await adminAuth.verifyIdToken(token);
 
-    req.user = decodedToken;
-
-    const userDoc = await adminDb
+    const profile = await adminDb
       .collection("user")
-      .doc(decodedToken.uid)
+      .doc(decoded.uid)
       .get();
 
-    if (!userDoc.exists) {
+    const role = String(profile.data()?.role || "").toLowerCase();
+
+    if (!profile.exists || role !== "admin") {
       return res.status(403).json({
-        error: "User profile not found.",
+        error: "Administrator access required.",
       });
     }
 
-    const userData = userDoc.data();
-
-    if (
-      !userData.role ||
-      userData.role.toString().toLowerCase() !== "instructor"
-    ) {
-      return res.status(403).json({
-        error: "Only instructors can create student accounts.",
-      });
-    }
-
-    req.userData = userData;
+    req.user = decoded;
+    req.userData = profile.data();
 
     next();
   } catch (error) {
-    console.error("Instructor authentication error:", error);
+    console.error("Admin authorization error:", error);
 
     return res.status(401).json({
       error: "Invalid or expired authentication token.",
     });
   }
-};
+}
 
-
-router.get("/", async (req, res) => {
+// Verify the Firebase ID token and require an instructor.
+async function requireInstructor(req, res, next) {
   try {
-    const listUsersResult = await adminAuth.listUsers();
+    const authorization = req.headers.authorization || "";
 
-    const users = await Promise.all(
-      listUsersResult.users.map(async (authUser) => {
-        const userDoc = await adminDb
+    if (!authorization.startsWith("Bearer ")) {
+      return res.status(401).json({
+        error: "Missing Firebase authentication token.",
+      });
+    }
+
+    const token = authorization.slice(7).trim();
+
+    if (!token) {
+      return res.status(401).json({
+        error: "Missing Firebase authentication token.",
+      });
+    }
+
+    const decoded = await adminAuth.verifyIdToken(token);
+
+    const profile = await adminDb
+      .collection("user")
+      .doc(decoded.uid)
+      .get();
+
+    const role = String(profile.data()?.role || "").toLowerCase();
+
+    if (!profile.exists || role !== "instructor") {
+      return res.status(403).json({
+        error: "Only instructors can create student accounts.",
+      });
+    }
+
+    req.user = decoded;
+    req.userData = profile.data();
+
+    next();
+  } catch (error) {
+    console.error("Instructor authorization error:", error);
+
+    return res.status(401).json({
+      error: "Invalid or expired authentication token.",
+    });
+  }
+}
+
+function normalizeStatus(status) {
+  return String(status || "Active").toLowerCase() === "inactive"
+    ? "Inactive"
+    : "Active";
+}
+
+function getErrorMessage(error) {
+  if (error.code === "auth/email-already-exists") {
+    return "An account with this email already exists.";
+  }
+
+  if (error.code === "auth/invalid-email") {
+    return "The email address is invalid.";
+  }
+
+  if (error.code === "auth/invalid-password") {
+    return "The password does not meet Firebase requirements.";
+  }
+
+  return error.message || "The request could not be completed.";
+}
+
+// GET /api/users
+// List Firebase Authentication accounts and their Firestore profiles.
+router.get("/", requireAdmin, async (_req, res) => {
+  try {
+    const users = [];
+    let nextPageToken;
+
+    // Read all pages from Firebase Authentication.
+    do {
+      const result = await adminAuth.listUsers(1000, nextPageToken);
+
+      for (const authUser of result.users) {
+        const profile = await adminDb
           .collection("user")
           .doc(authUser.uid)
           .get();
 
-        const firestoreData = userDoc.exists ? userDoc.data() : {};
+        const data = profile.exists ? profile.data() : {};
+        const displayName = authUser.displayName || "";
+        const nameParts = displayName.split(" ");
 
-        return {
+        users.push({
           id: authUser.uid,
           uid: authUser.uid,
-          firstName:
-            firestoreData.firstName ||
-            authUser.displayName?.split(" ")[0] ||
-            "",
+          firstName: data.firstName || nameParts[0] || "",
           lastName:
-            firestoreData.lastName ||
-            authUser.displayName?.split(" ").slice(1).join(" ") ||
-            "",
-          name:
-            firestoreData.name ||
-            authUser.displayName ||
-            "",
-          email: authUser.email || "",
-          role: firestoreData.role || "",
-          studentId: firestoreData.studentId || "",
-          studentNumber: firestoreData.studentNumber || "",
-          status:
-            firestoreData.status ||
-            (authUser.disabled ? "Inactive" : "Active"),
+            data.lastName || nameParts.slice(1).join(" ") || "",
+          name: data.name || displayName,
+          email: authUser.email || data.email || "",
+          role: data.role || "",
+          studentId: data.studentId || "",
+          studentNumber: data.studentNumber || "",
+          status: data.status || (authUser.disabled ? "Inactive" : "Active"),
           disabled: authUser.disabled,
-          createdAt:
-            firestoreData.createdAt ||
-            authUser.metadata?.creationTime ||
-            null,
-          updatedAt:
-            firestoreData.updatedAt ||
-            authUser.metadata?.lastSignInTime ||
-            null,
-        };
-      })
-    );
+          createdAt: data.createdAt || authUser.metadata.creationTime || null,
+          updatedAt: data.updatedAt || authUser.metadata.lastSignInTime || null,
+        });
+      }
 
-    res.json(users);
+      nextPageToken = result.pageToken;
+    } while (nextPageToken);
+
+    return res.json(users);
   } catch (error) {
     console.error("Error fetching users:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       error: "Failed to fetch users.",
     });
   }
 });
 
-router.post("/", async (req, res) => {
+// POST /api/users
+// Create an account in Firebase Authentication and a profile in Firestore.
+// This endpoint is administrator-only.
+router.post("/", requireAdmin, async (req, res) => {
+  let authUser;
+
   try {
     const {
-      firstName,
-      lastName,
+      firstName = "",
+      lastName = "",
       name,
       email,
       password,
       role,
-      studentId,
-      studentNumber,
-      status,
-    } = req.body;
+      studentId = "",
+      studentNumber = "",
+      status = "Active",
+    } = req.body || {};
 
-    if (!email || !password) {
+    if (
+      typeof email !== "string" ||
+      !email.trim() ||
+      typeof password !== "string" ||
+      password.length < 6
+    ) {
       return res.status(400).json({
-        error: "Email and password are required.",
+        error: "A valid email and a password of at least 6 characters are required.",
       });
     }
 
-    const authUser = await adminAuth.createUser({
-      email: email.trim(),
+    const normalizedEmail = email.trim().toLowerCase();
+    const fullName =
+      (typeof name === "string" && name.trim()) ||
+      `${firstName} ${lastName}`.trim();
+
+    const normalizedRole = String(role || "Student").trim();
+
+    if (!["student", "instructor", "admin"].includes(normalizedRole.toLowerCase())) {
+      return res.status(400).json({
+        error: "Role must be Student, Instructor, or Admin.",
+      });
+    }
+
+    authUser = await adminAuth.createUser({
+      email: normalizedEmail,
       password,
-      displayName:
-        name ||
-        `${firstName || ""} ${lastName || ""}`.trim(),
-      disabled: false,
+      displayName: fullName,
+      disabled: normalizeStatus(status) === "Inactive",
     });
 
     const now = new Date();
 
-    await adminDb
-      .collection("user")
-      .doc(authUser.uid)
-      .set({
-        firstName: firstName || "",
-        lastName: lastName || "",
-        name:
-          name ||
-          `${firstName || ""} ${lastName || ""}`.trim(),
-        email: email.trim(),
-        role: role || "",
-        studentId: studentId || "",
-        studentNumber: studentNumber || "",
-        status: status || "Active",
-        createdAt: now,
-        updatedAt: now,
-      });
+    await adminDb.collection("user").doc(authUser.uid).set({
+      firstName: String(firstName || "").trim(),
+      lastName: String(lastName || "").trim(),
+      name: fullName,
+      email: normalizedEmail,
+      role: normalizedRole,
+      studentId: String(studentId || ""),
+      studentNumber: String(studentNumber || ""),
+      status: normalizeStatus(status),
+      createdAt: now,
+      updatedAt: now,
+    });
 
-    res.status(201).json({
+    return res.status(201).json({
       id: authUser.uid,
       uid: authUser.uid,
-      firstName: firstName || "",
-      lastName: lastName || "",
-      name:
-        name ||
-        `${firstName || ""} ${lastName || ""}`.trim(),
-      email: email.trim(),
-      role: role || "",
-      studentId: studentId || "",
-      studentNumber: studentNumber || "",
-      status: status || "Active",
+      firstName: String(firstName || "").trim(),
+      lastName: String(lastName || "").trim(),
+      name: fullName,
+      email: normalizedEmail,
+      role: normalizedRole,
+      studentId,
+      studentNumber,
+      status: normalizeStatus(status),
     });
   } catch (error) {
     console.error("Error creating user:", error);
 
-    if (error.code === "auth/email-already-exists") {
-      return res.status(400).json({
-        error: "An account with this email already exists.",
-      });
+    // If the Firestore write failed after creating the Auth account,
+    // try to remove the newly created Auth account to avoid an orphan.
+    if (authUser?.uid) {
+      try {
+        await adminAuth.deleteUser(authUser.uid);
+      } catch (cleanupError) {
+        console.error("Failed to clean up Auth account:", cleanupError);
+      }
     }
 
-    if (error.code === "auth/invalid-email") {
-      return res.status(400).json({
-        error: "The email address is invalid.",
-      });
-    }
+    const statusCode =
+      error.code === "auth/email-already-exists" ||
+      error.code === "auth/invalid-email" ||
+      error.code === "auth/invalid-password"
+        ? 400
+        : 500;
 
-    if (error.code === "auth/invalid-password") {
-      return res.status(400).json({
-        error: "The password does not meet Firebase requirements.",
-      });
-    }
-
-    res.status(500).json({
-      error: "Failed to create user.",
+    return res.status(statusCode).json({
+      error: getErrorMessage(error),
     });
   }
 });
 
-// Create Student Accounts (Instructor)
+// POST /api/users/students
+// Instructor-only endpoint for creating student accounts in bulk.
 router.post("/students", requireInstructor, async (req, res) => {
   try {
-    const { blockId, password, students } = req.body;
+    const { blockId, password, students } = req.body || {};
 
-
-    if (!blockId) {
+    if (!blockId || typeof blockId !== "string") {
       return res.status(400).json({
         error: "blockId is required.",
-      });
-    }
-
-    if (!password) {
-      return res.status(400).json({
-        error: "A default password is required.",
       });
     }
 
@@ -246,33 +306,25 @@ router.post("/students", requireInstructor, async (req, res) => {
     }
 
     const blockRef = adminDb.collection("block").doc(blockId);
-    const blockDoc = await blockRef.get();
+    const blockSnapshot = await blockRef.get();
 
-    if (!blockDoc.exists) {
+    if (!blockSnapshot.exists) {
       return res.status(404).json({
         error: "Block not found.",
       });
     }
 
-    const blockData = blockDoc.data() || {};
+    const blockData = blockSnapshot.data() || {};
+    const ownerFields = ["instructorId", "ownerId", "createdBy"];
 
-    const possibleOwnerFields = [
-      "instructorId",
-      "ownerId",
-      "createdBy",
-    ];
-
-    const ownerField = possibleOwnerFields.find(
+    const ownerField = ownerFields.find(
       (field) =>
         blockData[field] !== undefined &&
         blockData[field] !== null &&
         blockData[field] !== ""
     );
 
-    if (
-      ownerField &&
-      blockData[ownerField] !== req.user.uid
-    ) {
+    if (ownerField && blockData[ownerField] !== req.user.uid) {
       return res.status(403).json({
         error: "You are not authorized to add students to this block.",
       });
@@ -302,38 +354,17 @@ router.post("/students", requireInstructor, async (req, res) => {
           ? student.studentNumber.trim()
           : "";
 
-
-      if (!firstName) {
+      if (!firstName || !lastName || !email) {
         failed.push({
           ...student,
-          error: "First name is required.",
+          error: "First name, last name, and email are required.",
         });
-
-        continue;
-      }
-
-      if (!lastName) {
-        failed.push({
-          ...student,
-          error: "Last name is required.",
-        });
-
-        continue;
-      }
-
-      if (!email) {
-        failed.push({
-          ...student,
-          error: "Email is required.",
-        });
-
         continue;
       }
 
       let authUser = null;
 
       try {
-
         authUser = await adminAuth.createUser({
           email,
           password,
@@ -343,28 +374,22 @@ router.post("/students", requireInstructor, async (req, res) => {
 
         const now = new Date();
 
-
-        await adminDb
-          .collection("user")
-          .doc(authUser.uid)
-          .set({
-            firstName,
-            lastName,
-            name: `${firstName} ${lastName}`.trim(),
-            email,
-            studentNumber,
-            role: "student",
-            status: "Active",
-            createdAt: now,
-            updatedAt: now,
-          });
-
+        await adminDb.collection("user").doc(authUser.uid).set({
+          firstName,
+          lastName,
+          name: `${firstName} ${lastName}`.trim(),
+          email,
+          studentNumber,
+          role: "student",
+          status: "Active",
+          createdAt: now,
+          updatedAt: now,
+        });
 
         await blockRef.update({
           studentIds: FieldValue.arrayUnion(authUser.uid),
           updatedAt: now,
         });
-
 
         created.push({
           id: authUser.uid,
@@ -378,43 +403,23 @@ router.post("/students", requireInstructor, async (req, res) => {
           status: "Active",
         });
       } catch (error) {
-        console.error(
-          `Error creating student ${email}:`,
-          error
-        );
+        console.error(`Error creating student ${email}:`, error);
 
         if (authUser?.uid) {
           try {
             await adminAuth.deleteUser(authUser.uid);
+            await adminDb.collection("user").doc(authUser.uid).delete();
           } catch (cleanupError) {
-            console.error(
-              `Failed to clean up Auth user ${authUser.uid}:`,
-              cleanupError
-            );
+            console.error("Failed to clean up student account:", cleanupError);
           }
-        }
-
-        let errorMessage = "Failed to create student account.";
-
-        if (error.code === "auth/email-already-exists") {
-          errorMessage =
-            "An account with this email already exists.";
-        } else if (error.code === "auth/invalid-email") {
-          errorMessage = "The email address is invalid.";
-        } else if (error.code === "auth/invalid-password") {
-          errorMessage =
-            "The password does not meet Firebase requirements.";
-        } else if (error.message) {
-          errorMessage = error.message;
         }
 
         failed.push({
           ...student,
-          error: errorMessage,
+          error: getErrorMessage(error),
         });
       }
     }
-
 
     if (created.length === 0) {
       return res.status(400).json({
@@ -430,20 +435,17 @@ router.post("/students", requireInstructor, async (req, res) => {
       failed,
     });
   } catch (error) {
-    console.error(
-      "Error creating student accounts:",
-      error
-    );
+    console.error("Error creating student accounts:", error);
 
     return res.status(500).json({
       error: "Failed to create student accounts.",
-      details: error.message,
     });
   }
 });
 
-
-router.patch("/:uid", async (req, res) => {
+// PATCH /api/users/:uid
+// Update Firebase Authentication details and the Firestore profile.
+router.patch("/:uid", requireAdmin, async (req, res) => {
   try {
     const { uid } = req.params;
 
@@ -456,86 +458,63 @@ router.patch("/:uid", async (req, res) => {
       studentId,
       studentNumber,
       status,
-      disabled,
-    } = req.body;
-
+    } = req.body || {};
 
     const authUpdate = {};
 
     if (email !== undefined) {
-      authUpdate.email = email.trim();
+      if (typeof email !== "string" || !email.trim()) {
+        return res.status(400).json({
+          error: "A valid email address is required.",
+        });
+      }
+
+      authUpdate.email = email.trim().toLowerCase();
     }
 
     if (name !== undefined) {
-      authUpdate.displayName = name;
-    } else if (
-      firstName !== undefined ||
-      lastName !== undefined
-    ) {
+      authUpdate.displayName = String(name);
+    } else if (firstName !== undefined || lastName !== undefined) {
       authUpdate.displayName =
         `${firstName || ""} ${lastName || ""}`.trim();
     }
 
-    if (disabled !== undefined) {
-      authUpdate.disabled = disabled;
+    if (status !== undefined) {
+      authUpdate.disabled = normalizeStatus(status) === "Inactive";
     }
+
+    // Check the account exists before updating.
+    await adminAuth.getUser(uid);
 
     if (Object.keys(authUpdate).length > 0) {
       await adminAuth.updateUser(uid, authUpdate);
     }
 
-
     const firestoreUpdate = {
       updatedAt: new Date(),
     };
 
-    if (firstName !== undefined) {
-      firestoreUpdate.firstName = firstName;
-    }
+    if (firstName !== undefined) firestoreUpdate.firstName = firstName;
+    if (lastName !== undefined) firestoreUpdate.lastName = lastName;
+    if (name !== undefined) firestoreUpdate.name = name;
+    if (email !== undefined) firestoreUpdate.email = email.trim().toLowerCase();
+    if (role !== undefined) firestoreUpdate.role = role;
+    if (studentId !== undefined) firestoreUpdate.studentId = studentId;
+    if (studentNumber !== undefined) firestoreUpdate.studentNumber = studentNumber;
+    if (status !== undefined) firestoreUpdate.status = normalizeStatus(status);
 
-    if (lastName !== undefined) {
-      firestoreUpdate.lastName = lastName;
-    }
-
-    if (name !== undefined) {
-      firestoreUpdate.name = name;
-    }
-
-    if (email !== undefined) {
-      firestoreUpdate.email = email.trim();
-    }
-
-    if (role !== undefined) {
-      firestoreUpdate.role = role;
-    }
-
-    if (studentId !== undefined) {
-      firestoreUpdate.studentId = studentId;
-    }
-
-    if (studentNumber !== undefined) {
-      firestoreUpdate.studentNumber = studentNumber;
-    }
-
-    if (status !== undefined) {
-      firestoreUpdate.status = status;
-    }
-
-    await adminDb
-      .collection("user")
-      .doc(uid)
-      .set(firestoreUpdate, { merge: true });
+    await adminDb.collection("user").doc(uid).set(firestoreUpdate, {
+      merge: true,
+    });
 
     const updatedAuthUser = await adminAuth.getUser(uid);
-    const updatedFirestoreDoc = await adminDb
-      .collection("user")
-      .doc(uid)
-      .get();
+    const updatedProfile = await adminDb.collection("user").doc(uid).get();
 
-    res.json({
+    return res.json({
       id: uid,
       uid,
-      ...updatedFirestoreDoc.data(),
+      ...updatedProfile.data(),
+      email: updatedAuthUser.email || "",
       disabled: updatedAuthUser.disabled,
     });
   } catch (error) {
@@ -547,56 +526,48 @@ router.patch("/:uid", async (req, res) => {
       });
     }
 
-    if (error.code === "auth/email-already-exists") {
-      return res.status(400).json({
-        error: "An account with this email already exists.",
-      });
-    }
+    const statusCode =
+      error.code === "auth/email-already-exists" ||
+      error.code === "auth/invalid-email"
+        ? 400
+        : 500;
 
-    res.status(500).json({
-      error: "Failed to update user.",
+    return res.status(statusCode).json({
+      error: getErrorMessage(error),
     });
   }
 });
 
-
-router.delete("/:uid", async (req, res) => {
+// DELETE /api/users/:uid
+// Delete a Firebase Authentication account and its Firestore profile.
+router.delete("/:uid", requireAdmin, async (req, res) => {
   try {
     const { uid } = req.params;
 
-    await adminAuth.deleteUser(uid);
+    if (uid === req.user.uid) {
+      return res.status(400).json({
+        error: "You cannot delete your own administrator account here.",
+      });
+    }
 
-    await adminDb
-      .collection("user")
-      .doc(uid)
-      .delete();
+    try {
+      await adminAuth.deleteUser(uid);
+    } catch (error) {
+      if (error.code !== "auth/user-not-found") {
+        throw error;
+      }
+    }
 
-    res.json({
+    await adminDb.collection("user").doc(uid).delete();
+
+    return res.json({
       message: "User deleted successfully.",
       uid,
     });
   } catch (error) {
     console.error("Error deleting user:", error);
 
-    if (error.code === "auth/user-not-found") {
-      try {
-        await adminDb
-          .collection("user")
-          .doc(req.params.uid)
-          .delete();
-      } catch (firestoreError) {
-        console.error(
-          "Error deleting Firestore user document:",
-          firestoreError
-        );
-      }
-
-      return res.status(404).json({
-        error: "User not found in Firebase Authentication.",
-      });
-    }
-
-    res.status(500).json({
+    return res.status(500).json({
       error: "Failed to delete user.",
     });
   }

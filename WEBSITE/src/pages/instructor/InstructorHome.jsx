@@ -321,11 +321,13 @@ export default function InstructorHome() {
       <section className="px-3 py-23">
         <div className="flex items-center justify-between mb-5">
           <h1 className="text-2xl font-medium">My courses</h1>
+        </div>
 
-          <button
-            onClick={() => setShowCreateCourse(true)}
-            className="
+        <button
+          onClick={() => setShowCreateCourse(true)}
+          className="
               px-4 py-2
+              mb-5
               flex items-center justify-center
               gap-2
               bg-indigo-800
@@ -334,11 +336,10 @@ export default function InstructorHome() {
               rounded-lg
               transition
             "
-          >
-            <span className="text-lg">+</span>
-            Create Course
-          </button>
-        </div>
+        >
+          <span className="text-lg">+</span>
+          Create Course
+        </button>
         {error && <p className="text-red-500 mb-4">{error}</p>}
         {loading && <p className="text-gray-500">Loading courses...</p>}
         {!loading && !error && courses.length === 0 && (
