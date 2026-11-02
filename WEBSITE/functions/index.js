@@ -199,6 +199,7 @@ exports.releaseVrExperimentSession = onCall(async (request) => {
       currentGroupId: null,
       currentUserId: null,
       currentBlockId: null,
+      assignedInstructorId: null,
       currentSceneName: "",
       currentModuleId: "",
       streamRoomName: "",
@@ -209,7 +210,6 @@ exports.releaseVrExperimentSession = onCall(async (request) => {
   });
 });
 
-/** Headset-owned scene status, without anonymous Firestore write privileges. */
 
 /**
  * Instructor's course-wide Live Experiments dashboard.
@@ -269,6 +269,17 @@ exports.getInstructorLiveOverview = onCall(async (request) => {
     return d.currentBlockId === blockId || allowedVrIds.has(d.vrId);
   });
 
+  // Resolve group labels on the server, keeping Firestore document IDs out of
+  // the instructor UI. Only names belonging to this same course are returned.
+  const groupIds = [...new Set(candidates.map((doc) => doc.get("currentGroupId"))
+    .filter((id) => nonblank(id) && !id.includes("/") && id !== "." && id !== ".."))];
+  const groupSnaps = groupIds.length
+    ? await db.getAll(...groupIds.map((id) => db.collection("group").doc(id)))
+    : [];
+  const groupNames = new Map(groupSnaps
+    .filter((snap) => snap.exists && snap.get("blockId") === blockId && nonblank(snap.get("groupName")))
+    .map((snap) => [snap.id, snap.get("groupName").trim()]));
+
   const devices = await Promise.all(candidates.map(async (doc) => {
     const d = doc.data();
     const vrId = d.vrId || doc.id;
@@ -285,6 +296,7 @@ exports.getInstructorLiveOverview = onCall(async (request) => {
       currentProgressId: progressId,
       currentSceneName: d.currentSceneName || "",
       currentGroupId: d.currentGroupId || "",
+      currentGroupName: groupNames.get(d.currentGroupId) || "",
       experimentName: experiment?.experimentName || experiment?.moduleName || "",
       state: "idle",
       message: "No active student attempt. Start an experiment session from the student page.",
@@ -297,16 +309,19 @@ exports.getInstructorLiveOverview = onCall(async (request) => {
       }
       return entry;
     }
+    
     if (d.currentBlockId !== blockId || d.assignedInstructorId !== request.auth.uid) {
       entry.state = "needs-attention";
       entry.message = "Session has missing or incorrect currentBlockId/assignedInstructorId. Reconnect the student attempt using the updated startVrExperimentSession Function.";
       return entry;
     }
+    
     if (!experiment) {
       entry.state = "needs-attention";
       entry.message = "currentExperimentId is not an experiment document ID in this course. An old client may have written a Unity scene name. Start a new student session.";
       return entry;
     }
+    
     if (!allowedVrIds.has(d.vrId) ||
         !(Array.isArray(experiment.vrIds) && experiment.vrIds.length
           ? experiment.vrIds.includes(d.vrId) : experiment.vrId === d.vrId)) {
@@ -314,6 +329,7 @@ exports.getInstructorLiveOverview = onCall(async (request) => {
       entry.message = "This headset is not assigned to the active experiment. Check the experiment's vrId/vrIds assignment.";
       return entry;
     }
+    
     if (!progressId || progressId.includes("/")) {
       entry.state = "needs-attention";
       entry.message = "Invalid currentProgressId on the headset.";
@@ -321,6 +337,7 @@ exports.getInstructorLiveOverview = onCall(async (request) => {
     }
     const progressSnap = await db.collection("experimentProgress").doc(progressId).get();
     const progress = progressSnap.exists ? progressSnap.data() : null;
+    
     if (!progress || (progress.experimentId || progress.exeprimentId) !== experimentId ||
         progress.blockId !== blockId || progress.vrId !== d.vrId ||
         progress.sessionControl === "ended" || progress.completionStatus === "Completed") {
@@ -328,21 +345,25 @@ exports.getInstructorLiveOverview = onCall(async (request) => {
       entry.message = "Pinned experimentProgress is missing, completed or mismatched. Finish/release the stale session and start a new student attempt.";
       return entry;
     }
+    
     if (!publisherRegistered) {
       entry.state = "needs-attention";
       entry.message = "publisherAuthUid is missing. Run the updated Unity app to register the headset automatically.";
       return entry;
     }
+    
     if (status !== "In Use") {
       entry.state = "needs-attention";
       entry.message = `This session is pinned but status is '${status || "(missing)"}', not 'In Use'. Confirm startVrExperimentSession and scene status calls succeeded.`;
       return entry;
     }
+    
     if (d.streamRoomName !== `slubt-${blockId}-${doc.id}`) {
       entry.state = "needs-attention";
       entry.message = "The LiveKit streamRoomName does not match this course/device. Reconnect the student experiment session.";
       return entry;
     }
+    
     if (!nonblank(d.currentSceneName)) {
       entry.state = "waiting-vr";
       entry.message = "Student session assigned. Put on this headset, select the experiment anchor, and wait for Unity to load the scene.";
@@ -361,33 +382,34 @@ exports.getInstructorLiveOverview = onCall(async (request) => {
   };
 });
 
-/**
- * Instructor-facing inventory list. Return only safe display fields, not hardware
- * identifiers or anonymous publisher UIDs. A previously unassigned headset is
- * selectable before the first student activation.
- */
+
 exports.listVrDevicesForInstructor = onCall(async (request) => {
   if (!request.auth || request.auth.token?.firebase?.sign_in_provider === "anonymous") {
     fail("permission-denied", "Sign in with an instructor account.");
   }
+
   const profile = await db.collection("user").doc(request.auth.uid).get();
   if (!profile.exists || profile.get("role") !== "instructor") {
     fail("permission-denied", "Only instructors can list available VR devices.");
   }
+
   const snapshot = await db.collection("vrDevices").limit(200).get();
   const devices = snapshot.docs.map((d) => {
     const data = d.data();
     if (!nonblank(data.vrId) || !nonblank(data.deviceId)) return null;
+    
     if (nonblank(data.assignedInstructorId) &&
         data.assignedInstructorId !== request.auth.uid && data.status === "In Use") {
       return null;
     }
+    
     return {
       id: d.id,
       vrId: data.vrId,
       status: data.status || "Available",
     };
   }).filter(Boolean);
+
   return { devices };
 });
 
@@ -395,21 +417,25 @@ exports.setVrExperimentSceneStatus = onCall(async (request) => {
   if (!request.auth || request.auth.token?.firebase?.sign_in_provider !== "anonymous") {
     fail("permission-denied", "Only a registered Unity publisher may update VR scene status.");
   }
+
   const { vrDeviceId, status, experimentId, progressId, blockId, sceneName } = request.data || {};
   if (!nonblank(vrDeviceId) || !["In Use", "Available"].includes(status)) {
     fail("invalid-argument", "VR device ID and valid status are required.");
   }
+
   if (status === "In Use" &&
       (![blockId, experimentId, progressId].every(nonblank) ||
        typeof sceneName !== "string" || sceneName.length > 160)) {
     fail("invalid-argument", "An active scene requires matching session identifiers.");
   }
+
   const deviceRef = db.collection("vrDevices").doc(vrDeviceId);
   return db.runTransaction(async (tx) => {
     const deviceSnap = await tx.get(deviceRef);
     if (!deviceSnap.exists || deviceSnap.get("publisherAuthUid") !== request.auth.uid) {
       fail("permission-denied", "This Unity publisher does not own the VR device.");
     }
+
     if (status === "Available") {
       tx.update(deviceRef, {
         status: "Available", currentSceneName: "", currentModuleId: "",
@@ -418,15 +444,18 @@ exports.setVrExperimentSceneStatus = onCall(async (request) => {
       });
       return { updated: true };
     }
+
     if (deviceSnap.get("currentBlockId") !== blockId ||
         deviceSnap.get("currentExperimentId") !== experimentId ||
         deviceSnap.get("currentProgressId") !== progressId) {
       fail("failed-precondition", "Web-pinned VR experiment session does not match the headset.");
     }
+
     const [progress, experiment] = await Promise.all([
       tx.get(db.collection("experimentProgress").doc(progressId)),
       tx.get(db.collection("experiment").doc(experimentId)),
     ]);
+
     if (!progress.exists || !experiment.exists ||
         experiment.get("blockId") !== blockId ||
         (progress.get("experimentId") || progress.get("exeprimentId")) !== experimentId ||
@@ -436,6 +465,7 @@ exports.setVrExperimentSceneStatus = onCall(async (request) => {
         progress.get("completionStatus") === "Completed") {
       fail("failed-precondition", "The experiment progress is missing, mismatched or completed.");
     }
+
     tx.update(deviceRef, {
       status: "In Use", currentSceneName: sceneName,
       currentModuleId: experiment.get("moduleId") || "",
@@ -443,6 +473,7 @@ exports.setVrExperimentSceneStatus = onCall(async (request) => {
       currentSessionStart: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
+
     return { updated: true };
   });
 });
@@ -452,17 +483,48 @@ exports.createLiveStreamToken = onCall(
   async (request) => {
     if (!request.auth) fail("unauthenticated", "Sign in with Firebase before requesting a stream token.");
 
-    const { blockId, vrDeviceId, experimentId, role } = request.data || {};
-    if (![blockId, vrDeviceId, experimentId].every(nonblank) ||
+    const { blockId, vrDeviceId, experimentId, progressId, role } = request.data || {};
+    if (![blockId, experimentId].every(nonblank) ||
         !["publisher", "viewer"].includes(role)) {
-      fail("invalid-argument", "blockId, vrDeviceId, experimentId and publisher/viewer role are required.");
+      fail("invalid-argument", "blockId, experimentId and publisher/viewer role are required.");
+    }
+
+    const uid = request.auth.uid;
+    const provider = request.auth.token?.firebase?.sign_in_provider;
+    // Students identify their OWN attempt, not a VR device they could choose.
+    // Instructor viewers and Unity publishers continue supplying vrDeviceId.
+    const studentViewer = role === "viewer" && nonblank(progressId);
+    let resolvedVrDeviceId = vrDeviceId;
+    if (studentViewer) {
+      if (progressId.includes("/")) fail("invalid-argument", "Invalid attempt ID.");
+      if (provider === "anonymous") {
+        fail("permission-denied", "A signed-in student is required to view an attempt.");
+      }
+      const requestedProgress = await db.collection("experimentProgress").doc(progressId).get();
+      if (!requestedProgress.exists || requestedProgress.get("studentId") !== uid ||
+          requestedProgress.get("blockId") !== blockId ||
+          (requestedProgress.get("experimentId") || requestedProgress.get("exeprimentId")) !== experimentId ||
+          requestedProgress.get("sessionControl") === "ended" ||
+          requestedProgress.get("completionStatus") === "Completed" ||
+          !nonblank(requestedProgress.get("vrId"))) {
+        fail("permission-denied", "This is not your active experiment attempt.");
+      }
+      const devices = await db.collection("vrDevices")
+        .where("vrId", "==", requestedProgress.get("vrId")).limit(2).get();
+      if (devices.size !== 1) {
+        fail("failed-precondition", "The assigned headset could not be resolved uniquely.");
+      }
+      resolvedVrDeviceId = devices.docs[0].id;
+    } else if (!nonblank(resolvedVrDeviceId)) {
+      fail("invalid-argument", "vrDeviceId is required for instructors and publishers.");
     }
 
     const [blockSnap, deviceSnap, experimentSnap] = await Promise.all([
       db.collection("block").doc(blockId).get(),
-      db.collection("vrDevices").doc(vrDeviceId).get(),
+      db.collection("vrDevices").doc(resolvedVrDeviceId).get(),
       db.collection("experiment").doc(experimentId).get(),
     ]);
+
     if (!blockSnap.exists || !deviceSnap.exists || !experimentSnap.exists) {
       fail("not-found", "Class, VR device, or experiment does not exist.");
     }
@@ -478,7 +540,7 @@ exports.createLiveStreamToken = onCall(
         device.currentExperimentId !== experimentId ||
         device.status !== "In Use" ||
         !nonblank(device.currentProgressId)) {
-      fail("failed-precondition", "VR session is inactive or does not belong to this instructor and experiment.");
+      fail("failed-precondition", "VR session is inactive or does not belong to this course and experiment.");
     }
 
     // Support the builder's multi-device vrIds and legacy single vrId.
@@ -489,12 +551,13 @@ exports.createLiveStreamToken = onCall(
       fail("permission-denied", "This VR device is not assigned to the selected experiment.");
     }
 
-    const roomName = `slubt-${blockId}-${vrDeviceId}`;
+    const roomName = `slubt-${blockId}-${resolvedVrDeviceId}`;
     if (device.streamRoomName !== roomName) {
       fail("failed-precondition", "The device stream room does not match its registered session.");
     }
 
-    // Verify session metadata server-side; never rely on UI-only filters.
+    // Always recheck the pinned attempt after resolving the headset. A student
+    // cannot use another group's attempt, an older attempt, or another experiment.
     const progressSnap = await db.collection("experimentProgress").doc(device.currentProgressId).get();
     if (!progressSnap.exists) fail("failed-precondition", "Active experiment progress was not found.");
     const progress = progressSnap.data();
@@ -507,20 +570,28 @@ exports.createLiveStreamToken = onCall(
       fail("failed-precondition", "Progress does not match the device's active experiment.");
     }
 
-    const uid = request.auth.uid;
-    const provider = request.auth.token?.firebase?.sign_in_provider;
     let identity;
     if (role === "viewer") {
-      if (provider === "anonymous" || uid !== owner) {
-        fail("permission-denied", "Only the signed-in instructor who owns this class can view this stream.");
+      if (studentViewer) {
+        const studentProfile = await db.collection("user").doc(uid).get();
+        if (!studentProfile.exists || studentProfile.get("role") !== "student" ||
+            !Array.isArray(block.studentIds) || !block.studentIds.includes(uid) ||
+            device.currentProgressId !== progressId ||
+            device.currentUserId !== uid || progress.studentId !== uid) {
+          fail("permission-denied", "You may only watch your own currently assigned experiment.");
+        }
+        identity = `student-${uid}-${randomUUID()}`;
+      } else {
+        if (provider === "anonymous" || uid !== owner) {
+          fail("permission-denied", "Only the signed-in instructor who owns this class can view this stream.");
+        }
+        identity = `instructor-${uid}-${randomUUID()}`;
       }
-      // Unique per browser tab avoids replacing another instructor connection.
-      identity = `instructor-${uid}-${randomUUID()}`;
     } else {
       if (provider !== "anonymous" || device.publisherAuthUid !== uid) {
         fail("permission-denied", "This Unity publisher is not the registered anonymous session for the headset.");
       }
-      identity = `vr-${vrDeviceId}`;
+      identity = `vr-${resolvedVrDeviceId}`;
     }
 
     const token = new AccessToken(LIVEKIT_API_KEY.value(), LIVEKIT_API_SECRET.value(), {
@@ -537,6 +608,9 @@ exports.createLiveStreamToken = onCall(
     if (!nonblank(process.env.LIVEKIT_URL)) {
       fail("failed-precondition", "LIVEKIT_URL is missing from the Functions environment.");
     }
-    return { serverUrl: process.env.LIVEKIT_URL, roomName, token: await token.toJwt() };
+    return {
+      serverUrl: process.env.LIVEKIT_URL, roomName,
+      vrDeviceId: resolvedVrDeviceId, token: await token.toJwt(),
+    };
   }
 );

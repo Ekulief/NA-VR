@@ -16,6 +16,7 @@ import {
 import { db } from "../../config/firebase-config";
 import { useAuth } from "../../context/AuthContext";
 import { getFunctions, httpsCallable } from "firebase/functions";
+import StudentLiveStream from "./StudentLiveStream";
 
 import {
   ArrowLeft,
@@ -498,7 +499,7 @@ export default function StudentExperimentRun() {
       await releaseSession({ progressId });
     } catch (err) {
       console.error("Failed to release VR session:", err);
-      alert(err?.message || "Unable to release the VR headset.");
+      // No popup for the automatic Firebase headset/assignedInstructorId cleanup.
     }
   };
 
@@ -521,6 +522,18 @@ export default function StudentExperimentRun() {
     await updateSessionControl("ended");
     await releaseVrLock(progress.id, progress.vrId || experiment.vrId);
   };
+
+  // If Unity finishes an attempt without a web End click, quietly release its
+  // headset too. The Function checks ownership and currentProgressId, making
+  // repeated calls safe and preventing release of a newer participant's session.
+  useEffect(() => {
+    if (!progress?.id || progress.studentId !== user?.uid ||
+        (progress.sessionControl !== "ended" && progress.completionStatus !== "Completed")) return;
+    const release = httpsCallable(getFunctions(), "releaseVrExperimentSession");
+    release({ progressId: progress.id }).catch((err) => {
+      console.error("Failed to automatically release the completed VR session:", err);
+    });
+  }, [progress?.id, progress?.studentId, progress?.sessionControl, progress?.completionStatus, user?.uid]);
 
   // ---------- Mark data collection done (per group) ----------
   const handleMarkDataCollectionDone = async () => {
@@ -852,6 +865,10 @@ export default function StudentExperimentRun() {
         : "bg-gray-100 text-gray-600";
 
   const previewSceneName = getPreviewSceneName();
+  const hasStudentLiveAttempt = Boolean(
+    progress?.id && progress.studentId === user?.uid &&
+    progress.sessionControl !== "ended" && progress.completionStatus !== "Completed"
+  );
 
   return (
     <div className="font-google min-h-screen bg-white text-black">
@@ -1074,9 +1091,11 @@ export default function StudentExperimentRun() {
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-medium">VR Preview</h2>
                 <p className="text-sm text-gray-500">
-                  Click inside the preview window. To exit, press Esc twice
+                  {hasStudentLiveAttempt
+                    ? "Click the livestream to enlarge. Press Esc to close."
+                    : "Click inside the preview window. To exit, press Esc twice"}
                 </p>
-                {showPreview && (
+                {showPreview && !hasStudentLiveAttempt && (
                   <button
                     onClick={() => setShowPreview(false)}
                     className="text-gray-500 hover:text-black transition"
@@ -1087,7 +1106,15 @@ export default function StudentExperimentRun() {
               </div>
 
               <div className="flex-1 min-h-[500px] bg-gray-100 rounded-lg overflow-hidden relative">
-                {!showPreview ? (
+                {hasStudentLiveAttempt ? (
+                  <StudentLiveStream
+                    key={progress.id}
+                    blockId={blockId}
+                    experimentId={experimentId}
+                    progressId={progress.id}
+                    experimentName={experiment.experimentName || "Experiment"}
+                  />
+                ) : !showPreview ? (
                   <button
                     onClick={() => setShowPreview(true)}
                     disabled={!previewSceneName}

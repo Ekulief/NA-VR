@@ -1,4 +1,3 @@
-
 using System.Collections;
 using System.Collections.Generic;
 using Firebase.Functions;
@@ -11,8 +10,19 @@ public class LiveKitVrPublisher : MonoBehaviour
     [Header("Assign the XR headset camera")]
     [SerializeField] private Camera xrCamera;
 
+    [Header("Instructor spectator livestream (does not change the VR headset view)")]
+    [Tooltip("Render a separate, wider camera for the instructor. Turn off to restore the original headset screen capture.")]
+    [SerializeField] private bool useWideSpectatorView = true;
+    [Tooltip("Vertical field of view for the 16:9 spectator camera. The XR camera remains unchanged.")]
+    [SerializeField, Range(80f, 120f)] private float spectatorFieldOfView = 100f;
+    [SerializeField] private int spectatorWidth = 960;
+    [SerializeField] private int spectatorHeight = 540;
+
     private Room _room;
-    private ScreenVideoSource _videoSource;
+    private RtcVideoSource _videoSource;
+    private Coroutine _videoUpdateCoroutine;
+    private Camera _spectatorCamera;
+    private RenderTexture _spectatorTexture;
     private LocalVideoTrack _videoTrack;
 
     private bool _isStarting;
@@ -177,8 +187,28 @@ public class LiveKitVrPublisher : MonoBehaviour
             yield break;
         }
 
-        // 7. Create a video source from the XR camera.
-        _videoSource = new ScreenVideoSource();
+        // 7. Use a dedicated mono spectator camera with a wider field of view.
+        // ScreenVideoSource captured the headset's narrow eye view and could not
+        // reveal scenery outside that crop. The student's XR camera is untouched.
+        if (useWideSpectatorView)
+        {
+            try
+            {
+                CreateSpectatorCamera();
+                _videoSource = new TextureVideoSource(_spectatorTexture);
+                Debug.Log($"[LiveKit] Wide spectator camera enabled: {spectatorFieldOfView:0} degrees.");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[LiveKit] Could not create the spectator camera; using headset screen capture. " + e.Message);
+                DestroySpectatorCamera();
+                _videoSource = new ScreenVideoSource();
+            }
+        }
+        else
+        {
+            _videoSource = new ScreenVideoSource();
+        }
 
         _videoTrack = LocalVideoTrack.CreateVideoTrack(
             "vr-first-person",
@@ -201,7 +231,7 @@ public class LiveKitVrPublisher : MonoBehaviour
             Source = TrackSource.SourceCamera
         };
 
-        // 9. Publish the XR camera track.
+        // 9. Publish the spectator (or fallback screen) track.
         var publish = _room.LocalParticipant.PublishTrack(
             _videoTrack,
             options
@@ -221,19 +251,84 @@ public class LiveKitVrPublisher : MonoBehaviour
 
         // 10. Start sending camera frames.
         _videoSource.Start();
-        StartCoroutine(_videoSource.Update());
+        _videoUpdateCoroutine = StartCoroutine(_videoSource.Update());
 
         _isStreaming = true;
         _isStarting = false;
 
         Debug.Log(
-            "[LiveKit] First-person VR video is now publishing."
+            "[LiveKit] VR video is now publishing to the instructor."
         );
+    }
+
+    private void CreateSpectatorCamera()
+    {
+        // Keep the camera in the persistent hub scene; experiment scenes load
+        // additively, so the exact same camera can follow the XR head in each.
+        GameObject spectator = new GameObject("LiveKit Instructor Spectator Camera");
+        spectator.transform.SetParent(transform, false);
+        _spectatorCamera = spectator.AddComponent<Camera>();
+        _spectatorCamera.enabled = false;
+        _spectatorCamera.CopyFrom(xrCamera);
+        _spectatorCamera.enabled = false;
+        _spectatorCamera.stereoTargetEye = StereoTargetEyeMask.None;
+        _spectatorCamera.usePhysicalProperties = false;
+        _spectatorCamera.fieldOfView = Mathf.Clamp(spectatorFieldOfView, 80f, 120f);
+        _spectatorCamera.aspect = 16f / 9f;
+        _spectatorCamera.ResetProjectionMatrix();
+        _spectatorCamera.allowHDR = false;
+        _spectatorCamera.allowMSAA = false;
+
+        // Target only this texture, never the player's VR eye displays.
+        _spectatorTexture = new RenderTexture(
+            Mathf.Clamp(spectatorWidth, 320, 1920),
+            Mathf.Clamp(spectatorHeight, 180, 1080),
+            24, RenderTextureFormat.ARGB32);
+        _spectatorTexture.name = "LiveKit Instructor Spectator Stream";
+        if (!_spectatorTexture.Create())
+            throw new System.InvalidOperationException("Could not allocate the spectator video texture.");
+        _spectatorCamera.targetTexture = _spectatorTexture;
+        FollowXrHead();
+        _spectatorCamera.enabled = true;
+    }
+
+    private void LateUpdate()
+    {
+        if (_spectatorCamera != null && xrCamera != null)
+            FollowXrHead();
+    }
+
+    private void FollowXrHead()
+    {
+        _spectatorCamera.transform.SetPositionAndRotation(
+            xrCamera.transform.position, xrCamera.transform.rotation);
+    }
+
+    private void DestroySpectatorCamera()
+    {
+        if (_spectatorCamera != null)
+        {
+            _spectatorCamera.enabled = false;
+            _spectatorCamera.targetTexture = null;
+            Destroy(_spectatorCamera.gameObject);
+            _spectatorCamera = null;
+        }
+        if (_spectatorTexture != null)
+        {
+            _spectatorTexture.Release();
+            Destroy(_spectatorTexture);
+            _spectatorTexture = null;
+        }
     }
 
     public void StopStreaming()
     {
-        // Stop capturing frames from the camera.
+        // Stop the capture coroutine before releasing its backing texture.
+        if (_videoUpdateCoroutine != null)
+        {
+            StopCoroutine(_videoUpdateCoroutine);
+            _videoUpdateCoroutine = null;
+        }
         if (_videoSource != null)
         {
             _videoSource.Stop();
@@ -248,6 +343,7 @@ public class LiveKitVrPublisher : MonoBehaviour
         }
 
         _videoTrack = null;
+        DestroySpectatorCamera();
 
         _isStreaming = false;
         _isStarting = false;
