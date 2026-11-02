@@ -1,11 +1,12 @@
-﻿using System;
+﻿using Firebase.Firestore;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
-using TMPro;
-using Firebase.Firestore;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
 
 /// <summary>
 /// Distance Perception UI
@@ -54,6 +55,9 @@ public class DistancePerceptionUI : MonoBehaviour
     private bool _submitted = false;
     private ExperimentLoader _experimentLoader;
 
+    // Locomotion Lock State (Matching Attentional Blindness)
+    private bool _locomotionLocked = false;
+
     private void Start()
     {
         _experimentLoader = FindAnyObjectByType<ExperimentLoader>();
@@ -74,8 +78,7 @@ public class DistancePerceptionUI : MonoBehaviour
 
     private void OnDestroy()
     {
-        // Always unlock if this object is destroyed
-        LocomotionLocker.Unlock();
+        UnlockLocomotion();
 
         if (startTestButton != null) startTestButton.onClick.RemoveListener(OnStartTest);
         if (incrementButton != null) incrementButton.onClick.RemoveListener(OnIncrement);
@@ -84,6 +87,38 @@ public class DistancePerceptionUI : MonoBehaviour
         if (returnHomeButton != null) returnHomeButton.onClick.RemoveListener(OnReturnHome);
         if (distanceSlider != null) distanceSlider.onValueChanged.RemoveListener(OnSliderChanged);
     }
+
+    private void LockPlayerLocomotion()
+    {
+        // Use MoveOnly mode to block walking/turning but keep Teleportation active
+        LocomotionLocker.Lock(LocomotionLocker.LockMode.MoveOnly, xrOriginOverride);
+
+        GameObject origin = xrOriginOverride;
+        if (origin == null)
+        {
+            var xr = FindAnyObjectByType<Unity.XR.CoreUtils.XROrigin>();
+            if (xr != null) origin = xr.gameObject;
+        }
+
+        if (origin != null)
+        {
+            var teleportProvider = origin.GetComponentInChildren<TeleportationProvider>(true);
+            if (teleportProvider != null)
+            {
+                teleportProvider.enabled = true;
+            }
+
+            _locomotionLocked = true;
+        }
+    }
+
+    private void UnlockLocomotion()
+    {
+        _locomotionLocked = false;
+        LocomotionLocker.Unlock();
+        Debug.Log("[DistancePerception] Locomotion unlocked.");
+    }
+
 
     private bool IsSessionPaused()
     {
@@ -106,11 +141,9 @@ public class DistancePerceptionUI : MonoBehaviour
             _minDistanceMetres = config.distance_MinDistanceMeters;
             _maxDistanceMetres = config.distance_MaxDistanceMeters;
             _actualDistance = config.distance_ActualDistanceMeters;
-            Debug.Log("[DistancePerception] Applied config parameters.");
         }
         else
         {
-            Debug.LogWarning("[DistancePerception] No config — using fallbacks.");
             _minDistanceMetres = 0f;
             _maxDistanceMetres = 100f;
             _stepAmount = 1f;
@@ -137,8 +170,7 @@ public class DistancePerceptionUI : MonoBehaviour
 
         if (instructionPanel != null) instructionPanel.SetActive(true);
 
-        SceneReadySignal.MarkReady();        
-        //ExperimentLogger.Log("instructions_shown", "Distance Perception instructions displayed");
+        SceneReadySignal.MarkReady();
     }
 
     private void OnStartTest()
@@ -146,6 +178,8 @@ public class DistancePerceptionUI : MonoBehaviour
         if (IsSessionPaused()) return;
 
         if (instructionPanel != null) instructionPanel.SetActive(false);
+
+        LocomotionLocker.Lock(LocomotionLocker.LockMode.MoveOnly, xrOriginOverride);
 
         _trialStartTime = Time.time;
         _experimentStartRealtime = Time.realtimeSinceStartup;
@@ -160,7 +194,6 @@ public class DistancePerceptionUI : MonoBehaviour
 
         ExperimentLogger.Log("trial_started", "Student began distance estimation");
     }
-
     private async void OnSubmit()
     {
         if (IsSessionPaused() || _submitted) return;
@@ -196,6 +229,8 @@ public class DistancePerceptionUI : MonoBehaviour
             (error < 2f
                 ? "Excellent distance estimation accuracy!"
                 : "Your estimate differed from the target position.");
+
+        UnlockLocomotion();
 
         if (_experimentLoader != null)
         {
@@ -302,8 +337,7 @@ public class DistancePerceptionUI : MonoBehaviour
 
     private void OnReturnHome()
     {
-        // Unlock before returning to hub
-        LocomotionLocker.Unlock();
+        UnlockLocomotion();
 
         if (_experimentLoader != null)
             _experimentLoader.ReturnToHub(hubReturnPosition);

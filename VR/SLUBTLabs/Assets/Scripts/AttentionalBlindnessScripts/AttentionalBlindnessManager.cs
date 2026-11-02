@@ -26,7 +26,6 @@ public class AttentionalBlindnessManager : MonoBehaviour
     public float fadeDelay = 8f;
     public float fadeDuration = 3f;
 
-
     [Header("Audio Distraction (Radio)")]
     [Tooltip("AudioSource on the Radio object. Leave empty to auto-find.")]
     public AudioSource radioAudioSource;
@@ -93,7 +92,6 @@ public class AttentionalBlindnessManager : MonoBehaviour
     // Audio state
     private AudioClip _chosenClip;
 
-
     private ContinuousMoveProvider _moveProvider;
     private ContinuousTurnProvider _turnProvider;
     private SnapTurnProvider _snapTurnProvider;
@@ -155,7 +153,6 @@ public class AttentionalBlindnessManager : MonoBehaviour
     {
         if (_locomotionLocked) return;
 
-        // Find the VR Player (XROrigin)
         GameObject origin = xrOriginOverride;
         Unity.XR.CoreUtils.XROrigin xr = null;
 
@@ -180,7 +177,6 @@ public class AttentionalBlindnessManager : MonoBehaviour
 
         DisableIfFound<ContinuousMoveProvider>(origin, "Move (thumbstick walk)");
         DisableIfFound<TeleportationProvider>(origin, "Teleportation");
-
         DisableIfFound<ContinuousTurnProvider>(origin, "ContinuousTurn (stick)");
         DisableIfFound<SnapTurnProvider>(origin, "SnapTurn (stick)");
 
@@ -243,7 +239,6 @@ public class AttentionalBlindnessManager : MonoBehaviour
         origin.transform.position = _lockedPosition;
     }
 
-
     private static GameObject FindChildRecursive(Transform parent, string name)
     {
         if (parent == null) return null;
@@ -279,7 +274,6 @@ public class AttentionalBlindnessManager : MonoBehaviour
             if (config.ab_FadeDelaySeconds > 0f) fadeDelay = config.ab_FadeDelaySeconds;
             if (config.ab_FadeDurationSeconds > 0f) fadeDuration = config.ab_FadeDurationSeconds;
 
-            // Audio config
             if (config.ab_AudioDelaySeconds > 0f)
                 audioDelay = config.ab_AudioDelaySeconds;
             useRandomAudioClip = config.ab_UseRandomAudioClip;
@@ -296,7 +290,9 @@ public class AttentionalBlindnessManager : MonoBehaviour
                       $"ab_AudioDelaySeconds={config.ab_AudioDelaySeconds}, " +
                       $"ab_UseRandomAudioClip={config.ab_UseRandomAudioClip}");
         }
-        LocomotionLocker.Lock(LocomotionLocker.LockMode.Full, xrOriginOverride);       
+
+        LocomotionLocker.Lock(LocomotionLocker.LockMode.Full, xrOriginOverride);
+
         if (radioAudioSource == null)
         {
             var radio = GameObject.Find("Radio");
@@ -318,18 +314,15 @@ public class AttentionalBlindnessManager : MonoBehaviour
             }
             else
             {
-                // 1. Prefer selection by name (from Firestore / web app)
                 string targetName = config != null ? config.ab_SpecificAudioClipName : null;
 
                 if (!string.IsNullOrEmpty(targetName))
                 {
                     targetName = targetName.Trim();
 
-                    // Exact match (case-insensitive)
                     _chosenClip = audioClips.Find(c =>
                         c != null && string.Equals(c.name, targetName, StringComparison.OrdinalIgnoreCase));
 
-                    // Partial match fallback
                     if (_chosenClip == null)
                     {
                         _chosenClip = audioClips.Find(c =>
@@ -337,17 +330,11 @@ public class AttentionalBlindnessManager : MonoBehaviour
                     }
 
                     if (_chosenClip != null)
-                    {
                         Debug.Log($"[AttentionalBlindness] Audio clip selected by name → '{_chosenClip.name}'");
-                    }
                     else
-                    {
-                        Debug.LogWarning($"[AttentionalBlindness] Could not find clip named '{targetName}'. " +
-                                         $"Available clips: {string.Join(", ", audioClips.ConvertAll(c => c != null ? c.name : "null"))}");
-                    }
+                        Debug.LogWarning($"[AttentionalBlindness] Could not find clip named '{targetName}'.");
                 }
 
-                // 2. Fallback to index if name was not found or not provided
                 if (_chosenClip == null)
                 {
                     int idx = Mathf.Clamp(specificAudioClipIndex, 0, audioClips.Count - 1);
@@ -358,11 +345,11 @@ public class AttentionalBlindnessManager : MonoBehaviour
         }
 
         if (_chosenClip != null)
-            Debug.Log($"[AttentionalBlindness] Final audio clip: '{_chosenClip.name}' (delay={audioDelay}s, random={useRandomAudioClip})");
+            Debug.Log($"[AttentionalBlindness] Final audio clip: '{_chosenClip.name}' (delay={audioDelay}s)");
         else
             Debug.LogWarning("[AttentionalBlindness] No audio clips available.");
 
-        // Build furniture list (recursive search so nested objects are found)
+        // Build furniture list
         if (config != null && config.ab_FurnitureList != null && config.ab_FurnitureList.Count > 0)
         {
             furnitureItems.Clear();
@@ -402,14 +389,12 @@ public class AttentionalBlindnessManager : MonoBehaviour
         else
         {
             string targetName = config?.ab_SpecificFadeTarget;
-            Debug.Log($"[AttentionalBlindness] Looking for specific fade target from Firestore: '{targetName}'");
+            Debug.Log($"[AttentionalBlindness] Looking for specific fade target: '{targetName}'");
 
             if (!string.IsNullOrEmpty(targetName))
             {
-                // exact
                 _fadeTarget = furnitureItems.Find(f => f.name == targetName);
 
-                // tolerant
                 if (_fadeTarget == null)
                 {
                     _fadeTarget = furnitureItems.Find(f =>
@@ -417,14 +402,9 @@ public class AttentionalBlindnessManager : MonoBehaviour
                 }
 
                 if (_fadeTarget == null)
-                {
-                    Debug.LogError($"[AttentionalBlindness] '{targetName}' not in loaded list. " +
-                                   $"Available: {string.Join(", ", furnitureItems.ConvertAll(f => f.name))}");
-                }
+                    Debug.LogError($"[AttentionalBlindness] '{targetName}' not in loaded list.");
                 else
-                {
                     Debug.Log($"[AttentionalBlindness] Matched specific target → '{_fadeTarget.name}'");
-                }
             }
 
             if (_fadeTarget == null)
@@ -464,8 +444,7 @@ public class AttentionalBlindnessManager : MonoBehaviour
         if (instructionPanel != null) instructionPanel.SetActive(true);
         LockLocomotion();
         ExperimentLogger.Log("instructions_shown", "Attentional Blindness instructions displayed");
-
-        SceneReadySignal.MarkReady();    
+        SceneReadySignal.MarkReady();
     }
 
     private void OnStartCounting()
@@ -482,7 +461,7 @@ public class AttentionalBlindnessManager : MonoBehaviour
 
         ShowCountInput();
         StartCoroutine(FadeOutAfterDelay());
-        StartCoroutine(PlayAudioAfterDelay());          
+        StartCoroutine(PlayAudioAfterDelay());
     }
 
     private void ShowCountInput()
@@ -518,9 +497,6 @@ public class AttentionalBlindnessManager : MonoBehaviour
         ExperimentLogger.Log("fade_completed", $"'{_fadeTarget.name}' fully faded");
     }
 
-    // ─────────────────────────────────────────────
-    // NEW: Audio playback
-    // ─────────────────────────────────────────────
     private IEnumerator PlayAudioAfterDelay()
     {
         if (_chosenClip == null || radioAudioSource == null) yield break;
@@ -547,7 +523,6 @@ public class AttentionalBlindnessManager : MonoBehaviour
         radioAudioSource.volume = audioVolume;
         radioAudioSource.Play();
 
-
         ExperimentLogger.Log("audio_started",
             $"Radio started playing '{_chosenClip.name}' after {audioDelay:F1}s",
             new Dictionary<string, object>
@@ -562,9 +537,7 @@ public class AttentionalBlindnessManager : MonoBehaviour
     private void StopRadioSound()
     {
         if (radioAudioSource != null && radioAudioSource.isPlaying)
-        {
             radioAudioSource.Stop();
-        }
     }
 
     private void OnSubmitCount()
@@ -604,7 +577,6 @@ public class AttentionalBlindnessManager : MonoBehaviour
         _noticedAnomaly = noticed;
         _trialComplete = true;
 
-        // Stop the radio when the trial ends
         StopRadioSound();
 
         if (awarenessPanel != null) awarenessPanel.SetActive(false);
@@ -636,7 +608,7 @@ public class AttentionalBlindnessManager : MonoBehaviour
             $"Actual count:     {_actualCount}\n" +
             $"Accuracy:         {countAccuracy}\n\n" +
             $"Noticed anomaly:  {(_noticedAnomaly ? "Yes" : "No")}\n" +
-            $"Faded item:       {fadedName}\n\n" +
+            $"Disappeared item:       {fadedName}\n\n" +
             (_noticedAnomaly
                 ? "You noticed the furniture item fading —\nyour attention was broadly distributed."
                 : "You did not notice the fading item.\nThis is the inattentional blindness effect.");
@@ -655,7 +627,7 @@ public class AttentionalBlindnessManager : MonoBehaviour
     }
 
     // ─────────────────────────────────────────────
-    // Fade (no black shadow spot)
+    // Fade (no blue/green flash)
     // ─────────────────────────────────────────────
     private void CacheRenderers(GameObject target)
     {
@@ -663,21 +635,28 @@ public class AttentionalBlindnessManager : MonoBehaviour
         _originalAlphas.Clear();
 
         Renderer[] renderers = target.GetComponentsInChildren<Renderer>(true);
+
         foreach (Renderer r in renderers)
         {
+            // Create material instances
+            Material[] mats = r.materials;
+
+            for (int i = 0; i < mats.Length; i++)
+            {
+                if (mats[i] != null)
+                    MakeMaterialTransparent(mats[i]);
+            }
+
+            r.materials = mats;
             r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             r.receiveShadows = false;
 
             _fadeTargetRenderers.Add(new Renderer[] { r });
 
-            float[] alphas = new float[r.materials.Length];
-            for (int i = 0; i < r.materials.Length; i++)
+            float[] alphas = new float[mats.Length];
+            for (int i = 0; i < mats.Length; i++)
             {
-                Material mat = r.materials[i];
-                SetMaterialTransparent(mat);
-                alphas[i] = mat.HasProperty("_BaseColor")
-                    ? mat.GetColor("_BaseColor").a
-                    : mat.color.a;
+                alphas[i] = GetAlpha(mats[i]);
             }
             _originalAlphas.Add(alphas);
         }
@@ -686,44 +665,101 @@ public class AttentionalBlindnessManager : MonoBehaviour
             col.enabled = false;
     }
 
+    private void MakeMaterialTransparent(Material mat)
+    {
+        if (mat.HasProperty("_Surface"))
+        {
+            // URP Lit / Simple Lit
+            mat.SetFloat("_Surface", 1f);                       // Transparent
+            mat.SetFloat("_Blend", 0f);                         // Alpha
+            mat.SetOverrideTag("RenderType", "Transparent");
+            mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            mat.SetInt("_ZWrite", 0);
+            mat.DisableKeyword("_ALPHATEST_ON");
+            mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            mat.DisableKeyword("_SURFACE_TYPE_OPAQUE");
+            mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+        }
+        else
+        {
+            // Built-in / other
+            mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            mat.SetInt("_ZWrite", 0);
+            mat.DisableKeyword("_ALPHATEST_ON");
+            mat.EnableKeyword("_ALPHABLEND_ON");
+            mat.renderQueue = 3000;
+        }
+    }
+
+    private float GetAlpha(Material mat)
+    {
+        if (mat == null) return 1f;
+        if (mat.HasProperty("_BaseColor"))
+            return mat.GetColor("_BaseColor").a;
+        if (mat.HasProperty("_Color"))
+            return mat.GetColor("_Color").a;
+        return mat.color.a;
+    }
+
+    private void SetAlpha(Material mat, float alpha)
+    {
+        if (mat == null) return;
+
+        if (mat.HasProperty("_BaseColor"))
+        {
+            Color c = mat.GetColor("_BaseColor");
+            c.a = alpha;
+            mat.SetColor("_BaseColor", c);
+        }
+        else if (mat.HasProperty("_Color"))
+        {
+            Color c = mat.GetColor("_Color");
+            c.a = alpha;
+            mat.SetColor("_Color", c);
+        }
+        else
+        {
+            Color c = mat.color;
+            c.a = alpha;
+            mat.color = c;
+        }
+    }
+
     private IEnumerator FadeOut()
     {
         if (_fadeTarget == null) yield break;
 
+        // Convert to transparent first
         CacheRenderers(_fadeTarget);
+
+        // Let the material change settle (removes the blue/green flash)
+        yield return null;
 
         float elapsed = 0f;
         while (elapsed < fadeDuration)
         {
             yield return WaitWhilePaused();
             elapsed += Time.deltaTime;
-            float alpha = Mathf.Lerp(1f, 0f, elapsed / fadeDuration);
+            float t = Mathf.Clamp01(elapsed / fadeDuration);
+            float alpha = Mathf.Lerp(1f, 0f, t);
 
             for (int i = 0; i < _fadeTargetRenderers.Count; i++)
             {
                 Renderer r = _fadeTargetRenderers[i][0];
                 if (r == null) continue;
 
-                for (int j = 0; j < r.materials.Length; j++)
+                foreach (Material mat in r.materials)
                 {
-                    Material mat = r.materials[j];
-                    if (mat.HasProperty("_BaseColor"))
-                    {
-                        Color c = mat.GetColor("_BaseColor");
-                        c.a = alpha;
-                        mat.SetColor("_BaseColor", c);
-                    }
-                    else
-                    {
-                        Color c = mat.color;
-                        c.a = alpha;
-                        mat.color = c;
-                    }
+                    if (mat != null)
+                        SetAlpha(mat, alpha);
                 }
             }
             yield return null;
         }
 
+        // Final clean-up
         if (_fadeTarget != null)
         {
             foreach (var group in _fadeTargetRenderers)
@@ -733,21 +769,6 @@ public class AttentionalBlindnessManager : MonoBehaviour
             }
             _fadeTarget.SetActive(false);
         }
-    }
-
-    private void SetMaterialTransparent(Material mat)
-    {
-        if (mat.HasProperty("_Surface"))
-            mat.SetFloat("_Surface", 1);
-        if (mat.HasProperty("_Blend"))
-            mat.SetFloat("_Blend", 0);
-
-        mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-        mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-        mat.SetInt("_ZWrite", 0);
-        mat.DisableKeyword("_ALPHATEST_ON");
-        mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-        mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
     }
 
     // ─────────────────────────────────────────────
@@ -804,8 +825,6 @@ public class AttentionalBlindnessManager : MonoBehaviour
                     { "fadedItemName", _fadeTarget != null ? _fadeTarget.name : "" },
                     { "instructionText", config != null ? config.ab_InstructionText ?? "" : "" },
                     { "awarenessQuestionText", config != null ? config.ab_AwarenessQuestionText ?? "" : "" },
-
-                    // NEW audio fields
                     { "audioDelaySeconds", audioDelay },
                     { "useRandomAudioClip", useRandomAudioClip },
                     { "specificAudioClipIndex", specificAudioClipIndex },
@@ -852,7 +871,6 @@ public class AttentionalBlindnessManager : MonoBehaviour
             };
 
             await db.Collection("experimentResults").AddAsync(doc);
-
             Debug.Log($"[AttentionalBlindness] Saved (duration={durationDisplay}, progressId={progressId})");
 
             ExperimentLogger.Log("experiment_completed",

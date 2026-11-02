@@ -420,7 +420,7 @@ public class ExperimentLoader : MonoBehaviour
         SceneReadySignal.Reset();
 
         if (loadingText != null) loadingText.text = "Loading Experiment…";
-        yield return StartCoroutine(EnterLoadingScreen());   // slow fade to black, then logo
+        yield return StartCoroutine(EnterLoadingScreen());  
 
         AsyncOperation load = SceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Additive);
         if (load == null)
@@ -461,7 +461,7 @@ public class ExperimentLoader : MonoBehaviour
         if (spawnPoint != null && xrOrigin != null)
             TeleportPlayerToTransform(spawnPoint.transform);
 
-        PlaceLoadingScreenInFront();              // re-place the canvas at the NEW position
+        PlaceLoadingScreenInFront();             
 
         // Lock continuous movement, but allow teleport until
         // Begin Experiment is pressed.
@@ -492,7 +492,7 @@ public class ExperimentLoader : MonoBehaviour
             waited += Time.unscaledDeltaTime;
             yield return null;
         }
-        yield return null;                        // let a couple of frames settle
+        yield return null;                        
         yield return null;
 
         yield return StartCoroutine(RevealWorld());
@@ -506,7 +506,7 @@ public class ExperimentLoader : MonoBehaviour
         if (loadingText != null)
             loadingText.text = "Returning…";
 
-        yield return StartCoroutine(EnterLoadingScreen());   // slow fade to black, then logo
+        yield return StartCoroutine(EnterLoadingScreen()); 
 
         // Stop the LiveKit publisher before unloading the experiment.
         if (livePublisher != null)

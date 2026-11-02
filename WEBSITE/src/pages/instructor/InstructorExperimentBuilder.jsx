@@ -57,7 +57,7 @@ const CONFIGURATION_ORDER = {
   ],
 
   Memory2: [
-    "memory_BriefingText",
+    "memory2_BriefingText",
     "memory_DistractorInstructionText",
     "memory_DistractorTaskDuration",
     "memory_RandomizeQuestions",
@@ -90,6 +90,7 @@ const CONFIGURATION_ORDER = {
     "oddItem_SelectedTarget",
     // "oddItem_RaycastDistance",
     "oddItem_SearchTimeLimitSeconds",
+    "oddItem_RepeatLayout",
   ],
 };
 
@@ -151,6 +152,7 @@ const formatConfigLabel = (key) => {
   label = label
     .replace(/^ab /i, "")
     .replace(/^depth /i, "")
+    .replace(/^memory2 /i, "")
     .replace(/^memory /i, "")
     .replace(/^oddItem /i, "")
     .replace(/^odd item /i, "");
@@ -1052,6 +1054,7 @@ export default function InstructorExperimentBuilder() {
                           <div className="flex items-center justify-between mb-4">
                             <span className="font-semibold text-gray-700 text-sm">
                               Target #{targetIdx + 1}
+                              {target.objectName ? ` – ${target.objectName}` : ""}
                             </span>
                             <button
                               type="button"
@@ -1197,7 +1200,10 @@ if (
                   key === "distance_MaxDistanceMeters" ||
                   key === "globalInstructionDelay" ||
                   key === "ab_AvailableAudioClips" ||
-                  key === "ab_SpecificAudioClipIndex"
+                  key === "ab_SpecificAudioClipIndex"||
+                  key === "memory_RoomInstructionText" ||    
+                  key === "memory2_RoomInstructionText"  ||
+                  key === "oddItem_RaycastDistance"          
                 ) {
                   return null;
                 }
@@ -1519,7 +1525,7 @@ if (
                         )
                       }
                     />
-                    {vrId} {device.status ? `(${device.status})` : ""}
+                    {vrId} {""}
                   </label>
                 );
               })}

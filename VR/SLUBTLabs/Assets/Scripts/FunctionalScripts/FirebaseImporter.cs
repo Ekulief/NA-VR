@@ -4,69 +4,125 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
 
-public class AttentionalBlindnessConfigImporter : MonoBehaviour
+public class LogCleanupManager : MonoBehaviour
 {
-    [Header("Firestore")]
-    public string collection = "experimentModule";
-    public string documentId = "Attentional_Blindness";
-
-    [Header("Furniture (exact Hierarchy names)")]
-    public List<string> furnitureList = new List<string>
-    {
-        "Kitchen Exhaust",
-        "Sofa at Front",
-        "Right Stool",
-        "Back Drawer",
-        "Back Table",
-        "Stop Sign",
-        "Left Sink",
-        "Right Drawer"
-    };
-
-    public string specificFadeTarget = "Sofa at Front";
-    public bool useRandomFadeTarget = true;
+    [Header("Firestore Collections")]
+    public string logsCollection = "logs";
+    public string resultsCollection = "experimentResults";
 
     [Header("Settings")]
-    public bool runOnStart = true;   // ← set to false if you only want manual runs later
+    public bool runOnStart = false;
+
+    [Header("Safety Limit")]
+    [Tooltip("Maximum documents to delete in a single execution to prevent performance spikes.")]
+    public int batchLimit = 500;
 
     private async void Start()
     {
         if (runOnStart)
-            await WriteToFirebase();
+        {
+            await Task.Delay(2000); // Slight delay for smooth scene startup
+            await DeleteLogsWithinLastMonth();
+        }
     }
 
-    [ContextMenu("Write Furniture List to Firebase")]
-    public async void WriteToFirebaseMenu()
+    [ContextMenu("Delete Logs Within Last Month")]
+    public async void DeleteRecentLogsMenu()
     {
-        await WriteToFirebase();
+        await DeleteLogsWithinLastMonth();
     }
 
-    public async Task WriteToFirebase()
+    [ContextMenu("Delete Results Within Last Week")]
+    public async void DeleteRecentResultsMenu()
+    {
+        await DeleteResultsWithinLastWeek();
+    }
+
+    public async Task DeleteLogsWithinLastMonth()
     {
         FirebaseFirestore db = FirebaseFirestore.DefaultInstance;
-        DocumentReference docRef = db.Collection(collection).Document(documentId);
 
-        // Write inside the nested "defaultConfig" map
-        var defaultConfig = new Dictionary<string, object>
-        {
-            { "ab_FurnitureList", furnitureList },
-            { "ab_SpecificFadeTarget", specificFadeTarget },
-            { "ab_UseRandomFadeTarget", useRandomFadeTarget }
-        };
+        // Calculate the threshold date (1 month / 30 days ago) in UTC ISO format
+        DateTime thresholdDate = DateTime.UtcNow.AddMonths(-1);
+        string thresholdString = thresholdDate.ToString("o");
 
-        var data = new Dictionary<string, object>
-        {
-            { "defaultConfig", defaultConfig }
-        };
+        Debug.Log($"[Cleanup] Querying logs created from {thresholdString} onward (within the last month)...");
 
         try
         {
-            await docRef.SetAsync(data, SetOptions.MergeAll);
-            Debug.Log($"[Importer] Wrote {furnitureList.Count} furniture items into defaultConfig. Target = '{specificFadeTarget}'");
+            Query query = db.Collection(logsCollection)
+                            .WhereGreaterThanOrEqualTo("timestamp", thresholdString)
+                            .Limit(batchLimit);
+
+            QuerySnapshot snapshot = await query.GetSnapshotAsync();
+
+            if (snapshot.Count == 0)
+            {
+                Debug.Log("[Cleanup] No logs found within the last month.");
+                return;
+            }
+
+            Debug.Log($"[Cleanup] Found {snapshot.Count} recent log(s) to delete. Processing...");
+
+            WriteBatch batch = db.StartBatch();
+            int totalDeleted = 0;
+
+            foreach (DocumentSnapshot doc in snapshot.Documents)
+            {
+                batch.Delete(doc.Reference);
+                totalDeleted++;
+            }
+
+            await batch.CommitAsync();
+            Debug.Log($"[Cleanup] Successfully deleted {totalDeleted} logs from the last month.");
         }
         catch (Exception ex)
         {
-            Debug.LogError($"[Importer] Failed: {ex}");
+            Debug.LogError($"[Cleanup] Failed to delete recent logs: {ex}");
+        }
+    }
+
+    public async Task DeleteResultsWithinLastWeek()
+    {
+        FirebaseFirestore db = FirebaseFirestore.DefaultInstance;
+
+        // Calculate the threshold date (1 week / 7 days ago) in UTC ISO format
+        DateTime thresholdDate = DateTime.UtcNow.AddDays(-7);
+        string thresholdString = thresholdDate.ToString("o");
+
+        Debug.Log($"[Cleanup] Querying results created from {thresholdString} onward (within the last week)...");
+
+        try
+        {
+            Query query = db.Collection(resultsCollection)
+                            .WhereGreaterThanOrEqualTo("timestamp", thresholdString)
+                            .Limit(batchLimit);
+
+            QuerySnapshot snapshot = await query.GetSnapshotAsync();
+
+            if (snapshot.Count == 0)
+            {
+                Debug.Log("[Cleanup] No results found within the last week.");
+                return;
+            }
+
+            Debug.Log($"[Cleanup] Found {snapshot.Count} recent result(s) to delete. Processing...");
+
+            WriteBatch batch = db.StartBatch();
+            int totalDeleted = 0;
+
+            foreach (DocumentSnapshot doc in snapshot.Documents)
+            {
+                batch.Delete(doc.Reference);
+                totalDeleted++;
+            }
+
+            await batch.CommitAsync();
+            Debug.Log($"[Cleanup] Successfully deleted {totalDeleted} results from the last week.");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"[Cleanup] Failed to delete recent results: {ex}");
         }
     }
 }

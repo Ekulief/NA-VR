@@ -25,6 +25,10 @@ public class OddItemManager : MonoBehaviour
     [Header("Shuffle")]
     public bool shuffleItems = true;
 
+    [Header("Layout")]
+    [Tooltip("Max seconds to wait for LayoutManager to finish deciding/applying the layout.")]
+    public float layoutWaitTimeout = 8f;
+
     [Header("UI — Instruction Panel")]
     public GameObject instructionPanel;
     public TMP_Text instructionText;
@@ -68,10 +72,7 @@ public class OddItemManager : MonoBehaviour
             triggerAction.action.performed -= OnTriggerPressed;
     }
 
-    private void Awake()
-    {
-        // Shuffle is now decided later (after LayoutManager is ready)
-    }
+    private void Awake() { }
 
     private void Start()
     {
@@ -115,11 +116,29 @@ public class OddItemManager : MonoBehaviour
 
     private IEnumerator InitialiseAfterSpawn()
     {
-        yield return null; // wait one frame so LayoutManager.Start has run
+        yield return null;
+
+        // Wait until LayoutManager has FINISHED deciding (and applying) the layout.
+        // A fixed two-frame wait raced with it: if the saved layout was applied after
+        // this method had already set up the items, the replacement items had no
+        // selection listeners and the target reference pointed at a destroyed object.
+        if (LayoutManager.Instance != null)
+        {
+            float waitedForLayout = 0f;
+            while (!LayoutManager.Instance.IsReady && waitedForLayout < layoutWaitTimeout)
+            {
+                waitedForLayout += Time.unscaledDeltaTime;
+                yield return null;
+            }
+
+            if (!LayoutManager.Instance.IsReady)
+                Debug.LogWarning("[OddItemDetection] LayoutManager did not finish in time; continuing with a normal layout.");
+        }
 
         bool replaying = LayoutManager.Instance != null && LayoutManager.Instance.IsReplaying;
 
-        // ── Shuffle only when NOT replaying ────────────────────────────────
+        // inside InitialiseAfterSpawn, in the shuffle block:
+
         if (!replaying && shuffleItems)
         {
             ShelfSpawner[] shelves = FindObjectsByType<ShelfSpawner>(FindObjectsSortMode.None);
@@ -143,7 +162,6 @@ public class OddItemManager : MonoBehaviour
                     bool bulky = shelf.distractorPrefabs.Count > 0 &&
                         shelf.distractorPrefabs.TrueForAll(p =>
                             p != null && (p.name.Contains("Beer") || p.name.Contains("Box") || p.name.Contains("Bread")));
-
                     if (bulky)
                     {
                         shelf.useConfigGrid = false;
@@ -153,42 +171,56 @@ public class OddItemManager : MonoBehaviour
                     }
                 }
 
-                Debug.Log("[OddItemDetection] Shelf categories shuffled between shelves.");
+                foreach (var shelf in shelves)
+                    shelf.RespawnShelf();
+
+                Debug.Log("[OddItemDetection] Shelf categories shuffled and respawned.");
             }
         }
+
+        bool replaySucceeded = false;
 
         if (replaying)
         {
-            // Layout already applied by LayoutManager – recover the target
             var snap = LayoutManager.Instance.GetCurrentLayout();
-            if (snap == null)
+
+            if (snap != null)
             {
-                Debug.LogError("[OddItemDetection] Replay mode but no layout snapshot.");
-                yield break;
+                _chosenOddItemPrefab = oddItemPrefabs.Find(p =>
+                    p != null && p.name.Equals(snap.chosenOddItem, StringComparison.OrdinalIgnoreCase));
+
+                yield return new WaitForSeconds(0.1f);
+
+                _targetInstance = GameObject.FindGameObjectsWithTag("SpawnedItem")
+                    .FirstOrDefault(go => go.name.Replace("(Clone)", "").Trim()
+                        .Equals(snap.chosenOddItem, StringComparison.OrdinalIgnoreCase));
+
+                if (_targetInstance != null && _chosenOddItemPrefab != null)
+                {
+                    replaySucceeded = true;
+                    Debug.Log($"[OddItemDetection] Replay mode – using saved target '{snap.chosenOddItem}'");
+                }
+                else
+                {
+                    Debug.LogWarning($"[OddItemDetection] Replay failed to locate target '{snap.chosenOddItem}'. Falling back to normal spawn.");
+                }
             }
-
-            _chosenOddItemPrefab = oddItemPrefabs.Find(p =>
-                p != null && p.name.Equals(snap.chosenOddItem, StringComparison.OrdinalIgnoreCase));
-
-            _targetInstance = GameObject.FindGameObjectsWithTag("SpawnedItem")
-                .FirstOrDefault(go => go.name.Replace("(Clone)", "").Trim()
-                    .Equals(snap.chosenOddItem, StringComparison.OrdinalIgnoreCase));
-
-            if (_targetInstance == null)
+            else
             {
-                Debug.LogError($"[OddItemDetection] Could not locate replayed target '{snap.chosenOddItem}'.");
-                yield break;
+                Debug.LogWarning("[OddItemDetection] Replay mode but no layout snapshot. Falling back to normal spawn.");
             }
-
-            Debug.Log($"[OddItemDetection] Replay mode – using saved target '{snap.chosenOddItem}'");
         }
-        else
+
+        // ── Normal path (also used as fallback) ────────────────────────────
+        if (!replaySucceeded)
         {
-            // ── Normal random / config path ────────────────────────────────
             if (oddItemPrefabs == null || oddItemPrefabs.Count == 0)
             {
                 Debug.LogError("[OddItemDetection] oddItemPrefabs list is empty!");
                 ExperimentLogger.Log("error", "oddItemPrefabs list is empty");
+                SceneReadySignal.MarkReady();
+                yield return new WaitForSeconds(_instructionDelay);
+                ShowInstructions();
                 yield break;
             }
 
@@ -200,6 +232,9 @@ public class OddItemManager : MonoBehaviour
             {
                 Debug.LogError("[OddItemDetection] No ShelfSpawners found in scene!");
                 ExperimentLogger.Log("error", "No ShelfSpawners found in scene");
+                SceneReadySignal.MarkReady();
+                yield return new WaitForSeconds(_instructionDelay);
+                ShowInstructions();
                 yield break;
             }
 
@@ -219,21 +254,44 @@ public class OddItemManager : MonoBehaviour
             {
                 Debug.LogError("[OddItemDetection] Target injection failed!");
                 ExperimentLogger.Log("error", "Target injection failed");
+                SceneReadySignal.MarkReady();
+                yield return new WaitForSeconds(_instructionDelay);
+                ShowInstructions();
                 yield break;
             }
 
             Debug.Log($"[OddItemDetection] '{_chosenOddItemPrefab.name}' injected on " +
                       $"'{chosenShelf.gameObject.name}' at {_targetInstance.transform.position}");
 
-            LayoutManager.Instance?.CaptureLayout(_targetInstance, _chosenOddItemPrefab);
+            // Only capture when we may need to save later
+            if (config != null && config.oddItem_RepeatLayout)
+                LayoutManager.Instance?.CaptureLayout(_targetInstance, _chosenOddItemPrefab);
         }
 
-        // Common for both paths
+        // ── Common for both paths ──────────────────────────────────────────
         _rightControllerTransform = FindRightController();
+
+        if (replaying)
+            yield return new WaitForSeconds(0.15f);
+
         CollectSpawnedItems();
 
+        if (_allSpawnedItems.Count == 0)
+        {
+            yield return new WaitForSeconds(0.2f);
+            CollectSpawnedItems();
+        }
+
         foreach (GameObject item in _allSpawnedItems)
+        {
+            if (!item.CompareTag("SpawnedItem"))
+                item.tag = "SpawnedItem";
+
             SetupInteractable(item);
+        }
+
+        Debug.Log($"[OddItemDetection] Interactables set up on {_allSpawnedItems.Count} items. " +
+                  $"Target = '{(_targetInstance != null ? _targetInstance.name : "null")}'");
 
         SceneReadySignal.MarkReady();
 
@@ -245,23 +303,6 @@ public class OddItemManager : MonoBehaviour
     {
         ExperimentConfig cfg = config != null ? config : ExperimentConfigLoader.Current;
 
-        Debug.Log($"[OddItemDetection Debug] --- Starting Target Resolution ---");
-        Debug.Log($"[OddItemDetection Debug] cfg is null? {cfg == null}");
-        if (cfg != null)
-        {
-            Debug.Log($"[OddItemDetection Debug] cfg.oddItem_SelectedTarget from Firestore: '{cfg.oddItem_SelectedTarget}'");
-            Debug.Log($"[OddItemDetection Debug] cfg.oddItem_RandomizeTarget: {cfg.oddItem_RandomizeTarget}");
-        }
-
-        Debug.Log($"[OddItemDetection Debug] Total oddItemPrefabs loaded in Inspector: {oddItemPrefabs.Count}");
-        for (int i = 0; i < oddItemPrefabs.Count; i++)
-        {
-            if (oddItemPrefabs[i] != null)
-                Debug.Log($"[OddItemDetection Debug] Prefab [{i}]: '{oddItemPrefabs[i].name}'");
-            else
-                Debug.Log($"[OddItemDetection Debug] Prefab [{i}]: NULL");
-        }
-
         if (cfg != null && !string.IsNullOrEmpty(cfg.oddItem_SelectedTarget))
         {
             GameObject match = oddItemPrefabs.Find(p =>
@@ -270,12 +311,8 @@ public class OddItemManager : MonoBehaviour
 
             if (match != null)
             {
-                Debug.Log($"[OddItemDetection Debug] SUCCESS: Found matching prefab for explicit target: '{match.name}'");
+                Debug.Log($"[OddItemDetection] Using explicit target: '{match.name}'");
                 return match;
-            }
-            else
-            {
-                Debug.LogWarning($"[OddItemDetection Debug] WARNING: Explicit target '{cfg.oddItem_SelectedTarget}' did NOT match any prefab name!");
             }
         }
 
@@ -294,19 +331,16 @@ public class OddItemManager : MonoBehaviour
             if (pool.Count > 0)
             {
                 GameObject random = pool[UnityEngine.Random.Range(0, pool.Count)];
-                Debug.Log($"[OddItemDetection Debug] SUCCESS: Randomized target chosen: '{random.name}'");
+                Debug.Log($"[OddItemDetection] Randomized target: '{random.name}'");
                 return random;
             }
         }
 
         int index = Mathf.Clamp(selectedOddItemIndex, 0, oddItemPrefabs.Count - 1);
         if (oddItemPrefabs.Count > 0 && oddItemPrefabs[index] != null)
-        {
-            Debug.Log($"[OddItemDetection Debug] FALLBACK: Using inspector index {index} ('{oddItemPrefabs[index].name}')");
             return oddItemPrefabs[index];
-        }
 
-        Debug.LogError("[OddItemDetection Debug] CRITICAL: No valid target could be resolved!");
+        Debug.LogError("[OddItemDetection] No valid target could be resolved!");
         return null;
     }
 
@@ -325,16 +359,51 @@ public class OddItemManager : MonoBehaviour
 
     private void SetupInteractable(GameObject item)
     {
+        if (item == null) return;
+
         XRSimpleInteractable interactable = item.GetComponent<XRSimpleInteractable>();
-        if (interactable == null) return;
+        if (interactable == null)
+            interactable = item.GetComponentInChildren<XRSimpleInteractable>();
+
+        if (interactable == null)
+        {
+            // Add one if the replayed prefab didn’t have it
+            interactable = item.AddComponent<XRSimpleInteractable>();
+        }
 
         Collider col = item.GetComponentInChildren<Collider>();
-        if (col == null) return;
+        if (col == null)
+        {
+            Debug.LogWarning($"[OddItemDetection] No collider on '{item.name}' – cannot select it.");
+            return;
+        }
 
         if (!interactable.colliders.Contains(col))
             interactable.colliders.Add(col);
 
+        // Avoid stacking listeners on repeated setups
+        interactable.selectEntered.RemoveAllListeners();
         interactable.selectEntered.AddListener((args) => OnItemSelected(item));
+    }
+
+    // Re-collects the items, re-hooks selection, and re-finds the target if its object was replaced.
+    private void RefreshInteractables()
+    {
+        CollectSpawnedItems();
+
+        if (_targetInstance == null && _chosenOddItemPrefab != null)
+        {
+            _targetInstance = _allSpawnedItems.FirstOrDefault(go => go != null &&
+                go.name.Replace("(Clone)", "").Trim()
+                    .Equals(_chosenOddItemPrefab.name, StringComparison.OrdinalIgnoreCase));
+
+            Debug.LogWarning(_targetInstance != null
+                ? "[OddItemDetection] Target reference was stale; recovered it."
+                : "[OddItemDetection] Target reference is missing and could not be recovered.");
+        }
+
+        foreach (GameObject item in _allSpawnedItems)
+            SetupInteractable(item);
     }
 
     private void CollectSpawnedItems()
@@ -365,6 +434,9 @@ public class OddItemManager : MonoBehaviour
 
         if (instructionPanel != null)
             instructionPanel.SetActive(false);
+
+        // Safety net: make sure every item is clickable and the target reference is valid
+        RefreshInteractables();
 
         _trialStartTime = Time.time;
         _experimentStartRealtime = Time.realtimeSinceStartup;
@@ -401,7 +473,10 @@ public class OddItemManager : MonoBehaviour
                 $"Search time: {_searchTimeLimit:F0}s (limit reached)\n\n" +
                 $"The odd item was not found in time.";
 
-            LayoutManager.Instance?.SaveSession(_searchTimeLimit, foundItem: false);
+            // Only save when Repeat Layout is on
+            if (config != null && config.oddItem_RepeatLayout)
+                LayoutManager.Instance?.SaveSession(_searchTimeLimit, foundItem: false);
+
             SaveResultsToFirestore(_searchTimeLimit, false);
 
             var loader = FindAnyObjectByType<ExperimentLoader>();
@@ -473,7 +548,10 @@ public class OddItemManager : MonoBehaviour
             $"Search time: {_foundTime:F1}s\n\n" +
             $"The odd item was the {_chosenOddItemPrefab.name}.";
 
-        LayoutManager.Instance?.SaveSession(_foundTime, foundItem: true);
+        // Only save when Repeat Layout is on
+        if (config != null && config.oddItem_RepeatLayout)
+            LayoutManager.Instance?.SaveSession(_foundTime, foundItem: true);
+
         SaveResultsToFirestore(_foundTime, true);
 
         var loader = FindAnyObjectByType<ExperimentLoader>();

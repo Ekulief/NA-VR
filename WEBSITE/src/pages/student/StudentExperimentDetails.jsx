@@ -165,6 +165,7 @@ export default function StudentExperimentDetails() {
     "abfurniturelist",
     "abavailableaudioclips",
     "abspecificaudioclipindex",
+    "odditemraycastdistance",
   ]);
 
   const filterConfiguration = (value) => {

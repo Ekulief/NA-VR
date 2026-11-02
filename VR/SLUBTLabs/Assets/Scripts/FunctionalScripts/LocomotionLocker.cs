@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Movement;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
-using UnityEngine.XR.Interaction.Toolkit.Interactors; // Added for XRI Interactors
+using UnityEngine.XR.Interaction.Toolkit.Interactors; 
 
 public class ExperimentLocomotionController : MonoBehaviour
 {

@@ -91,6 +91,14 @@ public class ShelfSpawner : MonoBehaviour
 
     public bool HasTarget() => targetPrefab != null;
 
+    /// <summary>The odd item on this shelf, or null if the target is on another shelf.</summary>
+    public GameObject GetTargetInstance()
+    {
+        if (_targetSlotIndex >= 0 && _targetSlotIndex < _spawnedItems.Count)
+            return _spawnedItems[_targetSlotIndex];
+        return null;
+    }
+
     public Vector3 GetTargetPosition()
     {
         if (_targetSlotIndex >= 0 && _targetSlotIndex < _spawnedItems.Count)
@@ -152,11 +160,16 @@ public class ShelfSpawner : MonoBehaviour
                 OddItemManager mgr = FindAnyObjectByType<OddItemManager>();
                 if (mgr != null)
                     prefab = mgr.oddItemPrefabs.Find(p =>
-                        p.name == itemSnap.prefabName);
+                        p != null && p.name == itemSnap.prefabName);
             }
             else
             {
-                prefab = distractorPrefabs.Find(p => p.name == itemSnap.prefabName);
+                prefab = distractorPrefabs.Find(p => p != null && p.name == itemSnap.prefabName);
+
+                // Shelf item lists are shuffled per session, so the saved prefab may now
+                // belong to another shelf's list. Look everywhere before giving up.
+                if (prefab == null)
+                    prefab = FindPrefabOnAnyShelf(itemSnap.prefabName);
             }
 
             if (prefab == null)
@@ -181,6 +194,16 @@ public class ShelfSpawner : MonoBehaviour
 
         Debug.Log($"[ShelfSpawner] Snapshot applied to '{gameObject.name}' — " +
                   $"{_spawnedItems.Count} items reconstructed.");
+    }
+
+    private static GameObject FindPrefabOnAnyShelf(string prefabName)
+    {
+        foreach (ShelfSpawner shelf in FindObjectsByType<ShelfSpawner>(FindObjectsSortMode.None))
+        {
+            GameObject match = shelf.distractorPrefabs.Find(p => p != null && p.name == prefabName);
+            if (match != null) return match;
+        }
+        return null;
     }
 
     // ── Spawning ──────────────────────────────────────────────────────────────
