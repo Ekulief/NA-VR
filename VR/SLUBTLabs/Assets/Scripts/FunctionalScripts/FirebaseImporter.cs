@@ -9,6 +9,7 @@ public class LogCleanupManager : MonoBehaviour
     [Header("Firestore Collections")]
     public string logsCollection = "logs";
     public string resultsCollection = "experimentResults";
+    public string progressCollection = "experimentProgress";
 
     [Header("Settings")]
     public bool runOnStart = false;
@@ -38,11 +39,16 @@ public class LogCleanupManager : MonoBehaviour
         await DeleteResultsWithinLastWeek();
     }
 
+    [ContextMenu("Delete Progress Within Last Week")]
+    public async void DeleteRecentProgressMenu()
+    {
+        await DeleteProgressWithinLastWeek();
+    }
+
     public async Task DeleteLogsWithinLastMonth()
     {
         FirebaseFirestore db = FirebaseFirestore.DefaultInstance;
 
-        // Calculate the threshold date (1 month / 30 days ago) in UTC ISO format
         DateTime thresholdDate = DateTime.UtcNow.AddMonths(-1);
         string thresholdString = thresholdDate.ToString("o");
 
@@ -86,7 +92,6 @@ public class LogCleanupManager : MonoBehaviour
     {
         FirebaseFirestore db = FirebaseFirestore.DefaultInstance;
 
-        // Calculate the threshold date (1 week / 7 days ago) in UTC ISO format
         DateTime thresholdDate = DateTime.UtcNow.AddDays(-7);
         string thresholdString = thresholdDate.ToString("o");
 
@@ -123,6 +128,50 @@ public class LogCleanupManager : MonoBehaviour
         catch (Exception ex)
         {
             Debug.LogError($"[Cleanup] Failed to delete recent results: {ex}");
+        }
+    }
+
+    public async Task DeleteProgressWithinLastWeek()
+    {
+        FirebaseFirestore db = FirebaseFirestore.DefaultInstance;
+
+        DateTime thresholdDate = DateTime.UtcNow.AddDays(-7);
+        string thresholdString = thresholdDate.ToString("o");
+
+        Debug.Log($"[Cleanup] Querying experiment progress from {thresholdString} onward (within the last week)...");
+
+        try
+        {
+            // Targets the 'completionAt' ISO string field visible in your experimentProgress collection
+            Query query = db.Collection(progressCollection)
+                            .WhereGreaterThanOrEqualTo("completionAt", thresholdString)
+                            .Limit(batchLimit);
+
+            QuerySnapshot snapshot = await query.GetSnapshotAsync();
+
+            if (snapshot.Count == 0)
+            {
+                Debug.Log("[Cleanup] No experiment progress records found within the last week.");
+                return;
+            }
+
+            Debug.Log($"[Cleanup] Found {snapshot.Count} recent progress record(s) to delete. Processing...");
+
+            WriteBatch batch = db.StartBatch();
+            int totalDeleted = 0;
+
+            foreach (DocumentSnapshot doc in snapshot.Documents)
+            {
+                batch.Delete(doc.Reference);
+                totalDeleted++;
+            }
+
+            await batch.CommitAsync();
+            Debug.Log($"[Cleanup] Successfully deleted {totalDeleted} experiment progress records from the last week.");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"[Cleanup] Failed to delete recent experiment progress: {ex}");
         }
     }
 }
