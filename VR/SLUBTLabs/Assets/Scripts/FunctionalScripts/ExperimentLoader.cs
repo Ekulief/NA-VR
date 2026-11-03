@@ -479,11 +479,8 @@ public class ExperimentLoader : MonoBehaviour
             yield break;
         }
 
-        // Start the LiveKit publisher only after the status update succeeds.
-        if (livePublisher != null)
-            livePublisher.StartStreaming();
-        else
-            Debug.LogWarning("[ExperimentLoader] LiveKit publisher is not assigned. The experiment will load without live streaming.");
+        // LiveKitVrPublisher is already watching the web attempt in Firestore.
+        // Do not restart its room when an experiment scene loads.
 
         // Wait until the experiment scene says it is ready (with a safety timeout).
         float waited = 0f;
@@ -508,9 +505,8 @@ public class ExperimentLoader : MonoBehaviour
 
         yield return StartCoroutine(EnterLoadingScreen()); 
 
-        // Stop the LiveKit publisher before unloading the experiment.
-        if (livePublisher != null)
-            livePublisher.StopStreaming();
+        // Publishing follows the web attempt, not scene transitions.
+        // Returning to the hub must not interrupt a still-active attempt.
 
         Scene mainScene = SceneManager.GetSceneAt(0);
         SceneManager.SetActiveScene(mainScene);
@@ -537,7 +533,8 @@ public class ExperimentLoader : MonoBehaviour
             PlaceLoadingScreenInFront();          // keep the canvas with the player
         }
 
-        // Mark the device as available in Firestore.
+        // Clear scene status only for this attempt. The Function keeps the VR
+        // In Use while its web attempt is active; release is handled by the web.
         Task statusTask = UpdateDeviceStatus("Available", "");
         yield return new WaitUntil(() => statusTask.IsCompleted);
 
@@ -622,7 +619,7 @@ public class ExperimentLoader : MonoBehaviour
             { "vrDeviceId", vrDeviceDocumentId },
             { "status", status },
             { "experimentId", inUse ? config.experimentId : "" },
-            { "progressId", inUse ? config.progressId : "" },
+            { "progressId", config != null ? config.progressId : "" },
             { "blockId", inUse ? config.blockId : "" },
             { "sceneName", inUse ? experimentSceneName : "" },
         };

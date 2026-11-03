@@ -9,7 +9,7 @@ import { useAuth } from "../../context/AuthContext";
 
 // The server verifies block ownership before returning ANY VR device metadata.
 // This page doesn't need Firestore composite indexes or direct vrDevices read rules.
-const POLL_INTERVAL_MS = 10000;
+const POLL_INTERVAL_MS = 3000;
 
 function StreamVideo({ deviceId, onHasVideo }) {
   const tracks = useTracks([Track.Source.Camera], { onlySubscribed: true });
@@ -75,7 +75,7 @@ function LiveStreamCard({ blockId, device, expanded, onExpand, onClose }) {
   }, [blockId, device.id, experimentId, progressId, canView, retry]);
 
   const textColor = hasVideo ? "text-green-700" : device.state === "needs-attention" ? "text-amber-700" : "text-gray-600";
-  const stateLabel = hasVideo ? "LIVE VIDEO" : canView ? "SCENE ACTIVE" : device.state === "waiting-vr" ? "WAITING FOR VR" : device.state === "needs-attention" ? "NEEDS ATTENTION" : "IDLE";
+  const stateLabel = hasVideo ? "LIVE VIDEO" : canView ? "ATTEMPT ACTIVE" : device.state === "waiting-vr" ? "WAITING FOR VR" : device.state === "needs-attention" ? "NEEDS ATTENTION" : "IDLE";
   const titleId = `stream-title-${device.id}`;
 
   return <article
@@ -93,7 +93,7 @@ function LiveStreamCard({ blockId, device, expanded, onExpand, onClose }) {
           {device.vrId || device.id}{expanded && device.experimentName ? ` — ${device.experimentName}` : ""}
         </h2>
         {!expanded && <p className="mt-1 text-sm text-gray-700">{device.experimentName || "No active experiment"}</p>}
-        <p className="mt-1 text-xs text-gray-500">{device.currentSceneName || "No experiment scene reported"}</p>
+        <p className="mt-1 text-xs text-gray-500">{device.currentSceneName || "VR hub (no experiment scene)"}</p>
         {device.currentGroupId && <p className="mt-1 text-sm text-gray-600">Group: <span className="font-medium text-gray-900">{device.currentGroupName || "Unknown group"}</span></p>}
       </div>
       <div className="flex shrink-0 items-center gap-3">
@@ -239,7 +239,7 @@ export default function InstructorLiveExperiments() {
         <RefreshCw size={16} /> {refreshing ? "Checking..." : "Refresh now"}
       </button>
     </div>
-    <p className="mb-5 mt-2 text-sm text-gray-500">Updates approximately every 10 seconds. A headset needs an active student session and must enter an experiment scene before video can appear.</p>
+    <p className="mb-5 mt-2 text-sm text-gray-500">Updates approximately every 3 seconds. Streaming begins when the student starts an attempt on the web, even while the headset is in the VR hub.</p>
     {checkedAt && <p className="mb-3 text-xs text-gray-500">Last checked: {checkedAt.toLocaleTimeString()}</p>}
     {displayedError && <div role="alert" className="mb-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
       <strong>Unable to refresh streams:</strong> {displayedError}
@@ -247,7 +247,7 @@ export default function InstructorLiveExperiments() {
     {authError ? null : loading ? <p>Checking available and active VR headsets...</p> : (
       <>
         <p className="mb-5 text-sm text-gray-700">
-          {devices.length} headset(s) found · {liveCount} scene(s) ready · {waitingCount} waiting for VR · {warningCount} needing attention
+          {devices.length} headset(s) found · {liveCount} active attempt(s) · {waitingCount} waiting for VR · {warningCount} needing attention
         </p>
         {devices.length === 0 ? (
           <div className="rounded-xl border border-gray-200 p-7 text-gray-600">

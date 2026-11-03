@@ -364,13 +364,11 @@ exports.getInstructorLiveOverview = onCall(async (request) => {
       return entry;
     }
     
-    if (!nonblank(d.currentSceneName)) {
-      entry.state = "waiting-vr";
-      entry.message = "Student session assigned. Put on this headset, select the experiment anchor, and wait for Unity to load the scene.";
-      return entry;
-    }
+    // The publisher starts when the web attempt is pinned, even in the VR hub.
     entry.state = "ready";
-    entry.message = "Experiment scene started. Connecting to the headset's LiveKit video track.";
+    entry.message = nonblank(d.currentSceneName)
+      ? "Active web attempt. Showing the headset's experiment scene."
+      : "Active web attempt. Showing the VR hub until an experiment scene is entered.";
     return entry;
   }));
   const rank = { ready: 0, "waiting-vr": 1, "needs-attention": 2, idle: 3 };
@@ -437,9 +435,17 @@ exports.setVrExperimentSceneStatus = onCall(async (request) => {
     }
 
     if (status === "Available") {
+      // This is a scene exit, not necessarily the end of the web attempt.
+      // A delayed callback from the old scene must not clear a newer attempt.
+      if (nonblank(progressId) && deviceSnap.get("currentProgressId") !== progressId) {
+        return { updated: false };
+      }
+      const hasPinnedAttempt = nonblank(deviceSnap.get("currentProgressId"));
       tx.update(deviceRef, {
-        status: "Available", currentSceneName: "", currentModuleId: "",
-        streamRoomName: "", currentSessionStart: FieldValue.delete(),
+        status: hasPinnedAttempt ? "In Use" : "Available",
+        currentSceneName: "", currentModuleId: "",
+        ...(hasPinnedAttempt ? {} : { streamRoomName: "" }),
+        currentSessionStart: FieldValue.delete(),
         updatedAt: FieldValue.serverTimestamp(),
       });
       return { updated: true };
