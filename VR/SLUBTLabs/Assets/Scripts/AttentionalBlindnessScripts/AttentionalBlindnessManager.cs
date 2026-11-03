@@ -22,6 +22,12 @@ public class AttentionalBlindnessManager : MonoBehaviour
     public bool useRandomFadeTarget = true;
     public GameObject specificFadeTarget;
 
+    [Header("Start Wall")]
+    [Tooltip("Wall that hides the room until the experiment begins. If empty, an object named 'StartWall' is looked up automatically.")]
+    public GameObject startWall;
+    [Tooltip("How long the wall takes to fade out after Start Counting is pressed.")]
+    public float startWallFadeSeconds = 1.5f;
+
     [Header("Fade Settings")]
     public float fadeDelay = 8f;
     public float fadeDuration = 3f;
@@ -83,6 +89,7 @@ public class AttentionalBlindnessManager : MonoBehaviour
     private int _actualCount;
     private bool _noticedAnomaly;
     private bool _trialComplete = false;
+    private bool _trialStarting = false;
     private GameObject _fadeTarget;
     private List<Renderer[]> _fadeTargetRenderers = new();
     private List<float[]> _originalAlphas = new();
@@ -107,6 +114,11 @@ public class AttentionalBlindnessManager : MonoBehaviour
         if (resultsPanel != null) resultsPanel.SetActive(false);
 
         _actualCount = 18;
+
+        if (startWall == null)
+            startWall = GameObject.Find("StartWall");
+        if (startWall == null)
+            Debug.LogWarning("[AttentionalBlindness] No 'StartWall' found in the scene; skipping the start-wall fade.");
 
         if (startCountingButton != null) startCountingButton.onClick.AddListener(OnStartCounting);
         if (incrementCountButton != null) incrementCountButton.onClick.AddListener(() =>
@@ -450,8 +462,20 @@ public class AttentionalBlindnessManager : MonoBehaviour
     private void OnStartCounting()
     {
         if (IsSessionPaused()) return;
+        if (_trialStarting) return;
+
+        _trialStarting = true;
 
         if (instructionPanel != null) instructionPanel.SetActive(false);
+
+        StartCoroutine(BeginTrialRoutine());
+    }
+
+    // Fades the start wall away first, so the timer, count panel, furniture fade
+    // and radio audio only begin once the participant can actually see the room.
+    private IEnumerator BeginTrialRoutine()
+    {
+        yield return FadeOutStartWall();
 
         _trialStartTime = Time.time;
         _experimentStartRealtime = Time.realtimeSinceStartup;
@@ -462,6 +486,55 @@ public class AttentionalBlindnessManager : MonoBehaviour
         ShowCountInput();
         StartCoroutine(FadeOutAfterDelay());
         StartCoroutine(PlayAudioAfterDelay());
+    }
+
+    private IEnumerator FadeOutStartWall()
+    {
+        if (startWall == null || !startWall.activeInHierarchy) yield break;
+
+        // Same transparency approach as the furniture fade; wall materials are
+        // instanced per renderer, so the shared assets are left untouched.
+        var mats = new List<Material>();
+        var startAlphas = new List<float>();
+
+        foreach (Renderer r in startWall.GetComponentsInChildren<Renderer>(true))
+        {
+            Material[] instanced = r.materials;
+            foreach (Material m in instanced)
+            {
+                if (m == null) continue;
+                MakeMaterialTransparent(m);
+                mats.Add(m);
+                startAlphas.Add(GetAlpha(m));
+            }
+            r.materials = instanced;
+            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            r.receiveShadows = false;
+        }
+
+        // The wall shouldn't block the participant's pointer while it fades.
+        foreach (Collider c in startWall.GetComponentsInChildren<Collider>(true))
+            c.enabled = false;
+
+        // Let the material change settle (avoids a one-frame colour flash)
+        yield return null;
+
+        float duration = Mathf.Max(0.01f, startWallFadeSeconds);
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float k = 1f - Mathf.Clamp01(elapsed / duration);
+
+            for (int i = 0; i < mats.Count; i++)
+                SetAlpha(mats[i], startAlphas[i] * k);
+
+            yield return null;
+        }
+
+        startWall.SetActive(false);
+        Debug.Log("[AttentionalBlindness] Start wall faded out.");
+        ExperimentLogger.Log("start_wall_faded", "Start wall faded out");
     }
 
     private void ShowCountInput()

@@ -1,10 +1,11 @@
-﻿using System;
+﻿using Firebase.Firestore;
+using System;
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
+using Unity.XR.CoreUtils;
 using UnityEngine;
 using UnityEngine.UI;
-using Firebase.Firestore;
-using TMPro;
 
 /// <summary>
 /// Memory experiment flow: rooms → optional distractor → recall questions.
@@ -256,6 +257,12 @@ public class ExperimentManager : MonoBehaviour
 
         ApplyConfig();
         SceneReadySignal.MarkReady();
+
+        yield return null;            
+        if (rooms != null && rooms.Count > 0 && rooms[0].spawnPoint != null)
+        {
+            TeleportPlayer(rooms[0].spawnPoint);
+        }
     }
     public void OnPlayerEnterRoom(string roomName)
     {
@@ -427,7 +434,7 @@ public class ExperimentManager : MonoBehaviour
         if (loader != null)
         {
             loader.QueueExperimentSummary("Memory 2 – Results", summary);
-            SaveResultsToFirestore();      
+            SaveResultsToFirestore();
             loader.ReturnToHub();
         }
         else
@@ -443,6 +450,7 @@ public class ExperimentManager : MonoBehaviour
     {
         if (destination == null) return;
 
+        // Find the XR Origin that lives in the Main VR Scene
         if (playerTransform == null)
         {
             GameObject player = GameObject.FindWithTag("Player") ?? GameObject.Find("XR Origin");
@@ -451,50 +459,77 @@ public class ExperimentManager : MonoBehaviour
 
         if (playerTransform == null)
         {
-            Debug.LogWarning("[ExperimentManager] No player transform.");
+            Debug.LogWarning("[ExperimentManager] No player / XR Origin found.");
             return;
         }
 
+        var origin = playerTransform.GetComponent<XROrigin>();
+        if (origin == null)
+            origin = playerTransform.GetComponentInChildren<XROrigin>();
+
         CharacterController cc = playerTransform.GetComponentInChildren<CharacterController>();
+        Rigidbody rb = playerTransform.GetComponentInChildren<Rigidbody>();
+
+        bool ccWasEnabled = cc != null && cc.enabled;
         if (cc != null) cc.enabled = false;
 
-        Rigidbody rb = playerTransform.GetComponentInChildren<Rigidbody>();
         if (rb != null)
         {
             rb.useGravity = false;
             rb.isKinematic = true;
         }
 
-        Camera mainCam = Camera.main;
-        if (mainCam == null)
-            mainCam = playerTransform.GetComponentInChildren<Camera>();
-
-        if (mainCam != null)
+        if (origin != null)
         {
-            float currentCamY = mainCam.transform.eulerAngles.y;
-            float targetY = destination.eulerAngles.y;
-            playerTransform.Rotate(0f, targetY - currentCamY, 0f, Space.World);
+            // Match the direction of the spawn point
+            Vector3 forward = Vector3.ProjectOnPlane(destination.forward, Vector3.up).normalized;
+            if (forward.sqrMagnitude > 0.001f)
+                origin.MatchOriginUpCameraForward(Vector3.up, forward);
 
-            Vector3 cameraOffset = mainCam.transform.position - playerTransform.position;
-            cameraOffset.y = 0f;
-
-            Vector3 finalPosition = destination.position - cameraOffset;
-
-            Transform cameraOffsetTf = playerTransform.Find("Camera Offset");
-            float localCamY = cameraOffsetTf != null
-                ? cameraOffsetTf.localPosition.y
-                : mainCam.transform.localPosition.y;
-
-            finalPosition.y = destination.position.y + 1.6f - localCamY;
-            playerTransform.position = finalPosition;
+            origin.MoveCameraToWorldLocation(destination.position);
         }
         else
         {
+            // Fallback if for some reason there is no XROrigin component
             playerTransform.position = destination.position;
             playerTransform.rotation = destination.rotation;
         }
 
-        StartCoroutine(ReenableLocomotion(cc, rb));
+        StartCoroutine(ReenableLocomotion(cc, rb, ccWasEnabled));
+    }
+
+    private IEnumerator ReenableLocomotion(CharacterController cc, Rigidbody rb, bool ccWasEnabled)
+    {
+        yield return new WaitForSecondsRealtime(0.25f);
+
+        if (cc != null) cc.enabled = ccWasEnabled;
+
+        if (rb != null)
+        {
+            rb.isKinematic = false;
+            rb.useGravity = true;
+        }
+    }
+
+    // Casts down from the spawn point to find the floor beneath it.
+    // Ignores triggers and the player's own colliders. Falls back to the spawn point's Y.
+    private float FindFloorY(Vector3 from)
+    {
+        Vector3 origin = from + Vector3.up * 0.5f;
+        RaycastHit[] hits = Physics.RaycastAll(origin, Vector3.down, 10f,
+            Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+
+        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+
+        foreach (RaycastHit hit in hits)
+        {
+            if (playerTransform != null && hit.collider.transform.IsChildOf(playerTransform))
+                continue;
+            return hit.point.y;
+        }
+
+        Debug.LogWarning("[ExperimentManager] No floor found under spawn point; using the spawn point's own height.");
+        return from.y;
     }
 
     private IEnumerator ReenableLocomotion(CharacterController cc, Rigidbody rb)

@@ -34,6 +34,12 @@ public class OddItemManager : MonoBehaviour
     public TMP_Text instructionText;
     public Button startButton;
 
+    [Header("Start Wall")]
+    [Tooltip("The wall that hides the shelves until the experiment begins. If left empty, an object named 'StartWall' is looked up automatically.")]
+    public GameObject startWall;
+    [Tooltip("How long the wall takes to fade out after Begin Experiment is pressed.")]
+    public float startWallFadeSeconds = 1.5f;
+
     [Header("UI — Results Panel")]
     public GameObject resultsPanel;
     public TMP_Text resultsSummaryText;
@@ -56,6 +62,8 @@ public class OddItemManager : MonoBehaviour
     private float _searchTimeLimit;
     private float _raycastDistance;
     private float _instructionDelay;
+
+    private bool _trialStarting = false;
 
     private void OnEnable()
     {
@@ -80,6 +88,9 @@ public class OddItemManager : MonoBehaviour
         if (resultsPanel != null) resultsPanel.SetActive(false);
 
         _feedbackDisplay = GetComponent<FeedbackDisplay>();
+
+        if (startWall == null)
+            startWall = GameObject.Find("StartWall");
 
         if (startButton != null)
             startButton.onClick.AddListener(OnStartButtonClicked);
@@ -431,9 +442,21 @@ public class OddItemManager : MonoBehaviour
     private void OnStartButtonClicked()
     {
         if (IsSessionPaused()) return;
+        if (_trialStarting || _awaitingSelection || _trialComplete) return;
+
+        _trialStarting = true;
 
         if (instructionPanel != null)
             instructionPanel.SetActive(false);
+
+        StartCoroutine(BeginTrialRoutine());
+    }
+
+    // Fades the start wall away, then starts the trial so the search timer
+    // only begins once the participant can actually see the shelves.
+    private IEnumerator BeginTrialRoutine()
+    {
+        yield return FadeOutStartWall();
 
         // Safety net: make sure every item is clickable and the target reference is valid
         RefreshInteractables();
@@ -442,11 +465,92 @@ public class OddItemManager : MonoBehaviour
         _experimentStartRealtime = Time.realtimeSinceStartup;
         _startedAtUtc = DateTime.UtcNow;
         _awaitingSelection = true;
+        _trialStarting = false;
 
         ExperimentLogger.Log("trial_started", "Student began searching for the odd item");
 
         if (_searchTimeLimit > 0)
             StartCoroutine(SearchTimeLimitCountdown());
+    }
+
+    private IEnumerator FadeOutStartWall()
+    {
+        if (startWall == null || !startWall.activeInHierarchy)
+            yield break;
+
+        Renderer[] renderers = startWall.GetComponentsInChildren<Renderer>();
+
+        // Per-material data so we can fade each one from its own starting alpha.
+        var mats = new List<Material>();
+        var colorIds = new List<int>();
+        var startColors = new List<Color>();
+
+        foreach (Renderer r in renderers)
+        {
+            foreach (Material m in r.materials) // .materials = per-renderer instances, shared assets stay untouched
+            {
+                int colorId = m.HasProperty("_BaseColor") ? Shader.PropertyToID("_BaseColor")
+                            : m.HasProperty("_Color") ? Shader.PropertyToID("_Color")
+                            : -1;
+                if (colorId == -1) continue;
+
+                MakeMaterialTransparent(m);
+                mats.Add(m);
+                colorIds.Add(colorId);
+                startColors.Add(m.GetColor(colorId));
+            }
+        }
+
+        // The wall shouldn't block the participant's pointer while it fades.
+        foreach (Collider c in startWall.GetComponentsInChildren<Collider>())
+            c.enabled = false;
+
+        float duration = Mathf.Max(0.01f, startWallFadeSeconds);
+        float t = 0f;
+        while (t < duration)
+        {
+            t += Time.unscaledDeltaTime;
+            float k = 1f - Mathf.Clamp01(t / duration);
+
+            for (int i = 0; i < mats.Count; i++)
+            {
+                Color c = startColors[i];
+                c.a = startColors[i].a * k;
+                mats[i].SetColor(colorIds[i], c);
+            }
+            yield return null;
+        }
+
+        startWall.SetActive(false);
+        Debug.Log("[OddItemDetection] Start wall faded out.");
+    }
+
+    // Switches a material to alpha-blended rendering at runtime (URP/Lit or Built-in Standard).
+    private static void MakeMaterialTransparent(Material m)
+    {
+        if (m.HasProperty("_Surface")) // URP Lit / Simple Lit / Unlit
+        {
+            m.SetFloat("_Surface", 1f);
+            m.SetFloat("_Blend", 0f);
+            m.SetOverrideTag("RenderType", "Transparent");
+            m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            m.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            m.SetInt("_ZWrite", 0);
+            m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+        }
+        else if (m.HasProperty("_Mode")) // Built-in Standard
+        {
+            m.SetFloat("_Mode", 3f);
+            m.SetOverrideTag("RenderType", "Transparent");
+            m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            m.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            m.SetInt("_ZWrite", 0);
+            m.DisableKeyword("_ALPHATEST_ON");
+            m.EnableKeyword("_ALPHABLEND_ON");
+            m.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+        }
     }
 
     private IEnumerator SearchTimeLimitCountdown()

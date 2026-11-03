@@ -49,24 +49,31 @@ public class DepthPerceptionUI : MonoBehaviour
     private DateTime _startedAtUtc;
     private bool _submitted = false;
     private ExperimentLoader _experimentLoader;
+
     [Header("Building Scaling (ExperimentArea only)")]
     [Tooltip("The main building whose height the student estimates (Building_I_2 under Building_I_2_Prefab (5))")]
-    public Transform mainBuildingToScale;          
+    public Transform mainBuildingToScale;
 
-    [Tooltip("Optional second / side building that should grow faster")]
-    public Transform sideBuildingToScale;        
+    [Tooltip("Optional second / side building that should grow with the main building")]
+    public Transform sideBuildingToScale;
 
     [Tooltip("All roof props / objects that must stay the same size and simply ride up with the roof")]
-    public Transform[] roofPropsToReposition;      
+    public Transform[] roofPropsToReposition;
 
     [Tooltip("Height in metres that the current (unscaled) buildings represent")]
     public float referenceHeightMetres = 14f;
-    [Tooltip("Height in metres that the side building's unscaled model represents (adjust if it's shorter natively)")]
-    public float sideReferenceHeightMetres = 12f; 
+
+    [Tooltip("Height in metres that the side building's unscaled model represents")]
+    public float sideReferenceHeightMetres = 13f;
+
     private Vector3 _mainBaseScale;
     private Vector3 _sideBaseScale;
-    private Vector3[] _propBaseLocalPositions;
+    private Vector3[] _propBaseWorldPositions;
     private bool _scalingApplied;
+
+    // ------------------------------------------------------------------
+    // Building scale + prop reposition
+    // ------------------------------------------------------------------
 
     private void CacheBaseScalesAndPositions()
     {
@@ -78,27 +85,29 @@ public class DepthPerceptionUI : MonoBehaviour
 
         if (roofPropsToReposition != null && roofPropsToReposition.Length > 0)
         {
-            _propBaseLocalPositions = new Vector3[roofPropsToReposition.Length];
+            _propBaseWorldPositions = new Vector3[roofPropsToReposition.Length];
             for (int i = 0; i < roofPropsToReposition.Length; i++)
             {
                 if (roofPropsToReposition[i] != null)
-                    _propBaseLocalPositions[i] = roofPropsToReposition[i].localPosition;
+                    _propBaseWorldPositions[i] = roofPropsToReposition[i].position; // world space
             }
         }
     }
 
     /// <summary>
-    /// Scales only the vertical axis of the buildings and lifts the roof props.
-    /// Side building gains +20 m for every +10 m the main building gains.
+    /// Scales the buildings and lifts the roof props by the same world-space height
+    /// so they stay sitting on the roof. Props keep their original size.
     /// </summary>
     private void ApplyBuildingHeightScale(float actualHeightMetres)
     {
         if (_scalingApplied) return;
 
-        if (referenceHeightMetres <= 0.01f) referenceHeightMetres = 14f;
+        if (referenceHeightMetres <= 0.01f)
+            referenceHeightMetres = 14f;
 
         float mainScaleFactor = actualHeightMetres / referenceHeightMetres;
 
+        // 1. Main building – local Z is the vertical axis in this prefab
         if (mainBuildingToScale != null)
         {
             Vector3 s = _mainBaseScale;
@@ -106,33 +115,41 @@ public class DepthPerceptionUI : MonoBehaviour
             mainBuildingToScale.localScale = s;
         }
 
+        // 2. Side building – it is rotated -90° on Y, so local Z is horizontal.
+        //    Scale local Y so it actually grows upward.
         if (sideBuildingToScale != null)
         {
-            float sideRef = sideReferenceHeightMetres <= 0.01f ? 10f : sideReferenceHeightMetres;
+            float sideRef = sideReferenceHeightMetres <= 0.01f ? 13f : sideReferenceHeightMetres;
             float sideScaleFactor = actualHeightMetres / sideRef;
 
             Vector3 s = _sideBaseScale;
-            s.z = _sideBaseScale.z * sideScaleFactor;
+            s.z = _sideBaseScale.z * sideScaleFactor; 
             sideBuildingToScale.localScale = s;
         }
 
+        // 3. Props – move in WORLD space by the exact height difference
         float heightDelta = actualHeightMetres - referenceHeightMetres;
 
-        if (roofPropsToReposition != null && _propBaseLocalPositions != null)
+        if (roofPropsToReposition != null && _propBaseWorldPositions != null)
         {
             for (int i = 0; i < roofPropsToReposition.Length; i++)
             {
                 if (roofPropsToReposition[i] == null) continue;
 
-                Vector3 pos = _propBaseLocalPositions[i];
-                pos.y = _propBaseLocalPositions[i].y + heightDelta; 
-                roofPropsToReposition[i].localPosition = pos;
+                Vector3 worldPos = _propBaseWorldPositions[i];
+                worldPos.y += heightDelta;
+                roofPropsToReposition[i].position = worldPos;
             }
         }
 
         _scalingApplied = true;
-        Debug.Log($"[DepthPerception] Main building: {actualHeightMetres}m, Side building: {actualHeightMetres - 2f}m");
+        Debug.Log($"[DepthPerception] Main → {actualHeightMetres}m | Side scaled | Props +{heightDelta:F1}m");
     }
+
+    // ------------------------------------------------------------------
+    // Unity lifecycle
+    // ------------------------------------------------------------------
+
     private void Start()
     {
         _experimentLoader = FindAnyObjectByType<ExperimentLoader>();
@@ -179,7 +196,7 @@ public class DepthPerceptionUI : MonoBehaviour
         if (config != null)
         {
             _maxHeightMetres = config.depth_MaxHeightMeters;
-            _stepAmount = 1f;   
+            _stepAmount = 1f;
             _actualHeight = config.depth_ActualHeightMeters;
             Debug.Log("[DepthPerception] Applied config parameters.");
         }
@@ -210,8 +227,7 @@ public class DepthPerceptionUI : MonoBehaviour
         _actualHeight = config != null ? config.depth_ActualHeightMeters : 15f;
         CacheBaseScalesAndPositions();
         ApplyBuildingHeightScale(_actualHeight);
-        SceneReadySignal.MarkReady();        
-        // ExperimentLogger.Log("instructions_shown", "Depth Perception instructions displayed");
+        SceneReadySignal.MarkReady();
     }
 
     private void OnStartTest()
@@ -383,8 +399,6 @@ public class DepthPerceptionUI : MonoBehaviour
 
     private void OnReturnHome()
     {
-       // ExperimentLogger.Log("return_to_hub", "Student returned to hub");
-
         if (_experimentLoader != null)
             _experimentLoader.ReturnToHub(hubReturnPosition);
         else
