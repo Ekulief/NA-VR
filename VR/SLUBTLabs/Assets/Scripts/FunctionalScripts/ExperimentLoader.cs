@@ -420,7 +420,7 @@ public class ExperimentLoader : MonoBehaviour
         SceneReadySignal.Reset();
 
         if (loadingText != null) loadingText.text = "Loading Experiment…";
-        yield return StartCoroutine(EnterLoadingScreen());  
+        yield return StartCoroutine(EnterLoadingScreen());
 
         AsyncOperation load = SceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Additive);
         if (load == null)
@@ -461,7 +461,7 @@ public class ExperimentLoader : MonoBehaviour
         if (spawnPoint != null && xrOrigin != null)
             TeleportPlayerToTransform(spawnPoint.transform);
 
-        PlaceLoadingScreenInFront();             
+        PlaceLoadingScreenInFront();
 
         // Lock continuous movement, but allow teleport until
         // Begin Experiment is pressed.
@@ -492,7 +492,7 @@ public class ExperimentLoader : MonoBehaviour
             waited += Time.unscaledDeltaTime;
             yield return null;
         }
-        yield return null;                        
+        yield return null;
         yield return null;
 
         yield return StartCoroutine(RevealWorld());
@@ -506,7 +506,7 @@ public class ExperimentLoader : MonoBehaviour
         if (loadingText != null)
             loadingText.text = "Returning…";
 
-        yield return StartCoroutine(EnterLoadingScreen()); 
+        yield return StartCoroutine(EnterLoadingScreen());
 
         // Stop the LiveKit publisher before unloading the experiment.
         if (livePublisher != null)
@@ -556,38 +556,118 @@ public class ExperimentLoader : MonoBehaviour
             ShowPendingSummary();
     }
 
-    // ------------------------------------------------------------------
-    // Player teleport
-    // ------------------------------------------------------------------
-
-    private void TeleportPlayerToTransform(Transform targetTransform)
+    /// <summary>
+    /// Teleports the persistent XR Origin so the camera ends up at the given transform.
+    /// Treats destination.position as the desired camera / eye position.
+    /// </summary>
+    /// <summary>
+    /// Teleports the persistent XR Origin.
+    /// - destination.position is treated as the desired CAMERA / eye position
+    /// - optionally snaps the feet to the floor underneath
+    /// </summary>
+    private void TeleportPlayerToTransform(Transform destination)
     {
-        if (xrOrigin == null || targetTransform == null)
-            return;
+        if (destination == null) return;
 
-        XROrigin origin = xrOrigin.GetComponent<XROrigin>();
+        // ---- resolve XROrigin correctly ----
+        XROrigin origin = null;
+
+        if (xrOrigin != null)
+            origin = xrOrigin.GetComponent<XROrigin>();
 
         if (origin == null)
+        {
+            GameObject player = GameObject.FindWithTag("Player") ?? GameObject.Find("XR Origin");
+            if (player != null)
+                origin = player.GetComponent<XROrigin>() ?? player.GetComponentInChildren<XROrigin>();
+        }
+
+        if (origin == null)
+        {
+            Debug.LogWarning("[ExperimentLoader] No XR Origin found for teleport.");
             return;
+        }
 
-        CharacterController cc = xrOrigin.GetComponentInChildren<CharacterController>();
+        CharacterController cc = origin.GetComponentInChildren<CharacterController>();
+        Rigidbody rb = origin.GetComponentInChildren<Rigidbody>();
 
-        bool controllerWasEnabled = cc != null && cc.enabled;
+        bool ccWasEnabled = cc != null && cc.enabled;
+        if (cc != null) cc.enabled = false;
+        if (rb != null)
+        {
+            rb.useGravity = false;
+            rb.isKinematic = true;
+            rb.linearVelocity = Vector3.zero;   // Unity 6
+                                                // rb.velocity = Vector3.zero;      // older Unity
+        }
 
-        if (cc != null)
-            cc.enabled = false;
-
-        Vector3 forward = Vector3.ProjectOnPlane(
-            targetTransform.forward,
-            Vector3.up
-        ).normalized;
-
+        // Face the same direction as the spawn point
+        Vector3 forward = Vector3.ProjectOnPlane(destination.forward, Vector3.up).normalized;
         if (forward.sqrMagnitude > 0.001f)
             origin.MatchOriginUpCameraForward(Vector3.up, forward);
 
-        origin.MoveCameraToWorldLocation(targetTransform.position);
+        // ---- decide final camera position ----
+        Vector3 targetCameraPos = destination.position;
 
-        StartCoroutine(RestoreCharacterController(cc, controllerWasEnabled));
+        if (useFixedSpawnHeight)
+        {
+            targetCameraPos.y = fixedSpawnHeight;
+        }
+        else if (snapToFloor)
+        {
+            // Cast from a bit above the spawn point
+            if (TryFindFloorY(destination.position + Vector3.up * 1.5f, out float floorY))
+            {
+                // Put camera ~1.6 m above the real floor
+                targetCameraPos.y = floorY + 1.6f;
+            }
+            // else keep destination.position.y
+        }
+
+        origin.MoveCameraToWorldLocation(targetCameraPos);
+
+        StartCoroutine(ReenableLocomotion(cc, rb, ccWasEnabled));
+    }
+
+    private IEnumerator ReenableLocomotion(CharacterController cc, Rigidbody rb, bool ccWasEnabled)
+    {
+        // Let the new scene's colliders finish loading
+        yield return null;
+        yield return null;
+        yield return new WaitForSecondsRealtime(Mathf.Max(0.15f, controllerReenableDelay));
+
+        if (rb != null)
+        {
+            rb.linearVelocity = Vector3.zero;
+            // rb.velocity = Vector3.zero;
+            rb.isKinematic = false;
+            rb.useGravity = true;
+        }
+
+        if (cc != null)
+            cc.enabled = ccWasEnabled;
+    }
+    // Casts down from the spawn point to find the floor. Ignores triggers and the player's own colliders.
+    private bool TryFindFloorY(Vector3 from, out float floorY)
+    {
+        floorY = from.y;
+
+        Vector3 start = from + Vector3.up * 0.5f;
+        RaycastHit[] hits = Physics.RaycastAll(start, Vector3.down, floorSnapDistance + 0.5f,
+            Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+
+        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+
+        foreach (RaycastHit hit in hits)
+        {
+            if (xrOrigin != null && hit.collider.transform.IsChildOf(xrOrigin.transform))
+                continue;
+
+            floorY = hit.point.y;
+            return true;
+        }
+
+        return false;
     }
 
     private IEnumerator RestoreCharacterController(CharacterController cc, bool wasEnabled)

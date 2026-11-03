@@ -1,11 +1,10 @@
-﻿using Firebase.Firestore;
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
-using TMPro;
-using Unity.XR.CoreUtils;
 using UnityEngine;
 using UnityEngine.UI;
+using Firebase.Firestore;
+using TMPro;
 
 /// <summary>
 /// Memory experiment flow: rooms → optional distractor → recall questions.
@@ -257,12 +256,6 @@ public class ExperimentManager : MonoBehaviour
 
         ApplyConfig();
         SceneReadySignal.MarkReady();
-
-        yield return null;            
-        if (rooms != null && rooms.Count > 0 && rooms[0].spawnPoint != null)
-        {
-            TeleportPlayer(rooms[0].spawnPoint);
-        }
     }
     public void OnPlayerEnterRoom(string roomName)
     {
@@ -450,7 +443,6 @@ public class ExperimentManager : MonoBehaviour
     {
         if (destination == null) return;
 
-        // Find the XR Origin that lives in the Main VR Scene
         if (playerTransform == null)
         {
             GameObject player = GameObject.FindWithTag("Player") ?? GameObject.Find("XR Origin");
@@ -459,56 +451,49 @@ public class ExperimentManager : MonoBehaviour
 
         if (playerTransform == null)
         {
-            Debug.LogWarning("[ExperimentManager] No player / XR Origin found.");
+            Debug.LogWarning("[ExperimentManager] No player transform.");
             return;
         }
 
-        var origin = playerTransform.GetComponent<XROrigin>();
-        if (origin == null)
-            origin = playerTransform.GetComponentInChildren<XROrigin>();
-
         CharacterController cc = playerTransform.GetComponentInChildren<CharacterController>();
-        Rigidbody rb = playerTransform.GetComponentInChildren<Rigidbody>();
-
-        bool ccWasEnabled = cc != null && cc.enabled;
         if (cc != null) cc.enabled = false;
 
+        Rigidbody rb = playerTransform.GetComponentInChildren<Rigidbody>();
         if (rb != null)
         {
             rb.useGravity = false;
             rb.isKinematic = true;
         }
 
-        if (origin != null)
-        {
-            // Match the direction of the spawn point
-            Vector3 forward = Vector3.ProjectOnPlane(destination.forward, Vector3.up).normalized;
-            if (forward.sqrMagnitude > 0.001f)
-                origin.MatchOriginUpCameraForward(Vector3.up, forward);
+        Camera mainCam = Camera.main;
+        if (mainCam == null)
+            mainCam = playerTransform.GetComponentInChildren<Camera>();
 
-            origin.MoveCameraToWorldLocation(destination.position);
+        if (mainCam != null)
+        {
+            float currentCamY = mainCam.transform.eulerAngles.y;
+            float targetY = destination.eulerAngles.y;
+            playerTransform.Rotate(0f, targetY - currentCamY, 0f, Space.World);
+
+            Vector3 cameraOffset = mainCam.transform.position - playerTransform.position;
+            cameraOffset.y = 0f;
+
+            Vector3 finalPosition = destination.position - cameraOffset;
+
+            // The XR Origin's Y should sit ON THE FLOOR. The headset's own height
+            // (tracked, or via the Camera Offset) is added on top of that.
+            // The old code added a fixed 1.6 m on top of the spawn point's Y, which
+            // double-counted head height (and the spawn point itself sits above the floor).
+            finalPosition.y = FindFloorY(destination.position);
+            playerTransform.position = finalPosition;
         }
         else
         {
-            // Fallback if for some reason there is no XROrigin component
             playerTransform.position = destination.position;
             playerTransform.rotation = destination.rotation;
         }
 
-        StartCoroutine(ReenableLocomotion(cc, rb, ccWasEnabled));
-    }
-
-    private IEnumerator ReenableLocomotion(CharacterController cc, Rigidbody rb, bool ccWasEnabled)
-    {
-        yield return new WaitForSecondsRealtime(0.25f);
-
-        if (cc != null) cc.enabled = ccWasEnabled;
-
-        if (rb != null)
-        {
-            rb.isKinematic = false;
-            rb.useGravity = true;
-        }
+        StartCoroutine(ReenableLocomotion(cc, rb));
     }
 
     // Casts down from the spawn point to find the floor beneath it.
