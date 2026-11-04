@@ -439,69 +439,102 @@ public class ExperimentManager : MonoBehaviour
         OnExperimentFinished?.Invoke();
         Debug.Log("[ExperimentManager] Experiment complete – returning to hub.");
     }
+    // Teleport logic mirrors MemoryExperimentManager.TeleportPlayer, which is known to be solid on the headset.
     private void TeleportPlayer(Transform destination)
     {
-        if (destination == null) return;
+        if (destination == null)
+        {
+            Debug.LogError("[ExperimentManager] Teleport failed: destination is not assigned.");
+            return;
+        }
 
         if (playerTransform == null)
         {
-            GameObject player = GameObject.FindWithTag("Player") ?? GameObject.Find("XR Origin");
+            GameObject player = GameObject.FindWithTag("Player")
+                ?? GameObject.Find("VR Player")
+                ?? GameObject.Find("XR Origin")
+                ?? GameObject.Find("XR Origin (XR Rig)");
+
             if (player != null) playerTransform = player.transform;
         }
 
         if (playerTransform == null)
         {
-            Debug.LogWarning("[ExperimentManager] No player transform.");
+            Debug.LogError("[ExperimentManager] Teleport failed: player rig not found.");
             return;
         }
 
         CharacterController cc = playerTransform.GetComponentInChildren<CharacterController>();
-        if (cc != null) cc.enabled = false;
-
         Rigidbody rb = playerTransform.GetComponentInChildren<Rigidbody>();
+
+        // Remember the rig's ORIGINAL physics state so it can be put back exactly as it was.
+        // (The old code force-enabled gravity afterwards, which let the player fall through the floor.)
+        bool controllerWasEnabled = cc != null && cc.enabled;
+        bool wasKinematic = rb != null && rb.isKinematic;
+        bool usedGravity = rb != null && rb.useGravity;
+
+        if (cc != null)
+            cc.enabled = false;
+
         if (rb != null)
         {
-            rb.useGravity = false;
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
             rb.isKinematic = true;
         }
 
-        Camera mainCam = Camera.main;
-        if (mainCam == null)
-            mainCam = playerTransform.GetComponentInChildren<Camera>();
+        Camera vrCamera = Camera.main;
+        if (vrCamera == null)
+            vrCamera = playerTransform.GetComponentInChildren<Camera>();
 
-        if (mainCam != null)
+        Vector3 targetForward = Vector3.ProjectOnPlane(destination.forward, Vector3.up).normalized;
+
+        if (targetForward.sqrMagnitude > 0.001f)
         {
-            float currentCamY = mainCam.transform.eulerAngles.y;
-            float targetY = destination.eulerAngles.y;
-            playerTransform.Rotate(0f, targetY - currentCamY, 0f, Space.World);
+            if (vrCamera != null)
+            {
+                float cameraYaw = vrCamera.transform.eulerAngles.y;
+                float targetYaw = Quaternion.LookRotation(targetForward).eulerAngles.y;
+                playerTransform.Rotate(0f, targetYaw - cameraYaw, 0f, Space.World);
+            }
+            else
+            {
+                playerTransform.rotation = Quaternion.LookRotation(targetForward, Vector3.up);
+            }
+        }
 
-            Vector3 cameraOffset = mainCam.transform.position - playerTransform.position;
+        // Rig origin goes ON the floor. Like the Memory manager, the spawn point's own height is used;
+        // if the spawn point is floating (e.g. at head height), snap down to the real floor below it.
+        float originY = FindFloorY(destination.position);
+
+        if (vrCamera != null)
+        {
+            Vector3 cameraOffset = vrCamera.transform.position - playerTransform.position;
             cameraOffset.y = 0f;
 
-            Vector3 finalPosition = destination.position - cameraOffset;
-
-            // The XR Origin's Y should sit ON THE FLOOR. The headset's own height
-            // (tracked, or via the Camera Offset) is added on top of that.
-            // The old code added a fixed 1.6 m on top of the spawn point's Y, which
-            // double-counted head height (and the spawn point itself sits above the floor).
-            finalPosition.y = FindFloorY(destination.position);
-            playerTransform.position = finalPosition;
+            playerTransform.position = new Vector3(
+                destination.position.x - cameraOffset.x,
+                originY,
+                destination.position.z - cameraOffset.z);
         }
         else
         {
-            playerTransform.position = destination.position;
-            playerTransform.rotation = destination.rotation;
+            playerTransform.position = new Vector3(destination.position.x, originY, destination.position.z);
         }
 
-        StartCoroutine(ReenableLocomotion(cc, rb));
+        Debug.Log($"[ExperimentManager] Teleported to {destination.name}. " +
+                  $"Spawn={destination.position}, Origin={playerTransform.position}, " +
+                  $"Camera={(vrCamera != null ? vrCamera.transform.position.ToString() : "not found")}");
+
+        StartCoroutine(RestorePlayerAfterTeleport(cc, controllerWasEnabled, rb, wasKinematic, usedGravity));
     }
 
-    // Casts down from the spawn point to find the floor beneath it.
-    // Ignores triggers and the player's own colliders. Falls back to the spawn point's Y.
+    // Looks for the floor just under the spawn point. If none is found (or the spawn point already
+    // sits on the floor) the spawn point's own height is used, exactly like MemoryExperimentManager.
     private float FindFloorY(Vector3 from)
     {
-        Vector3 origin = from + Vector3.up * 0.5f;
-        RaycastHit[] hits = Physics.RaycastAll(origin, Vector3.down, 10f,
+        Vector3 start = from + Vector3.up * 0.5f;
+        RaycastHit[] hits = Physics.RaycastAll(start, Vector3.down, 3.5f,
             Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
 
         System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
@@ -513,18 +546,29 @@ public class ExperimentManager : MonoBehaviour
             return hit.point.y;
         }
 
-        Debug.LogWarning("[ExperimentManager] No floor found under spawn point; using the spawn point's own height.");
+        Debug.LogWarning("[ExperimentManager] No floor collider found under the spawn point; using the spawn point's height. " +
+                         "Make sure the floor has a collider and the spawn point sits on it.");
         return from.y;
     }
 
-    private IEnumerator ReenableLocomotion(CharacterController cc, Rigidbody rb)
+    // Wait for a physics step before handing control back, so the CharacterController/Rigidbody
+    // pick up the NEW position instead of the old one, and restore the original gravity state.
+    private IEnumerator RestorePlayerAfterTeleport(
+        CharacterController cc, bool controllerWasEnabled,
+        Rigidbody rb, bool wasKinematic, bool usedGravity)
     {
         yield return null;
-        if (cc != null) cc.enabled = true;
+        yield return new WaitForFixedUpdate();
+
+        if (cc != null)
+            cc.enabled = controllerWasEnabled;
+
         if (rb != null)
         {
-            rb.isKinematic = false;
-            rb.useGravity = true;
+            rb.isKinematic = wasKinematic;
+            rb.useGravity = usedGravity;
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
         }
     }
 
