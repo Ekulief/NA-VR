@@ -18,6 +18,8 @@ public class ExperimentLoader : MonoBehaviour
     public float fixedSpawnHeight = 1.6f;
     public bool snapToFloor = true;
     public float floorSnapDistance = 3f;
+    [Tooltip("After spawning, if the camera is lower than this above the floor (headset not reporting height), the Camera Y Offset is raised to fixedSpawnHeight.")]
+    public float minEyeHeight = 1.0f;
 
     [Header("Main Scene Visibility")]
     public GameObject[] mainSceneObjects;
@@ -76,6 +78,13 @@ public class ExperimentLoader : MonoBehaviour
     private CameraClearFlags _savedClear;
     private Color _savedBg;
     private bool _inVoid;
+
+    // Player freeze state (see FreezePlayer)
+    private bool _playerFrozen;
+    private CharacterController _frozenCC;
+    private bool _frozenCCWasEnabled;
+    private MonoBehaviour _frozenGravity;
+    private bool _frozenGravityWasEnabled;
 
     // Screen fade state
     private Renderer _fadeQuad;
@@ -418,6 +427,7 @@ public class ExperimentLoader : MonoBehaviour
         _isLoading = true;
         _currentSceneName = sceneName;
         SceneReadySignal.Reset();
+        FreezePlayer();
 
         if (loadingText != null) loadingText.text = "Loading Experiment…";
         yield return StartCoroutine(EnterLoadingScreen());
@@ -428,6 +438,7 @@ public class ExperimentLoader : MonoBehaviour
             Debug.LogError($"[ExperimentLoader] Could not begin loading scene '{sceneName}'.");
             _isLoading = false;
             yield return StartCoroutine(RevealWorld());
+            UnfreezePlayer();
             yield break;
         }
 
@@ -449,6 +460,7 @@ public class ExperimentLoader : MonoBehaviour
             _currentSceneName = "";
             _isLoading = false;
             yield return StartCoroutine(RevealWorld());
+            UnfreezePlayer();
             yield break;
         }
 
@@ -476,11 +488,15 @@ public class ExperimentLoader : MonoBehaviour
             Debug.LogError("[ExperimentLoader] Firestore status update failed. Live streaming will not start.");
             _isLoading = false;
             yield return StartCoroutine(RevealWorld());
+            UnfreezePlayer();
             yield break;
         }
 
-        // LiveKitVrPublisher is already watching the web attempt in Firestore.
-        // Do not restart its room when an experiment scene loads.
+        // Start the LiveKit publisher only after the status update succeeds.
+        if (livePublisher != null)
+            livePublisher.StartStreaming();
+        else
+            Debug.LogWarning("[ExperimentLoader] LiveKit publisher is not assigned. The experiment will load without live streaming.");
 
         // Wait until the experiment scene says it is ready (with a safety timeout).
         float waited = 0f;
@@ -493,20 +509,23 @@ public class ExperimentLoader : MonoBehaviour
         yield return null;
 
         yield return StartCoroutine(RevealWorld());
+        UnfreezePlayer();
         _isLoading = false;
     }
 
     private IEnumerator UnloadExperimentScene(GameObject respawnObject)
     {
         _isLoading = true;
+        FreezePlayer();
 
         if (loadingText != null)
             loadingText.text = "Returning…";
 
         yield return StartCoroutine(EnterLoadingScreen());
 
-        // Publishing follows the web attempt, not scene transitions.
-        // Returning to the hub must not interrupt a still-active attempt.
+        // Stop the LiveKit publisher before unloading the experiment.
+        if (livePublisher != null)
+            livePublisher.StopStreaming();
 
         Scene mainScene = SceneManager.GetSceneAt(0);
         SceneManager.SetActiveScene(mainScene);
@@ -533,8 +552,7 @@ public class ExperimentLoader : MonoBehaviour
             PlaceLoadingScreenInFront();          // keep the canvas with the player
         }
 
-        // Clear scene status only for this attempt. The Function keeps the VR
-        // In Use while its web attempt is active; release is handled by the web.
+        // Mark the device as available in Firestore.
         Task statusTask = UpdateDeviceStatus("Available", "");
         yield return new WaitUntil(() => statusTask.IsCompleted);
 
@@ -546,6 +564,7 @@ public class ExperimentLoader : MonoBehaviour
 
         yield return new WaitForSecondsRealtime(0.5f);
         yield return StartCoroutine(RevealWorld());
+        UnfreezePlayer();
 
         _isLoading = false;
 
@@ -553,97 +572,133 @@ public class ExperimentLoader : MonoBehaviour
             ShowPendingSummary();
     }
 
-    /// <summary>
-    /// Teleports the persistent XR Origin so the camera ends up at the given transform.
-    /// Treats destination.position as the desired camera / eye position.
-    /// </summary>
-    /// <summary>
-    /// Teleports the persistent XR Origin.
-    /// - destination.position is treated as the desired CAMERA / eye position
-    /// - optionally snaps the feet to the floor underneath
-    /// </summary>
-    private void TeleportPlayerToTransform(Transform destination)
+    // ------------------------------------------------------------------
+    // Player freeze (loading screens)
+    // ------------------------------------------------------------------
+
+    // While the screen is black the hub is hidden / the experiment scene is loading or unloading,
+    // so there may be no floor under the player. With gravity running they used to fall behind the
+    // loading screen, hit the FallLimit and get respawned over and over. Freeze the body (gravity +
+    // CharacterController) for the whole transition and release it once the world is revealed.
+    private void FreezePlayer()
     {
-        if (destination == null) return;
+        if (_playerFrozen || xrOrigin == null) return;
 
-        // ---- resolve XROrigin correctly ----
-        XROrigin origin = null;
+        _frozenCC = xrOrigin.GetComponentInChildren<CharacterController>();
+        _frozenCCWasEnabled = _frozenCC != null && _frozenCC.enabled;
 
-        if (xrOrigin != null)
-            origin = xrOrigin.GetComponent<XROrigin>();
-
-        if (origin == null)
+        // Found by name so this doesn't depend on the XRI namespace.
+        _frozenGravity = null;
+        foreach (MonoBehaviour mb in xrOrigin.GetComponentsInChildren<MonoBehaviour>(true))
         {
-            GameObject player = GameObject.FindWithTag("Player") ?? GameObject.Find("XR Origin");
-            if (player != null)
-                origin = player.GetComponent<XROrigin>() ?? player.GetComponentInChildren<XROrigin>();
+            if (mb != null && mb.GetType().Name == "GravityProvider")
+            {
+                _frozenGravity = mb;
+                break;
+            }
         }
+        _frozenGravityWasEnabled = _frozenGravity != null && _frozenGravity.enabled;
 
-        if (origin == null)
-        {
-            Debug.LogWarning("[ExperimentLoader] No XR Origin found for teleport.");
+        if (_frozenGravity != null) _frozenGravity.enabled = false;
+        if (_frozenCC != null) _frozenCC.enabled = false;
+
+        _playerFrozen = true;
+    }
+
+    private void UnfreezePlayer()
+    {
+        if (!_playerFrozen) return;
+        _playerFrozen = false;
+
+        if (_frozenCC != null) _frozenCC.enabled = _frozenCCWasEnabled;
+        if (_frozenGravity != null) _frozenGravity.enabled = _frozenGravityWasEnabled;
+    }
+
+    // ------------------------------------------------------------------
+    // Player teleport
+    // ------------------------------------------------------------------
+
+    private void TeleportPlayerToTransform(Transform targetTransform)
+    {
+        if (xrOrigin == null || targetTransform == null)
             return;
-        }
 
-        CharacterController cc = origin.GetComponentInChildren<CharacterController>();
-        Rigidbody rb = origin.GetComponentInChildren<Rigidbody>();
+        XROrigin origin = xrOrigin.GetComponent<XROrigin>();
 
-        bool ccWasEnabled = cc != null && cc.enabled;
-        if (cc != null) cc.enabled = false;
-        if (rb != null)
-        {
-            rb.useGravity = false;
-            rb.isKinematic = true;
-            rb.linearVelocity = Vector3.zero;   // Unity 6
-                                                // rb.velocity = Vector3.zero;      // older Unity
-        }
+        if (origin == null)
+            return;
 
-        // Face the same direction as the spawn point
-        Vector3 forward = Vector3.ProjectOnPlane(destination.forward, Vector3.up).normalized;
+        CharacterController cc = xrOrigin.GetComponentInChildren<CharacterController>();
+
+        bool controllerWasEnabled = cc != null && cc.enabled;
+
+        if (cc != null)
+            cc.enabled = false;
+
+        Vector3 forward = Vector3.ProjectOnPlane(
+            targetTransform.forward,
+            Vector3.up
+        ).normalized;
+
         if (forward.sqrMagnitude > 0.001f)
             origin.MatchOriginUpCameraForward(Vector3.up, forward);
 
-        // ---- decide final camera position ----
-        Vector3 targetCameraPos = destination.position;
+        origin.MoveCameraToWorldLocation(targetTransform.position);
 
-        if (useFixedSpawnHeight)
+        // Previously the Spawn Point's raw height was used and the snapToFloor /
+        // useFixedSpawnHeight settings were never applied. Put the rig on the actual
+        // floor so the player's eye height comes from the headset (or Camera Y Offset).
+        if (snapToFloor)
         {
-            targetCameraPos.y = fixedSpawnHeight;
-        }
-        else if (snapToFloor)
-        {
-            // Cast from a bit above the spawn point
-            if (TryFindFloorY(destination.position + Vector3.up * 1.5f, out float floorY))
+            Physics.SyncTransforms();
+
+            if (TryFindFloorY(targetTransform.position, out float floorY))
             {
-                // Put camera ~1.6 m above the real floor
-                targetCameraPos.y = floorY + 1.6f;
+                Transform originT = origin.Origin != null ? origin.Origin.transform : xrOrigin.transform;
+                Vector3 p = originT.position;
+                p.y = floorY;
+                originT.position = p;
+
+                // On a headset the tracked pose arrives a few frames AFTER the teleport,
+                // so eye height is checked (and corrected) once tracking has settled.
+                StartCoroutine(SettleEyeHeight(origin, floorY));
             }
-            // else keep destination.position.y
+            else
+            {
+                Debug.LogWarning("[ExperimentLoader] snapToFloor: no floor collider found below the Spawn Point; leaving height as is.");
+            }
         }
 
-        origin.MoveCameraToWorldLocation(targetCameraPos);
-
-        StartCoroutine(ReenableLocomotion(cc, rb, ccWasEnabled));
+        StartCoroutine(RestoreCharacterController(cc, controllerWasEnabled));
     }
 
-    private IEnumerator ReenableLocomotion(CharacterController cc, Rigidbody rb, bool ccWasEnabled)
+    private IEnumerator SettleEyeHeight(XROrigin origin, float floorY)
     {
-        // Let the new scene's colliders finish loading
-        yield return null;
-        yield return null;
-        yield return new WaitForSecondsRealtime(Mathf.Max(0.15f, controllerReenableDelay));
+        yield return new WaitForSecondsRealtime(0.75f);
 
-        if (rb != null)
+        if (origin == null || origin.Camera == null)
+            yield break;
+
+        float eye = origin.Camera.transform.position.y - floorY;
+        bool floorMode = origin.RequestedTrackingOriginMode == XROrigin.TrackingOriginMode.Floor;
+
+        Debug.Log($"[ExperimentLoader] Spawn settled: floorY={floorY:F2}, eyeHeightAboveFloor={eye:F2}, " +
+                  $"trackingMode={origin.RequestedTrackingOriginMode}, cameraYOffset={origin.CameraYOffset:F2}");
+
+        // Headset isn't giving us a standing height (Device mode / no floor-level tracking):
+        // make up the difference with the Camera Y Offset so the player isn't at or under the floor.
+        if (!floorMode && eye < minEyeHeight)
         {
-            rb.linearVelocity = Vector3.zero;
-            // rb.velocity = Vector3.zero;
-            rb.isKinematic = false;
-            rb.useGravity = true;
+            float target = Mathf.Max(fixedSpawnHeight, minEyeHeight);
+            origin.CameraYOffset += target - eye;
+            Debug.LogWarning($"[ExperimentLoader] Eye height was {eye:F2} m; raised Camera Y Offset to {origin.CameraYOffset:F2}.");
         }
-
-        if (cc != null)
-            cc.enabled = ccWasEnabled;
+        else if (eye < 0.3f)
+        {
+            Debug.LogWarning($"[ExperimentLoader] Eye height is only {eye:F2} m in Floor mode. Check the headset's floor level / guardian setup.");
+        }
     }
+
     // Casts down from the spawn point to find the floor. Ignores triggers and the player's own colliders.
     private bool TryFindFloorY(Vector3 from, out float floorY)
     {
@@ -673,6 +728,9 @@ public class ExperimentLoader : MonoBehaviour
             Mathf.Max(0.25f, controllerReenableDelay)
         );
 
+        // While frozen, UnfreezePlayer() owns the CharacterController.
+        if (_playerFrozen) yield break;
+
         if (cc != null)
             cc.enabled = wasEnabled;
     }
@@ -699,7 +757,7 @@ public class ExperimentLoader : MonoBehaviour
             { "vrDeviceId", vrDeviceDocumentId },
             { "status", status },
             { "experimentId", inUse ? config.experimentId : "" },
-            { "progressId", config != null ? config.progressId : "" },
+            { "progressId", inUse ? config.progressId : "" },
             { "blockId", inUse ? config.blockId : "" },
             { "sceneName", inUse ? experimentSceneName : "" },
         };
