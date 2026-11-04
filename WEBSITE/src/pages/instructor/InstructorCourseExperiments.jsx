@@ -818,6 +818,30 @@ export default function InstructorCourseExperiments() {
     return group?.groupName || "Unassigned";
   };
 
+  const getUnassignedStudents = () => {
+    return students.filter(
+      (student) =>
+        !groups.some((group) => group.studentIds?.includes(student.id)),
+    );
+  };
+
+  const getAvailableStudentsForEdit = (groupId) => {
+    const currentGroup = groups.find((group) => group.id === groupId);
+
+    return students.filter((student) => {
+      const belongsToCurrentGroup = currentGroup?.studentIds?.includes(
+        student.id,
+      );
+
+      const belongsToAnotherGroup = groups.some(
+        (group) =>
+          group.id !== groupId && group.studentIds?.includes(student.id),
+      );
+
+      return belongsToCurrentGroup || !belongsToAnotherGroup;
+    });
+  };
+
   const handleCreateGroup = async () => {
     if (!groupName.trim()) {
       setError("Please enter a group name.");
@@ -2141,10 +2165,16 @@ export default function InstructorCourseExperiments() {
             <h2 className="text-2xl font-medium mb-3">Select students</h2>
 
             <div className="max-h-[550px] overflow-y-auto">
-              {students.map((student) => (
-                <label
-                  key={student.id}
-                  className="
+              {getUnassignedStudents().length === 0 ? (
+                <p className="text-sm text-gray-500 py-3">
+                  All students have already been assigned to a group. No more
+                  students can be added.
+                </p>
+              ) : (
+                getUnassignedStudents().map((student) => (
+                  <label
+                    key={student.id}
+                    className="
                     flex
                     items-center
                     gap-4
@@ -2154,16 +2184,16 @@ export default function InstructorCourseExperiments() {
                     border-gray-300
                     cursor-pointer
                   "
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedStudents.includes(student.id)}
-                    onChange={() => handleStudentSelection(student.id)}
-                    className="w-5 h-5"
-                  />
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedStudents.includes(student.id)}
+                      onChange={() => handleStudentSelection(student.id)}
+                      className="w-5 h-5"
+                    />
 
-                  <div
-                    className="
+                    <div
+                      className="
                       w-14
                       h-14
                       rounded-full
@@ -2174,15 +2204,16 @@ export default function InstructorCourseExperiments() {
                       text-gray-600
                       text-2xl
                     "
-                  >
-                    <User size={25} />
-                  </div>
+                    >
+                      <User size={25} />
+                    </div>
 
-                  <span className="text-lg">
-                    {student.firstName} {student.lastName}
-                  </span>
-                </label>
-              ))}
+                    <span className="text-lg">
+                      {student.firstName} {student.lastName}
+                    </span>
+                  </label>
+                ))
+              )}
             </div>
 
             <div className="flex gap-3 mt-5">
@@ -2248,10 +2279,16 @@ export default function InstructorCourseExperiments() {
             <h2 className="text-2xl font-medium mb-3">Students</h2>
 
             <div className="max-h-[550px] overflow-y-auto">
-              {students.map((student) => (
-                <label
-                  key={student.id}
-                  className="
+              {getAvailableStudentsForEdit(editingGroup.id).length === 0 ? (
+                <p className="text-sm text-gray-500 py-3">
+                  All students have already been assigned to a group. No more
+                  students can be added.
+                </p>
+              ) : (
+                getAvailableStudentsForEdit(editingGroup.id).map((student) => (
+                  <label
+                    key={student.id}
+                    className="
                       flex
                       items-center
                       gap-4
@@ -2261,16 +2298,16 @@ export default function InstructorCourseExperiments() {
                       border-gray-300
                       cursor-pointer
                     "
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedStudents.includes(student.id)}
-                    onChange={() => handleStudentSelection(student.id)}
-                    className="w-5 h-5"
-                  />
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedStudents.includes(student.id)}
+                      onChange={() => handleStudentSelection(student.id)}
+                      className="w-5 h-5"
+                    />
 
-                  <div
-                    className="
+                    <div
+                      className="
                         w-14
                         h-14
                         rounded-full
@@ -2281,15 +2318,16 @@ export default function InstructorCourseExperiments() {
                         text-gray-600
                         text-2xl
                       "
-                  >
-                    <User size={25} />
-                  </div>
+                    >
+                      <User size={25} />
+                    </div>
 
-                  <span className="text-lg">
-                    {student.firstName} {student.lastName}
-                  </span>
-                </label>
-              ))}
+                    <span className="text-lg">
+                      {student.firstName} {student.lastName}
+                    </span>
+                  </label>
+                ))
+              )}
             </div>
 
             <div className="flex gap-3 mt-5">
