@@ -351,6 +351,15 @@ public class LiveKitVrPublisher : MonoBehaviour
     {
         _spectatorCamera.transform.SetPositionAndRotation(
             xrCamera.transform.position, xrCamera.transform.rotation);
+
+        // CopyFrom() only takes a one-time snapshot. ExperimentLoader switches the headset
+        // camera into a black "loading void" (culling mask = loading UI only) during the
+        // disclaimers and scene loads, then restores it. If the stream starts during the
+        // disclaimers, the spectator camera would keep that void mask forever and never
+        // show the experiment, so mirror these settings every frame.
+        _spectatorCamera.cullingMask = xrCamera.cullingMask;
+        _spectatorCamera.clearFlags = xrCamera.clearFlags;
+        _spectatorCamera.backgroundColor = xrCamera.backgroundColor;
     }
 
     private void DestroySpectatorCamera()

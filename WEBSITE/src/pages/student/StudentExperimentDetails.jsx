@@ -47,10 +47,25 @@ export default function StudentExperimentDetails() {
 
         setCourse(courseData);
 
+        // The instructor's original experiment is always what is shown and run
+        let originalExperimentId = experimentId;
+
         if (experimentId) {
           const experimentRef = doc(db, "experiment", experimentId);
 
-          const experimentSnap = await getDoc(experimentRef);
+          let experimentSnap = await getDoc(experimentRef);
+
+          // If the URL points at a student's own copy, show its parent instead
+          if (
+            experimentSnap.exists() &&
+            experimentSnap.data().createdByStudent === true &&
+            experimentSnap.data().parentExperimentId
+          ) {
+            originalExperimentId = experimentSnap.data().parentExperimentId;
+            experimentSnap = await getDoc(
+              doc(db, "experiment", originalExperimentId),
+            );
+          }
 
           if (experimentSnap.exists()) {
             setExperiment({
@@ -58,33 +73,26 @@ export default function StudentExperimentDetails() {
               ...experimentSnap.data(),
             });
           }
-        } else {
-          const experimentsRef = collection(db, "experiment");
+        }
 
-          const q = query(experimentsRef, where("blockId", "==", blockId));
-
-          const experimentSnapshot = await getDocs(q);
+        // Wait for Firebase Auth to restore the session before reading the user
+        if (auth.authStateReady) {
+          await auth.authStateReady();
         }
 
         const currentUser = auth.currentUser;
 
-        if (currentUser) {
-          const experimentsRef = collection(db, "experiment");
-
+        if (currentUser && originalExperimentId) {
           const studentQuery = query(
-            experimentsRef,
+            collection(db, "experiment"),
             where("blockId", "==", blockId),
+            where("studentId", "==", currentUser.uid),
+            where("parentExperimentId", "==", originalExperimentId),
           );
 
           const studentSnapshot = await getDocs(studentQuery);
 
-          const existingStudentExperiment = studentSnapshot.docs.find(
-            (experimentDoc) => {
-              const data = experimentDoc.data();
-
-              return data.createdByStudent === currentUser.uid;
-            },
-          );
+          const existingStudentExperiment = studentSnapshot.docs[0];
 
           if (existingStudentExperiment) {
             setStudentExperiment({
@@ -300,11 +308,13 @@ export default function StudentExperimentDetails() {
   };
 
   const handleCreateExperiment = () => {
-    if (studentExperiment) {
+    if (studentExperiment || !experiment?.id) {
       return;
     }
 
-    navigate(`/student/course/${blockId}/experiment/create`);
+    navigate(
+      `/student/course/${blockId}/experiment/create?parent=${experiment.id}`,
+    );
   };
 
   const handleEditExperiment = () => {
@@ -590,7 +600,7 @@ export default function StudentExperimentDetails() {
                     <span>
                       {studentExperiment
                         ? "Experiment Created"
-                        : "Create Experiment"}
+                        : "Edit Experiment"}
                     </span>
                   </button>
                 )}
@@ -599,7 +609,7 @@ export default function StudentExperimentDetails() {
           )}
         </section>
 
-        {studentExperiment && (
+        {studentExperiment && experiment?.allowStudentExperiments === true && (
           <section
             className="
               border

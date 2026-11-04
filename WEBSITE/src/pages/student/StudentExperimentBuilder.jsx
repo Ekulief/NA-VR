@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import {
   collection,
@@ -13,7 +13,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 
-import { db } from "../../config/firebase-config";
+import { db, auth } from "../../config/firebase-config";
 
 import { ArrowLeft, Plus, Box, X, Save, Loader2, Trash2 } from "lucide-react";
 
@@ -166,6 +166,9 @@ const formatConfigLabel = (key) => {
 export default function InstructorExperimentBuilder() {
   const navigate = useNavigate();
   const { blockId, experimentId } = useParams();
+  const [searchParams] = useSearchParams();
+  // The instructor experiment this student experiment belongs to (set on create)
+  const parentExperimentId = searchParams.get("parent") || null;
 
   const isEditing = Boolean(experimentId);
 
@@ -181,7 +184,7 @@ export default function InstructorExperimentBuilder() {
   const [moduleLoading, setModuleLoading] = useState(true);
 
   const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(isEditing);
+  const [loading, setLoading] = useState(true);
 
   const [showPreview, setShowPreview] = useState(false);
 
@@ -193,60 +196,6 @@ export default function InstructorExperimentBuilder() {
     if (!moduleId && !sceneId) return null;
     const key = moduleId || sceneId;
     return previewSceneMap[key] || null;
-  };
-
-  const loadExperimentModule = async (selectedModuleId) => {
-    if (!selectedModuleId) return null;
-
-    try {
-      const moduleSnap = await getDoc(
-        doc(db, "experimentModule", selectedModuleId),
-      );
-
-      if (!moduleSnap || !moduleSnap.exists()) {
-        console.error(`Experiment module "${selectedModuleId}" was not found.`);
-        return null;
-      }
-
-      const data = moduleSnap.data();
-
-      return {
-        id: selectedModuleId,
-        moduleName: data.moduleName || "",
-        description: data.description || "",
-        sceneId: data.sceneId || "",
-        defaultConfig: cloneConfig(data.defaultConfig || {}),
-      };
-    } catch (error) {
-      console.error("Error loading experiment module:", error);
-      return null;
-    }
-  };
-
-  const selectEnvironment = async (option) => {
-    setModuleLoading(true);
-    setShowPreview(false);
-
-    try {
-      const module = await loadExperimentModule(option.moduleId);
-
-      if (!module) {
-        alert(`Unable to load default configuration for ${option.name}.`);
-        return;
-      }
-
-      setEnvironment(option.name);
-      setModuleId(module.id);
-      setModuleName(module.moduleName || option.name);
-      setExperimentName(module.moduleName || option.name);
-      setSceneId(module.sceneId || "");
-      setModuleDescription(module.description || option.description);
-      setInstructions(module.description || option.description);
-
-      setConfiguration(cloneConfig(module.defaultConfig || {}));
-    } finally {
-      setModuleLoading(false);
-    }
   };
 
   useEffect(() => {
@@ -266,16 +215,20 @@ export default function InstructorExperimentBuilder() {
 
   useEffect(() => {
     const getExperiment = async () => {
-      if (!experimentId) {
-        setLoading(false);
-        setModuleLoading(false);
+      // Editing the student's own copy, or starting a new copy from the
+      // instructor's experiment. Students never start from a blank experiment.
+      const sourceId = experimentId || parentExperimentId;
+
+      if (!sourceId) {
+        alert("Open an experiment first, then choose Create Experiment.");
+        navigate(-1);
         return;
       }
 
       try {
         setLoading(true);
 
-        const experimentRef = doc(db, "experiment", experimentId);
+        const experimentRef = doc(db, "experiment", sourceId);
         const experimentSnap = await getDoc(experimentRef);
 
         if (!experimentSnap.exists()) {
@@ -286,13 +239,20 @@ export default function InstructorExperimentBuilder() {
 
         const data = experimentSnap.data();
 
-        // ← put it here
+        if (!experimentId && data.allowStudentExperiments !== true) {
+          alert("Your instructor has not enabled student experiments for this activity.");
+          navigate(-1);
+          return;
+        }
 
         setExperimentName(data.experimentName || "");
         setInstructions(data.instructions || "");
         setEnvironment(data.environment || "");
-
-        // ... rest of the existing code
+        setModuleId(data.moduleId || "");
+        setModuleName(data.moduleName || "");
+        setSceneId(data.sceneId || "");
+        setModuleDescription(data.moduleDescription || "");
+        setConfiguration(cloneConfig(data.configuration || {}));
       } catch (error) {
         console.error("Error getting experiment:", error);
         alert("Unable to load the experiment.");
@@ -304,7 +264,7 @@ export default function InstructorExperimentBuilder() {
     };
 
     getExperiment();
-  }, [experimentId, navigate]);
+  }, [experimentId, parentExperimentId, navigate]);
 
   const updateConfigValue = (path, value) => {
     setConfiguration((previous) => {
@@ -551,6 +511,12 @@ export default function InstructorExperimentBuilder() {
       return;
     }
 
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      alert("You need to be signed in to save an experiment.");
+      return;
+    }
+
     setSaving(true);
 
     try {
@@ -572,6 +538,9 @@ export default function InstructorExperimentBuilder() {
         alert("Experiment updated successfully.");
       } else {
         payload.createdAt = serverTimestamp();
+        payload.createdByStudent = true;
+        payload.studentId = currentUser.uid;
+        payload.parentExperimentId = parentExperimentId;
         await addDoc(collection(db, "experiment"), payload);
         alert("Experiment created successfully.");
       }
@@ -806,27 +775,33 @@ export default function InstructorExperimentBuilder() {
         </button>
 
         <h1 className="text-2xl font-medium mb-6">
-          {isEditing ? "Edit Experiment" : "Create New Experiment"}
+          Edit Experiment
         </h1>
 
         {/* Environment Selection */}
         <section className="bg-white border border-gray-200 rounded-xl p-6 mb-6 shadow-sm">
           <h2 className="text-lg font-medium mb-3">
-            Select Environment / Module
+            Experiment Type
           </h2>
+          <p className="text-sm text-gray-500 mb-3">
+            The experiment type is set by your instructor and can&apos;t be
+            changed.
+          </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {ENVIRONMENT_OPTIONS.map((opt) => {
+            {ENVIRONMENT_OPTIONS.filter(
+              (opt) => moduleId === opt.moduleId || environment === opt.name,
+            ).map((opt) => {
               const isSelected =
                 moduleId === opt.moduleId || environment === opt.name;
               return (
                 <button
                   key={opt.moduleId}
                   type="button"
-                  onClick={() => selectEnvironment(opt)}
-                  className={`text-left border rounded-lg p-4 transition ${
+                  disabled
+                  className={`text-left border rounded-lg p-4 cursor-default ${
                     isSelected
                       ? "border-indigo-600 bg-indigo-50/50 ring-2 ring-indigo-500/20"
-                      : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                      : "border-gray-200"
                   }`}
                 >
                   <p className="font-medium text-sm text-gray-900">
@@ -1308,7 +1283,7 @@ export default function InstructorExperimentBuilder() {
               <Save size={18} />
             )}
             <span>
-              {isEditing ? "Update Experiment" : "Publish Experiment"}
+              Save Experiment
             </span>
           </button>
         </div>
