@@ -18,8 +18,6 @@ public class ExperimentLoader : MonoBehaviour
     public float fixedSpawnHeight = 1.6f;
     public bool snapToFloor = true;
     public float floorSnapDistance = 3f;
-    [Tooltip("After spawning, if the camera is lower than this above the floor (headset not reporting height), the Camera Y Offset is raised to fixedSpawnHeight.")]
-    public float minEyeHeight = 1.0f;
 
     [Header("Main Scene Visibility")]
     public GameObject[] mainSceneObjects;
@@ -79,7 +77,7 @@ public class ExperimentLoader : MonoBehaviour
     private Color _savedBg;
     private bool _inVoid;
 
-    // Player freeze state (see FreezePlayer)
+    // Player freeze state (Memory Scene 2 only)
     private bool _playerFrozen;
     private CharacterController _frozenCC;
     private bool _frozenCCWasEnabled;
@@ -427,6 +425,8 @@ public class ExperimentLoader : MonoBehaviour
         _isLoading = true;
         _currentSceneName = sceneName;
         SceneReadySignal.Reset();
+
+        // Only freeze if loading Memory Scene 2
         FreezePlayer();
 
         if (loadingText != null) loadingText.text = "Loading Experiment…";
@@ -507,7 +507,7 @@ public class ExperimentLoader : MonoBehaviour
         }
         yield return null;
         yield return null;
-
+        yield return new WaitForSecondsRealtime(1f);
         yield return StartCoroutine(RevealWorld());
         UnfreezePlayer();
         _isLoading = false;
@@ -516,6 +516,8 @@ public class ExperimentLoader : MonoBehaviour
     private IEnumerator UnloadExperimentScene(GameObject respawnObject)
     {
         _isLoading = true;
+
+        // Only freeze if returning from Memory Scene 2
         FreezePlayer();
 
         if (loadingText != null)
@@ -573,15 +575,14 @@ public class ExperimentLoader : MonoBehaviour
     }
 
     // ------------------------------------------------------------------
-    // Player freeze (loading screens)
+    // Player freeze (Memory Scene 2 only)
     // ------------------------------------------------------------------
 
-    // While the screen is black the hub is hidden / the experiment scene is loading or unloading,
-    // so there may be no floor under the player. With gravity running they used to fall behind the
-    // loading screen, hit the FallLimit and get respawned over and over. Freeze the body (gravity +
-    // CharacterController) for the whole transition and release it once the world is revealed.
     private void FreezePlayer()
     {
+        // Only apply freeze behavior if the target/current scene is "Memory Scene 2"
+        if (_currentSceneName != "Memory Scene 2") return;
+
         if (_playerFrozen || xrOrigin == null) return;
 
         _frozenCC = xrOrigin.GetComponentInChildren<CharacterController>();
@@ -607,7 +608,9 @@ public class ExperimentLoader : MonoBehaviour
 
     private void UnfreezePlayer()
     {
+        if (_currentSceneName != "Memory Scene 2") return;
         if (!_playerFrozen) return;
+
         _playerFrozen = false;
 
         if (_frozenCC != null) _frozenCC.enabled = _frozenCCWasEnabled;
@@ -645,81 +648,7 @@ public class ExperimentLoader : MonoBehaviour
 
         origin.MoveCameraToWorldLocation(targetTransform.position);
 
-        // Previously the Spawn Point's raw height was used and the snapToFloor /
-        // useFixedSpawnHeight settings were never applied. Put the rig on the actual
-        // floor so the player's eye height comes from the headset (or Camera Y Offset).
-        if (snapToFloor)
-        {
-            Physics.SyncTransforms();
-
-            if (TryFindFloorY(targetTransform.position, out float floorY))
-            {
-                Transform originT = origin.Origin != null ? origin.Origin.transform : xrOrigin.transform;
-                Vector3 p = originT.position;
-                p.y = floorY;
-                originT.position = p;
-
-                // On a headset the tracked pose arrives a few frames AFTER the teleport,
-                // so eye height is checked (and corrected) once tracking has settled.
-                StartCoroutine(SettleEyeHeight(origin, floorY));
-            }
-            else
-            {
-                Debug.LogWarning("[ExperimentLoader] snapToFloor: no floor collider found below the Spawn Point; leaving height as is.");
-            }
-        }
-
         StartCoroutine(RestoreCharacterController(cc, controllerWasEnabled));
-    }
-
-    private IEnumerator SettleEyeHeight(XROrigin origin, float floorY)
-    {
-        yield return new WaitForSecondsRealtime(0.75f);
-
-        if (origin == null || origin.Camera == null)
-            yield break;
-
-        float eye = origin.Camera.transform.position.y - floorY;
-        bool floorMode = origin.RequestedTrackingOriginMode == XROrigin.TrackingOriginMode.Floor;
-
-        Debug.Log($"[ExperimentLoader] Spawn settled: floorY={floorY:F2}, eyeHeightAboveFloor={eye:F2}, " +
-                  $"trackingMode={origin.RequestedTrackingOriginMode}, cameraYOffset={origin.CameraYOffset:F2}");
-
-        // Headset isn't giving us a standing height (Device mode / no floor-level tracking):
-        // make up the difference with the Camera Y Offset so the player isn't at or under the floor.
-        if (!floorMode && eye < minEyeHeight)
-        {
-            float target = Mathf.Max(fixedSpawnHeight, minEyeHeight);
-            origin.CameraYOffset += target - eye;
-            Debug.LogWarning($"[ExperimentLoader] Eye height was {eye:F2} m; raised Camera Y Offset to {origin.CameraYOffset:F2}.");
-        }
-        else if (eye < 0.3f)
-        {
-            Debug.LogWarning($"[ExperimentLoader] Eye height is only {eye:F2} m in Floor mode. Check the headset's floor level / guardian setup.");
-        }
-    }
-
-    // Casts down from the spawn point to find the floor. Ignores triggers and the player's own colliders.
-    private bool TryFindFloorY(Vector3 from, out float floorY)
-    {
-        floorY = from.y;
-
-        Vector3 start = from + Vector3.up * 0.5f;
-        RaycastHit[] hits = Physics.RaycastAll(start, Vector3.down, floorSnapDistance + 0.5f,
-            Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
-
-        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
-
-        foreach (RaycastHit hit in hits)
-        {
-            if (xrOrigin != null && hit.collider.transform.IsChildOf(xrOrigin.transform))
-                continue;
-
-            floorY = hit.point.y;
-            return true;
-        }
-
-        return false;
     }
 
     private IEnumerator RestoreCharacterController(CharacterController cc, bool wasEnabled)
