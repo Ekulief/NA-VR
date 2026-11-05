@@ -59,6 +59,8 @@ public class AttentionalBlindnessManager : MonoBehaviour
     public GameObject instructionPanel;
     public TMP_Text instructionText;
     public Button startCountingButton;
+    [Tooltip("Seconds to wait after the instruction panel appears before showing the Start Counting button.")]
+    public float beginButtonAppearDelay = 2.5f;
 
     [Header("UI — Count Input Panel")]
     public GameObject countInputPanel;
@@ -453,10 +455,26 @@ public class AttentionalBlindnessManager : MonoBehaviour
                 : "<b>Count the furniture</b>\n\nLook around the scene and count how many furniture items you can see.\n\nPress <b>Start Counting</b> when you are ready.";
         }
 
+        // Hide the button first so it can appear after a short delay
+        if (startCountingButton != null)
+            startCountingButton.gameObject.SetActive(false);
+
         if (instructionPanel != null) instructionPanel.SetActive(true);
         LockLocomotion();
         ExperimentLogger.Log("instructions_shown", "Attentional Blindness instructions displayed");
         SceneReadySignal.MarkReady();
+
+        StartCoroutine(ShowBeginButtonAfterDelay());
+    }
+
+    private IEnumerator ShowBeginButtonAfterDelay()
+    {
+        float delay = Mathf.Max(0f, beginButtonAppearDelay);
+        if (delay > 0f)
+            yield return new WaitForSeconds(delay);
+
+        if (startCountingButton != null)
+            startCountingButton.gameObject.SetActive(true);
     }
 
     private void OnStartCounting()

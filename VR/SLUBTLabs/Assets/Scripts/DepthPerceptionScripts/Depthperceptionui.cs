@@ -6,6 +6,8 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using Firebase.Firestore;
+using UnityEngine.XR.Interaction.Toolkit;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
 
 /// <summary>
 /// Depth / height estimation trial UI.
@@ -20,6 +22,8 @@ public class DepthPerceptionUI : MonoBehaviour
     public GameObject instructionPanel;
     public TMP_Text instructionText;
     public Button startTestButton;
+    [Tooltip("Seconds to wait after the player teleports via StartExperimentAnchor before showing the Start Test button.")]
+    public float beginButtonAppearDelay = 2.5f;
 
     [Header("UI — Input Panel")]
     public GameObject inputPanel;
@@ -70,6 +74,8 @@ public class DepthPerceptionUI : MonoBehaviour
     private Vector3 _sideBaseScale;
     private Vector3[] _propBaseWorldPositions;
     private bool _scalingApplied;
+
+    private TeleportationAnchor _startExperimentAnchor;
 
     // ------------------------------------------------------------------
     // Building scale + prop reposition
@@ -123,7 +129,7 @@ public class DepthPerceptionUI : MonoBehaviour
             float sideScaleFactor = actualHeightMetres / sideRef;
 
             Vector3 s = _sideBaseScale;
-            s.z = _sideBaseScale.z * sideScaleFactor; 
+            s.z = _sideBaseScale.z * sideScaleFactor;
             sideBuildingToScale.localScale = s;
         }
 
@@ -177,6 +183,12 @@ public class DepthPerceptionUI : MonoBehaviour
         StartCoroutine(BeginExperiment());
     }
 
+    private void OnDestroy()
+    {
+        if (_startExperimentAnchor != null)
+            _startExperimentAnchor.selectExited.RemoveListener(OnStartExperimentAnchorUsed);
+    }
+
     private bool IsSessionPaused()
     {
         return SessionController.Instance != null && SessionController.Instance.IsPaused;
@@ -219,8 +231,12 @@ public class DepthPerceptionUI : MonoBehaviour
         {
             instructionText.text = (config != null && !string.IsNullOrEmpty(config.depth_InstructionText))
                 ? config.depth_InstructionText
-                : "<b>Depth Perception Test</b>\n\nObserve the target building structure and estimate its height in meters.\n\nPress <b>Start Test</b> when ready.";
+                : "<b>Depth Perception Test</b>\n\nObserve the target building structure and estimate its height in meters.\n\nTeleport to the viewing position, then press <b>Start Test</b> when ready.";
         }
+
+        // Keep the Start Test button hidden until the player uses StartExperimentAnchor
+        if (startTestButton != null)
+            startTestButton.gameObject.SetActive(false);
 
         if (instructionPanel != null) instructionPanel.SetActive(true);
 
@@ -228,6 +244,50 @@ public class DepthPerceptionUI : MonoBehaviour
         CacheBaseScalesAndPositions();
         ApplyBuildingHeightScale(_actualHeight);
         SceneReadySignal.MarkReady();
+
+        SubscribeToStartExperimentAnchor();
+    }
+
+    private void SubscribeToStartExperimentAnchor()
+    {
+        GameObject anchorGo = GameObject.Find("StartExperimentAnchor");
+        if (anchorGo == null)
+        {
+            Debug.LogWarning("[DepthPerception] StartExperimentAnchor not found – showing Start Test button after delay as fallback.");
+            StartCoroutine(ShowBeginButtonAfterDelay());
+            return;
+        }
+
+        _startExperimentAnchor = anchorGo.GetComponent<TeleportationAnchor>();
+        if (_startExperimentAnchor == null)
+        {
+            Debug.LogWarning("[DepthPerception] StartExperimentAnchor has no TeleportationAnchor component – showing button after delay as fallback.");
+            StartCoroutine(ShowBeginButtonAfterDelay());
+            return;
+        }
+
+        _startExperimentAnchor.selectExited.AddListener(OnStartExperimentAnchorUsed);
+        Debug.Log("[DepthPerception] Waiting for player to teleport via StartExperimentAnchor before showing Start Test button.");
+    }
+
+    private void OnStartExperimentAnchorUsed(SelectExitEventArgs args)
+    {
+        // Only react once
+        if (_startExperimentAnchor != null)
+            _startExperimentAnchor.selectExited.RemoveListener(OnStartExperimentAnchorUsed);
+
+        Debug.Log("[DepthPerception] Player entered via StartExperimentAnchor – showing Start Test button after delay.");
+        StartCoroutine(ShowBeginButtonAfterDelay());
+    }
+
+    private IEnumerator ShowBeginButtonAfterDelay()
+    {
+        float delay = Mathf.Max(0f, beginButtonAppearDelay);
+        if (delay > 0f)
+            yield return new WaitForSeconds(delay);
+
+        if (startTestButton != null)
+            startTestButton.gameObject.SetActive(true);
     }
 
     private void OnStartTest()

@@ -33,6 +33,8 @@ public class OddItemManager : MonoBehaviour
     public GameObject instructionPanel;
     public TMP_Text instructionText;
     public Button startButton;
+    [Tooltip("Seconds to wait after the instruction panel appears before showing the Begin Experiment button.")]
+    public float beginButtonAppearDelay = 2.5f;
 
     [Header("Start Wall")]
     [Tooltip("The wall that hides the shelves until the experiment begins. If left empty, an object named 'StartWall' is looked up automatically.")]
@@ -435,8 +437,24 @@ public class OddItemManager : MonoBehaviour
                 : "Find the item that doesn't belong.\nPoint at it and pull the trigger.";
         }
 
+        // Hide the button first so it can appear after a short delay
+        if (startButton != null)
+            startButton.gameObject.SetActive(false);
+
         if (instructionPanel != null)
             instructionPanel.SetActive(true);
+
+        StartCoroutine(ShowBeginButtonAfterDelay());
+    }
+
+    private IEnumerator ShowBeginButtonAfterDelay()
+    {
+        float delay = Mathf.Max(0f, beginButtonAppearDelay);
+        if (delay > 0f)
+            yield return new WaitForSeconds(delay);
+
+        if (startButton != null)
+            startButton.gameObject.SetActive(true);
     }
 
     private void OnStartButtonClicked()

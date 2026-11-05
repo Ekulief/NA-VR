@@ -55,6 +55,8 @@ public class ExperimentManager : MonoBehaviour
     [Header("UI References")]
     public Button beginExperimentButton;
     public GameObject startingPanel;
+    [Tooltip("Seconds to wait after the starting panel is ready before showing the Begin Experiment button.")]
+    public float beginButtonAppearDelay = 2.5f;
 
     [Header("Recall Instruction UI")]
     public GameObject recallInstructionPanel;
@@ -104,7 +106,11 @@ public class ExperimentManager : MonoBehaviour
             fadeController = FindFirstObjectByType<FadeController>();
 
         if (beginExperimentButton != null)
+        {
             beginExperimentButton.onClick.AddListener(StartExperiment);
+            // Hide until the delay completes so participants read the briefing first
+            beginExperimentButton.gameObject.SetActive(false);
+        }
 
         if (beginQuestioningButton != null)
             beginQuestioningButton.onClick.AddListener(BeginQuestioning);
@@ -256,7 +262,20 @@ public class ExperimentManager : MonoBehaviour
 
         ApplyConfig();
         SceneReadySignal.MarkReady();
+
+        StartCoroutine(ShowBeginButtonAfterDelay());
     }
+
+    private IEnumerator ShowBeginButtonAfterDelay()
+    {
+        float delay = Mathf.Max(0f, beginButtonAppearDelay);
+        if (delay > 0f)
+            yield return new WaitForSeconds(delay);
+
+        if (beginExperimentButton != null)
+            beginExperimentButton.gameObject.SetActive(true);
+    }
+
     public void OnPlayerEnterRoom(string roomName)
     {
         if (CurrentState != ExperimentState.Exploring) return;

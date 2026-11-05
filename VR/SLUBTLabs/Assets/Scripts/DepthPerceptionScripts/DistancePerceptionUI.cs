@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion.Movement;
+using UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
 
 /// <summary>
@@ -21,6 +23,8 @@ public class DistancePerceptionUI : MonoBehaviour
     public GameObject instructionPanel;
     public TMP_Text instructionText;
     public Button startTestButton;
+    [Tooltip("Seconds to wait after the instruction panel appears before showing the Start Test button.")]
+    public float beginButtonAppearDelay = 2.5f;
 
     [Header("UI — Input Panel")]
     public GameObject inputPanel;
@@ -57,6 +61,9 @@ public class DistancePerceptionUI : MonoBehaviour
 
     // Locomotion Lock State (Matching Attentional Blindness)
     private bool _locomotionLocked = false;
+    private Vector3 _lockedPosition;
+    private readonly List<Behaviour> _disabledLocomotion = new();
+    private CharacterController _characterController;
 
     private void Start()
     {
@@ -88,10 +95,89 @@ public class DistancePerceptionUI : MonoBehaviour
         if (distanceSlider != null) distanceSlider.onValueChanged.RemoveListener(OnSliderChanged);
     }
 
-    private void LockPlayerLocomotion()
+    // ─────────────────────────────────────────────
+    // Locomotion lock / unlock (same as Attentional Blindness)
+    // ─────────────────────────────────────────────
+
+    private void LockLocomotion()
     {
-        // Use MoveOnly mode to block walking/turning but keep Teleportation active
-        LocomotionLocker.Lock(LocomotionLocker.LockMode.MoveOnly, xrOriginOverride);
+        if (_locomotionLocked) return;
+
+        GameObject origin = xrOriginOverride;
+        Unity.XR.CoreUtils.XROrigin xr = null;
+
+        if (origin == null)
+        {
+            xr = FindAnyObjectByType<Unity.XR.CoreUtils.XROrigin>();
+            if (xr != null) origin = xr.gameObject;
+        }
+        else
+        {
+            xr = origin.GetComponent<Unity.XR.CoreUtils.XROrigin>();
+        }
+
+        if (origin == null)
+        {
+            Debug.LogWarning("[DistancePerception] VR Player / XROrigin not found.");
+            return;
+        }
+
+        Debug.Log($"[DistancePerception] Found VR Player: '{origin.name}' " +
+                  $"(pos={origin.transform.position}, children={origin.transform.childCount})");
+
+        DisableIfFound<ContinuousMoveProvider>(origin, "Move (thumbstick walk)");
+        DisableIfFound<TeleportationProvider>(origin, "Teleportation");
+        DisableIfFound<ContinuousTurnProvider>(origin, "ContinuousTurn (stick)");
+        DisableIfFound<SnapTurnProvider>(origin, "SnapTurn (stick)");
+
+        _characterController = origin.GetComponent<CharacterController>();
+        if (_characterController != null && _characterController.enabled)
+        {
+            _characterController.enabled = false;
+            Debug.Log("[DistancePerception] Disabled: CharacterController on VR Player");
+        }
+
+        _lockedPosition = origin.transform.position;
+        _locomotionLocked = true;
+
+        Debug.Log($"[DistancePerception] Locomotion locked. " +
+                  $"Disabled {_disabledLocomotion.Count} providers. " +
+                  $"Position frozen at {_lockedPosition}. Head look + UI trigger still enabled.");
+    }
+
+    private void DisableIfFound<T>(GameObject root, string label) where T : Behaviour
+    {
+        var comps = root.GetComponentsInChildren<T>(true);
+        foreach (var c in comps)
+        {
+            if (c == null || !c.enabled) continue;
+            c.enabled = false;
+            _disabledLocomotion.Add(c);
+            Debug.Log($"[DistancePerception] Disabled: {typeof(T).Name} on '{c.gameObject.name}' ({label})");
+        }
+    }
+
+    private void UnlockLocomotion()
+    {
+        if (!_locomotionLocked) return;
+
+        foreach (var c in _disabledLocomotion)
+        {
+            if (c != null) c.enabled = true;
+        }
+        _disabledLocomotion.Clear();
+
+        if (_characterController != null)
+            _characterController.enabled = true;
+
+        _locomotionLocked = false;
+        LocomotionLocker.Unlock();
+        Debug.Log("[DistancePerception] Locomotion unlocked.");
+    }
+
+    private void LateUpdate()
+    {
+        if (!_locomotionLocked) return;
 
         GameObject origin = xrOriginOverride;
         if (origin == null)
@@ -99,26 +185,10 @@ public class DistancePerceptionUI : MonoBehaviour
             var xr = FindAnyObjectByType<Unity.XR.CoreUtils.XROrigin>();
             if (xr != null) origin = xr.gameObject;
         }
+        if (origin == null) return;
 
-        if (origin != null)
-        {
-            var teleportProvider = origin.GetComponentInChildren<TeleportationProvider>(true);
-            if (teleportProvider != null)
-            {
-                teleportProvider.enabled = true;
-            }
-
-            _locomotionLocked = true;
-        }
+        origin.transform.position = _lockedPosition;
     }
-
-    private void UnlockLocomotion()
-    {
-        _locomotionLocked = false;
-        LocomotionLocker.Unlock();
-        Debug.Log("[DistancePerception] Locomotion unlocked.");
-    }
-
 
     private bool IsSessionPaused()
     {
@@ -166,11 +236,29 @@ public class DistancePerceptionUI : MonoBehaviour
                 : "<b>Horizontal Distance Perception Test</b>\n\nObserve the target object ahead and estimate its horizontal distance in meters.\n\nPress <b>Start Test</b> when ready.";
         }
 
+        // Full lock via LocomotionLocker + hard freeze (same as Attentional Blindness)
         LocomotionLocker.Lock(LocomotionLocker.LockMode.Full, xrOriginOverride);
+        LockLocomotion();
+
+        // Hide the button first so it can appear after a short delay
+        if (startTestButton != null)
+            startTestButton.gameObject.SetActive(false);
 
         if (instructionPanel != null) instructionPanel.SetActive(true);
 
         SceneReadySignal.MarkReady();
+
+        StartCoroutine(ShowBeginButtonAfterDelay());
+    }
+
+    private IEnumerator ShowBeginButtonAfterDelay()
+    {
+        float delay = Mathf.Max(0f, beginButtonAppearDelay);
+        if (delay > 0f)
+            yield return new WaitForSeconds(delay);
+
+        if (startTestButton != null)
+            startTestButton.gameObject.SetActive(true);
     }
 
     private void OnStartTest()
@@ -179,7 +267,8 @@ public class DistancePerceptionUI : MonoBehaviour
 
         if (instructionPanel != null) instructionPanel.SetActive(false);
 
-        LocomotionLocker.Lock(LocomotionLocker.LockMode.MoveOnly, xrOriginOverride);
+        // Stay fully locked during the estimation (no walking / teleport / turn)
+        // LockLocomotion already applied at instruction time; keep position frozen.
 
         _trialStartTime = Time.time;
         _experimentStartRealtime = Time.realtimeSinceStartup;

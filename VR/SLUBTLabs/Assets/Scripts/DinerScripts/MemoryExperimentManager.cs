@@ -170,7 +170,7 @@ public class MemoryExperimentManager : MonoBehaviour
         }
         ApplyConfig();
 
-        SceneReadySignal.MarkReady();       
+        SceneReadySignal.MarkReady();
     }
 
     void ApplyConfig()
@@ -640,12 +640,6 @@ public class MemoryExperimentManager : MonoBehaviour
                 { "reactionTimeMs", (int)(rt * 1000) }
             });
 
-        if (choiceButtons != null)
-        {
-            foreach (var b in choiceButtons)
-                if (b != null) b.gameObject.SetActive(false);
-        }
-
         SetQuestionText(correct ? "Correct" : "Incorrect");
         StartCoroutine(DelayThenNextTrial(1.2f));
     }
@@ -659,6 +653,13 @@ public class MemoryExperimentManager : MonoBehaviour
             waited += Time.deltaTime;
             yield return null;
         }
+
+        if (choiceButtons != null)
+        {
+            foreach (var b in choiceButtons)
+                if (b != null) b.gameObject.SetActive(false);
+        }
+
         currentTrial++;
         ShowNextTrial();
     }
@@ -684,7 +685,7 @@ public class MemoryExperimentManager : MonoBehaviour
         if (loader != null)
         {
             loader.QueueExperimentSummary("Memory – Results", summary);
-            SaveFinalResults();         
+            SaveFinalResults();
             loader.ReturnToHub();
         }
         else
