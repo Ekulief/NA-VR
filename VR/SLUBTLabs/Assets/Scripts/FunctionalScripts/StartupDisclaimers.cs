@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
-using System.Collections.Generic;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Controls;
 using UnityEngine.InputSystem.XR;
@@ -19,6 +19,8 @@ using UnityEngine.UI;
 ///  - Create a child of the loading canvas with a CanvasGroup, a title TMP and a body TMP.
 ///  - Set that child and all its children to the LoadingUI layer.
 ///  - Assign the references below, then assign this component on ExperimentLoader.
+///  - Assign Canvas Root (the world-space canvas) and Head (Main Camera) so the
+///    pages are placed in front of the player every time.
 /// </summary>
 public class StartupDisclaimers : MonoBehaviour
 {
@@ -37,6 +39,17 @@ public class StartupDisclaimers : MonoBehaviour
     public TMP_Text bodyText;
     [Tooltip("Optional, shows e.g. 1 / 4")]
     public TMP_Text pageIndicatorText;
+
+    [Header("Placement (world-space canvas)")]
+    [Tooltip("The root of the world-space canvas that holds the group. Leave empty to skip placement.")]
+    public Transform canvasRoot;
+    [Tooltip("The XR camera (Main Camera). Falls back to Camera.main if empty.")]
+    public Transform head;
+    public float distance = 1.5f;
+    [Tooltip("Max seconds to wait for the headset to be tracked/worn before showing anyway.")]
+    public float headsetWaitTimeout = 10f;
+    [Tooltip("Extra delay after the headset is ready so recentering can settle.")]
+    public float headsetSettleSeconds = 0.5f;
 
     [Header("Timing")]
     public float fadeInSeconds = 1f;
@@ -116,6 +129,24 @@ public class StartupDisclaimers : MonoBehaviour
         if (group != null) group.alpha = 0f;
     }
 
+    private void OnEnable()
+    {
+        InputSystem.onDeviceChange += OnDeviceChange;
+        _buttonsDirty = true;
+    }
+
+    private void OnDisable()
+    {
+        InputSystem.onDeviceChange -= OnDeviceChange;
+    }
+
+    // Controllers can appear, disappear or be swapped (hand tracking <-> controllers,
+    // sleep/wake) at any time. Any such change invalidates the cached buttons.
+    private void OnDeviceChange(InputDevice device, InputDeviceChange change)
+    {
+        if (device is XRController) _buttonsDirty = true;
+    }
+
     public IEnumerator Play()
     {
         if (!WillShow) yield break;
@@ -127,6 +158,10 @@ public class StartupDisclaimers : MonoBehaviour
         group.gameObject.SetActive(true);
         group.alpha = 0f;
         if (acceptButton != null) acceptButton.gameObject.SetActive(false);
+
+        // Don't start until the headset is tracked/worn, otherwise the panel
+        // is placed relative to a head that is not where the player ends up.
+        yield return StartCoroutine(WaitForHeadset());
 
         bool canSkip = CanSkip;
         if (skipHintText != null) skipHintText.gameObject.SetActive(canSkip);
@@ -155,6 +190,9 @@ public class StartupDisclaimers : MonoBehaviour
             bodyText.text = p.body ?? "";
             if (pageIndicatorText != null)
                 pageIndicatorText.text = $"{i + 1} / {pages.Length}";
+
+            // Re-place in front of the player for every page.
+            PlaceInFrontOfHead();
 
             yield return StartCoroutine(FadeGroup(0f, 1f, fadeInSeconds));
 
@@ -223,6 +261,76 @@ public class StartupDisclaimers : MonoBehaviour
         group.gameObject.SetActive(false);
     }
 
+    // ------------------------------------------------------------------
+    // Headset readiness + placement
+    // ------------------------------------------------------------------
+
+    private Transform Head
+    {
+        get
+        {
+            if (head != null) return head;
+            Camera cam = Camera.main;
+            return cam != null ? cam.transform : null;
+        }
+    }
+
+    private bool IsHeadReady()
+    {
+        // Not running in XR (e.g. editor without a headset): nothing to wait for.
+        if (!UnityEngine.XR.XRSettings.isDeviceActive) return true;
+
+        UnityEngine.XR.InputDevice hmd =
+            UnityEngine.XR.InputDevices.GetDeviceAtXRNode(UnityEngine.XR.XRNode.Head);
+        if (!hmd.isValid || Head == null) return false;
+
+        if (hmd.TryGetFeatureValue(UnityEngine.XR.CommonUsages.userPresence, out bool worn) && !worn)
+            return false;
+
+        return true;
+    }
+
+    private IEnumerator WaitForHeadset()
+    {
+        float t = 0f;
+        while (!IsHeadReady() && t < headsetWaitTimeout)
+        {
+            t += Dt;
+            yield return null;
+        }
+
+        // Let tracking / recenter settle.
+        if (headsetSettleSeconds > 0f)
+            yield return new WaitForSecondsRealtime(headsetSettleSeconds);
+    }
+
+    private void PlaceInFrontOfHead()
+    {
+        Transform h = Head;
+        Transform root = canvasRoot;
+
+        // Fallback: use the root canvas that contains the disclaimer group
+        // (FadeCanvas in your scene), so it works even if Canvas Root is empty.
+        if (root == null && group != null)
+        {
+            Canvas c = group.GetComponentInParent<Canvas>();
+            if (c != null) root = c.rootCanvas.transform;
+        }
+
+        if (root == null || h == null) return;
+
+        Vector3 fwd = Vector3.ProjectOnPlane(h.forward, Vector3.up);
+        if (fwd.sqrMagnitude < 0.01f) fwd = h.forward;
+        fwd.Normalize();
+
+        root.position = h.position + fwd * distance;
+        root.rotation = Quaternion.LookRotation(fwd, Vector3.up);
+    }
+
+    // ------------------------------------------------------------------
+    // Hold to skip
+    // ------------------------------------------------------------------
+
     private IEnumerator HoldToSkipRoutine()
     {
         float held = 0f;
@@ -259,13 +367,13 @@ public class StartupDisclaimers : MonoBehaviour
 
     private readonly List<ButtonControl> _controllerButtons = new();
     private readonly HashSet<ButtonControl> _ignoreUntilReleased = new();
-    private int _knownDeviceCount = -1;
+    private bool _buttonsDirty = true;
     private string _heldSource = "";
 
     private void RebuildButtonCache()
     {
         _controllerButtons.Clear();
-        _knownDeviceCount = InputSystem.devices.Count;
+        _buttonsDirty = false;
 
         foreach (InputDevice device in InputSystem.devices)
         {
@@ -277,6 +385,11 @@ public class StartupDisclaimers : MonoBehaviour
                     _controllerButtons.Add(button);
             }
         }
+
+        // Forget buttons that belong to devices that no longer exist.
+        _ignoreUntilReleased.RemoveWhere(b => !_controllerButtons.Contains(b));
+
+        Debug.Log($"[StartupDisclaimers] Skip buttons found: {_controllerButtons.Count}");
     }
 
     // Anything already pressed (or stuck pressed) when the pages start is ignored
@@ -284,7 +397,7 @@ public class StartupDisclaimers : MonoBehaviour
     private void SnapshotPressedButtons()
     {
         _ignoreUntilReleased.Clear();
-        if (_knownDeviceCount != InputSystem.devices.Count)
+        if (_buttonsDirty)
             RebuildButtonCache();
 
         foreach (ButtonControl b in _controllerButtons)
@@ -295,7 +408,7 @@ public class StartupDisclaimers : MonoBehaviour
     {
         if (anyControllerButton)
         {
-            if (_knownDeviceCount != InputSystem.devices.Count)
+            if (_buttonsDirty)
                 RebuildButtonCache();
 
             for (int i = 0; i < _controllerButtons.Count; i++)
@@ -330,6 +443,10 @@ public class StartupDisclaimers : MonoBehaviour
 #endif
         return false;
     }
+
+    // ------------------------------------------------------------------
+    // Timing helpers
+    // ------------------------------------------------------------------
 
     // A loading hitch must never count as hold time or reading time.
     private static float Dt => Mathf.Min(Time.unscaledDeltaTime, 0.1f);

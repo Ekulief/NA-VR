@@ -259,9 +259,9 @@ public class ExperimentLoader : MonoBehaviour
         if (_inVoid)
         {
             yield return StartCoroutine(Fade(1f, 0f));
-            SetScreenAlpha(1f);                   // black cover before the world returns
+            SetScreenAlpha(1f);                  
             ExitLoadingVoid();
-            yield return StartCoroutine(WaitForSmoothFrames());   // heavy first frames happen while black
+            yield return StartCoroutine(WaitForSmoothFrames());  
             yield return StartCoroutine(FadeScreen(1f, 0f, screenFadeDuration));
         }
         else
@@ -301,7 +301,6 @@ public class ExperimentLoader : MonoBehaviour
         go.transform.localPosition = new Vector3(0f, 0f, 0.3f);
         go.transform.localScale = new Vector3(3f, 3f, 1f);
 
-        // Same layer as the loading UI so it stays visible when the mask changes.
         int layer = LayerMask.NameToLayer(loadingLayerName);
         if (layer >= 0) go.layer = layer;
 
@@ -412,8 +411,15 @@ public class ExperimentLoader : MonoBehaviour
 
         summaryPanel.SetActive(true);
 
-        // Optional: auto-hide after 20 s
-        // StartCoroutine(AutoHideSummary(20f));
+        StartCoroutine(AutoHideSummary(20f));
+    }
+
+    private IEnumerator AutoHideSummary(float seconds)
+    {
+        yield return new WaitForSecondsRealtime(seconds);
+
+        if (_hasPendingSummary && summaryPanel != null && summaryPanel.activeSelf)
+            HideSummary();
     }
 
     // ------------------------------------------------------------------
