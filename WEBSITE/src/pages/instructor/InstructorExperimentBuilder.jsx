@@ -107,7 +107,7 @@ const ENVIRONMENT_OPTIONS = [
   },
   {
     moduleId: "Attentional_Blindness",
-    name: "Inattentional Blindness",
+    name: "Attentional Blindness",
     description: 'Minimalist "minimal" hallway',
   },
   {
@@ -265,9 +265,14 @@ export default function InstructorExperimentBuilder() {
         if (!user?.uid) return;
         // Call a trusted function so the builder does not need permission to
         // read hardware IDs or publisher UIDs from the full VR inventory.
-        const listAvailable = httpsCallable(getFunctions(), "listVrDevicesForInstructor");
+        const listAvailable = httpsCallable(
+          getFunctions(),
+          "listVrDevicesForInstructor",
+        );
         const reply = await listAvailable();
-        const list = Array.isArray(reply.data?.devices) ? reply.data.devices : [];
+        const list = Array.isArray(reply.data?.devices)
+          ? reply.data.devices
+          : [];
         list.sort((a, b) => (a.vrId || a.id).localeCompare(b.vrId || b.id));
         setVrDevices(list);
       } catch (error) {
@@ -728,7 +733,7 @@ export default function InstructorExperimentBuilder() {
                       }
                       rows={2}
                       placeholder="Enter the question..."
-                      className="w-full rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
                     />
                   </div>
 
@@ -761,7 +766,7 @@ export default function InstructorExperimentBuilder() {
                           updateConfigValue(optionsPath, []);
                         }
                       }}
-                      className="w-full rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
                     >
                       <option value="MultipleChoice">Multiple Choice</option>
                       <option value="YesNo">Yes / No</option>
@@ -782,7 +787,7 @@ export default function InstructorExperimentBuilder() {
                         )
                       }
                       placeholder="Correct answer..."
-                      className="w-full rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
                     />
                   </div>
 
@@ -835,7 +840,7 @@ export default function InstructorExperimentBuilder() {
                                   );
                                 }}
                                 placeholder={`Option ${optIndex + 1}`}
-                                className="w-full rounded-lg border border-gray-300 p-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
                               />
                               <button
                                 type="button"
@@ -879,8 +884,8 @@ export default function InstructorExperimentBuilder() {
   }
 
   return (
-    <div className="font-google min-h-screen bg-gray-50 text-black pb-24">
-      <main className="pt-20 px-5 max-w-5xl mx-auto">
+    <div className="font-google min-h-screen bg-slate-50 pb-24 text-gray-900">
+      <main className="mx-auto max-w-5xl px-5 pt-20">
         <button
           onClick={() => navigate(-1)}
           className="flex items-center gap-2 text-gray-600 hover:text-black transition mb-6"
@@ -894,8 +899,8 @@ export default function InstructorExperimentBuilder() {
         </h1>
 
         {/* Environment Selection */}
-        <section className="bg-white border border-gray-200 rounded-xl p-6 mb-6 shadow-sm">
-          <h2 className="text-lg font-medium mb-3">
+        <section className="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="mb-4 text-base font-semibold tracking-tight text-gray-900">
             Select Environment / Module
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -907,7 +912,7 @@ export default function InstructorExperimentBuilder() {
                   key={opt.moduleId}
                   type="button"
                   onClick={() => selectEnvironment(opt)}
-                  className={`text-left border rounded-lg p-4 transition ${
+                  className={`text-left rounded-xl border p-4 transition cursor-pointer ${
                     isSelected
                       ? "border-indigo-600 bg-indigo-50/50 ring-2 ring-indigo-500/20"
                       : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
@@ -926,8 +931,10 @@ export default function InstructorExperimentBuilder() {
         </section>
 
         {/* Experiment Details */}
-        <section className="bg-white border border-gray-200 rounded-xl p-6 mb-6 shadow-sm">
-          <h2 className="text-lg font-medium mb-4">Experiment Information</h2>
+        <section className="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="mb-4 text-base font-semibold tracking-tight text-gray-900">
+            Experiment Information
+          </h2>
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -938,7 +945,7 @@ export default function InstructorExperimentBuilder() {
                 value={experimentName}
                 onChange={(e) => setExperimentName(e.target.value)}
                 placeholder="e.g. Depth Perception - Trial A"
-                className="w-full rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
               />
             </div>
 
@@ -951,7 +958,7 @@ export default function InstructorExperimentBuilder() {
                 onChange={(e) => setInstructions(e.target.value)}
                 rows={3}
                 placeholder="Instructions shown to students before taking the experiment..."
-                className="w-full rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
               />
             </div>
           </div>
@@ -959,10 +966,12 @@ export default function InstructorExperimentBuilder() {
 
         {/* VR Environment Preview */}
         {moduleId && (
-          <section className="bg-white border border-gray-200 rounded-xl p-6 mb-6 shadow-sm">
+          <section className="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="text-lg font-medium">VR Environment Preview</h2>
+                <h2 className="text-base font-semibold tracking-tight text-gray-900">
+                  VR Environment Preview
+                </h2>
                 <p className="text-sm text-gray-500">
                   Click inside the preview window, To exit, press Esc key twice
                 </p>
@@ -1013,8 +1022,8 @@ export default function InstructorExperimentBuilder() {
         )}
         {/* Configuration Parameters */}
         {moduleId && Object.keys(configuration).length > 0 && (
-          <section className="bg-white border border-gray-200 rounded-xl p-6 mb-6 shadow-sm">
-            <h2 className="text-lg font-medium mb-4">
+          <section className="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            <h2 className="mb-4 text-base font-semibold tracking-tight text-gray-900">
               Module Configuration Parameters
             </h2>
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
@@ -1054,7 +1063,9 @@ export default function InstructorExperimentBuilder() {
                           <div className="flex items-center justify-between mb-4">
                             <span className="font-semibold text-gray-700 text-sm">
                               Target #{targetIdx + 1}
-                              {target.objectName ? ` – ${target.objectName}` : ""}
+                              {target.objectName
+                                ? ` – ${target.objectName}`
+                                : ""}
                             </span>
                             <button
                               type="button"
@@ -1106,89 +1117,97 @@ export default function InstructorExperimentBuilder() {
                     </div>
                   );
                 }
-if (
-    key === "ab_AvailableAudioClips" ||
-    key === "ab_FurnitureList" ||
-    key === "targets"
-  ) {
-    return null;
-  }
+                if (
+                  key === "ab_AvailableAudioClips" ||
+                  key === "ab_FurnitureList" ||
+                  key === "targets"
+                ) {
+                  return null;
+                }
 
-  // 1. Audio Clip Selection Dropdown
-  if (key === "ab_SpecificAudioClipName") {
-    const isRandomAudio = configuration.ab_UseRandomAudioClip === true;
-    const availableClips = Array.isArray(configuration.ab_AvailableAudioClips)
-      ? configuration.ab_AvailableAudioClips
-      : [];
+                if (key === "ab_SpecificAudioClipName") {
+                  const isRandomAudio =
+                    configuration.ab_UseRandomAudioClip === true;
+                  const availableClips = Array.isArray(
+                    configuration.ab_AvailableAudioClips,
+                  )
+                    ? configuration.ab_AvailableAudioClips
+                    : [];
 
-    return (
-      <div key={key} className="space-y-1.5">
-        <label className="block text-sm font-medium text-gray-700">
-          {label}
-        </label>
-        <select
-          value={value ?? ""}
-          disabled={isRandomAudio || saving}
-          onChange={(e) => updateConfigValue([key], e.target.value)}
-          className={`w-full rounded-lg border p-2.5 text-sm outline-none transition ${
-            isRandomAudio
-              ? "bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200"
-              : "bg-white text-gray-900 border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-          }`}
-        >
-          <option value="">Select an audio clip...</option>
-          {availableClips.map((clipName, idx) => (
-            <option key={idx} value={clipName}>
-              {clipName}
-            </option>
-          ))}
-        </select>
-        {isRandomAudio && (
-          <p className="text-xs text-gray-500 italic">
-            Disabled because "Use Random Audio Clip" is enabled.
-          </p>
-        )}
-      </div>
-    );
-  }
+                  return (
+                    <div key={key} className="space-y-1.5">
+                      <label className="block text-sm font-medium text-gray-700">
+                        {label}
+                      </label>
+                      <select
+                        value={value ?? ""}
+                        disabled={isRandomAudio || saving}
+                        onChange={(e) =>
+                          updateConfigValue([key], e.target.value)
+                        }
+                        className={`w-full rounded-lg border p-2.5 text-sm outline-none transition ${
+                          isRandomAudio
+                            ? "bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200"
+                            : "bg-white text-gray-900 border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                        }`}
+                      >
+                        <option value="">Select an audio clip...</option>
+                        {availableClips.map((clipName, idx) => (
+                          <option key={idx} value={clipName}>
+                            {clipName}
+                          </option>
+                        ))}
+                      </select>
+                      {isRandomAudio && (
+                        <p className="text-xs text-gray-500 italic">
+                          Disabled because "Use Random Audio Clip" is enabled.
+                        </p>
+                      )}
+                    </div>
+                  );
+                }
 
-  // 2. Specific Fade Target Dropdown (matches your furniture items list)
-  if (key === "ab_SpecificFadeTarget") {
-    const isRandomFade = configuration.ab_UseRandomFadeTarget === true;
-    const furnitureList = Array.isArray(configuration.ab_FurnitureList)
-      ? configuration.ab_FurnitureList
-      : [];
+                if (key === "ab_SpecificFadeTarget") {
+                  const isRandomFade =
+                    configuration.ab_UseRandomFadeTarget === true;
+                  const furnitureList = Array.isArray(
+                    configuration.ab_FurnitureList,
+                  )
+                    ? configuration.ab_FurnitureList
+                    : [];
 
-    return (
-      <div key={key} className="space-y-1.5">
-        <label className="block text-sm font-medium text-gray-700">
-          {label}
-        </label>
-        <select
-          value={value ?? ""}
-          disabled={isRandomFade || saving}
-          onChange={(e) => updateConfigValue([key], e.target.value)}
-          className={`w-full rounded-lg border p-2.5 text-sm outline-none transition ${
-            isRandomFade
-              ? "bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200"
-              : "bg-white text-gray-900 border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-          }`}
-        >
-          <option value="">Select a fade target...</option>
-          {furnitureList.map((itemName, idx) => (
-            <option key={idx} value={itemName}>
-              {itemName}
-            </option>
-          ))}
-        </select>
-        {isRandomFade && (
-          <p className="text-xs text-gray-500 italic">
-            Disabled because "Use Random Fade Target" is enabled.
-          </p>
-        )}
-      </div>
-    );
-  }
+                  return (
+                    <div key={key} className="space-y-1.5">
+                      <label className="block text-sm font-medium text-gray-700">
+                        {label}
+                      </label>
+                      <select
+                        value={value ?? ""}
+                        disabled={isRandomFade || saving}
+                        onChange={(e) =>
+                          updateConfigValue([key], e.target.value)
+                        }
+                        className={`w-full rounded-lg border p-2.5 text-sm outline-none transition ${
+                          isRandomFade
+                            ? "bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200"
+                            : "bg-white text-gray-900 border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                        }`}
+                      >
+                        <option value="">Select a fade target...</option>
+                        {furnitureList.map((itemName, idx) => (
+                          <option key={idx} value={itemName}>
+                            {itemName}
+                          </option>
+                        ))}
+                      </select>
+                      {isRandomFade && (
+                        <p className="text-xs text-gray-500 italic">
+                          Disabled because "Use Random Fade Target" is enabled.
+                        </p>
+                      )}
+                    </div>
+                  );
+                }
                 if (
                   key === "ab_FurnitureList" ||
                   key === "oddItem_AvailableTargets" ||
@@ -1200,10 +1219,10 @@ if (
                   key === "distance_MaxDistanceMeters" ||
                   key === "globalInstructionDelay" ||
                   key === "ab_AvailableAudioClips" ||
-                  key === "ab_SpecificAudioClipIndex"||
-                  key === "memory_RoomInstructionText" ||    
-                  key === "memory2_RoomInstructionText"  ||
-                  key === "oddItem_RaycastDistance"          
+                  key === "ab_SpecificAudioClipIndex" ||
+                  key === "memory_RoomInstructionText" ||
+                  key === "memory2_RoomInstructionText" ||
+                  key === "oddItem_RaycastDistance"
                 ) {
                   return null;
                 }
@@ -1251,8 +1270,6 @@ if (
                   );
                 }
 
-                // Attentional Blindness – Selected Audio Clip (Dropdown)
-                // Attentional Blindness – Selected Audio Clip (Dropdown)
                 if (key === "ab_SpecificAudioClip") {
                   const isRandom = configuration.ab_UseRandomAudioClip === true;
                   const availableClips = Array.isArray(
@@ -1293,8 +1310,6 @@ if (
                     </div>
                   );
                 }
-                // Odd Item Detection - Selected Target (Dropdown)
-                // Odd Item Detection - Selected Target (Dropdown)
                 if (key === "oddItem_SelectedTarget") {
                   const isRandom =
                     configuration.oddItem_RandomizeTarget === true;
@@ -1340,7 +1355,10 @@ if (
                 // Boolean
                 if (typeof value === "boolean") {
                   return (
-                    <div key={key} className="flex items-center gap-3">
+                    <label
+                      key={key}
+                      className="flex min-h-12 items-center gap-3 rounded-lg border border-gray-200 bg-gray-50/70 px-3 py-2.5 transition hover:border-gray-300 hover:bg-gray-50"
+                    >
                       <input
                         type="checkbox"
                         id={key}
@@ -1348,15 +1366,12 @@ if (
                         onChange={(e) =>
                           updateConfigValue([key], e.target.checked)
                         }
-                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        className="h-4 w-4 shrink-0 rounded border-gray-300 text-indigo-600 accent-indigo-600 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1"
                       />
-                      <label
-                        htmlFor={key}
-                        className="text-sm font-medium text-gray-700 cursor-pointer"
-                      >
+                      <span className="cursor-pointer text-sm font-medium text-gray-700">
                         {formatConfigLabel(key)}
-                      </label>
-                    </div>
+                      </span>
+                    </label>
                   );
                 }
 
@@ -1389,7 +1404,7 @@ if (
                           num = Math.min(Math.max(num, min), max); // clamp
                           updateConfigValue([key], num);
                         }}
-                        className="w-full rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
                       />
                       <p className="mt-1 text-xs text-gray-500">
                         Must be between {min} m and {max} m
@@ -1424,7 +1439,7 @@ if (
                           num = Math.min(Math.max(num, min), max);
                           updateConfigValue([key], num);
                         }}
-                        className="w-full rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
                       />
                       <p className="mt-1 text-xs text-gray-500">
                         Must be between {min} m and {max} m
@@ -1449,7 +1464,7 @@ if (
                             : e.target.value,
                         )
                       }
-                      className="w-full rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
                     />
                   </div>
                 );
@@ -1460,26 +1475,26 @@ if (
 
         {/* Group Assignment */}
         {groups.length > 0 && (
-          <section className="bg-white border border-gray-200 rounded-xl p-6 mb-6 shadow-sm">
-            <h2 className="text-lg font-medium mb-3">Assign Student Groups</h2>
+          <section className="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            <h2 className="mb-4 text-base font-semibold tracking-tight text-gray-900">
+              Assign Student Groups
+            </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
               {groups.map((group) => {
-                const isChecked = selectedGroups.includes(group.id);
                 return (
                   <label
                     key={group.id}
-                    onClick={() => toggleGroup(group.id)}
-                    className={`flex items-center gap-3 border rounded-lg p-3 cursor-pointer transition ${
-                      isChecked
-                        ? "border-indigo-600 bg-indigo-50/50"
-                        : "border-gray-200 hover:bg-gray-50"
+                    className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-3 text-sm transition ${
+                      selectedGroups.includes(group.id)
+                        ? "border-indigo-300 bg-indigo-50/70"
+                        : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
                     }`}
                   >
                     <input
                       type="checkbox"
-                      checked={isChecked}
-                      onChange={() => {}}
-                      className="h-4 w-4 rounded text-indigo-600 focus:ring-indigo-500"
+                      checked={selectedGroups.includes(group.id)}
+                      onChange={() => toggleGroup(group.id)}
+                      className="h-4 w-4 shrink-0 rounded border-gray-300 text-indigo-600 accent-indigo-600 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1"
                     />
                     <span className="text-sm font-medium text-gray-800">
                       {group.groupName || group.name || `Group ${group.id}`}
@@ -1491,13 +1506,15 @@ if (
           </section>
         )}
         {/* VR Device Assignment */}
-        <section className="bg-white border border-gray-200 rounded-xl p-6 mb-6 shadow-sm">
-          <h2 className="text-lg font-medium mb-3">Assign VR Devices</h2>
+        <section className="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="mb-4 text-base font-semibold tracking-tight text-gray-900">
+            Assign VR Devices
+          </h2>
           <p className="text-sm text-gray-500 mb-3">
-            Select registered VR devices for this experiment. Available headsets can
-            be reused; when a student connects, the headset is automatically
-            linked to the instructor and class. A student session is still required
-            before video begins.
+            Select registered VR devices for this experiment. Available headsets
+            can be reused; when a student connects, the headset is automatically
+            linked to the instructor and class. A student session is still
+            required before video begins.
           </p>
           {vrDevices.length === 0 ? (
             <p className="text-sm text-amber-700">
@@ -1512,7 +1529,11 @@ if (
                 return (
                   <label
                     key={device.id}
-                    className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-300 p-3 text-sm"
+                    className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-3 text-sm transition ${
+                      selectedVrIds.includes(vrId)
+                        ? "border-indigo-300 bg-indigo-50/70"
+                        : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
+                    }`}
                   >
                     <input
                       type="checkbox"
@@ -1524,6 +1545,7 @@ if (
                             : previous.filter((id) => id !== vrId),
                         )
                       }
+                      className="h-4 w-4 shrink-0 rounded border-gray-300 text-indigo-600 accent-indigo-600 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1"
                     />
                     {vrId} {""}
                   </label>
@@ -1533,14 +1555,16 @@ if (
           )}
         </section>
         {/* Permissions */}
-        <section className="bg-white border border-gray-200 rounded-xl p-6 mb-8 shadow-sm">
-          <h2 className="text-lg font-medium mb-3">Permissions</h2>
-          <label className="flex items-center gap-3 cursor-pointer">
+        <section className="mb-8 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="mb-4 text-base font-semibold tracking-tight text-gray-900">
+            Permissions
+          </h2>
+          <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-gray-200 bg-gray-50/70 px-3 py-3 transition hover:border-gray-300 hover:bg-gray-50">
             <input
               type="checkbox"
               checked={allowStudentExperiments}
               onChange={(e) => setAllowStudentExperiments(e.target.checked)}
-              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              className="h-4 w-4 shrink-0 rounded border-gray-300 text-indigo-600 accent-indigo-600 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1"
             />
             <span className="text-sm font-medium text-gray-700">
               Allow students to create and run their own experiments

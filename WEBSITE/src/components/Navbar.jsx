@@ -65,7 +65,7 @@ export default function Navbar() {
         top-0
         w-full
         h-[68px]
-        bg-indigo-800
+        bg-[#004aad]
         px-4
         z-50
       "
