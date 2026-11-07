@@ -1,9 +1,8 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Movement;
-using UnityEngine.XR.Interaction.Toolkit.Locomotion.Turning;
 using UnityEngine.XR.Interaction.Toolkit.Locomotion.Teleportation;
-using UnityEngine.XR.Interaction.Toolkit.Interactors; 
+using UnityEngine.XR.Interaction.Toolkit.Interactors;
 
 public class ExperimentLocomotionController : MonoBehaviour
 {
@@ -35,14 +34,14 @@ public class ExperimentLocomotionController : MonoBehaviour
         GameObject origin = FindVRPlayer();
         if (origin == null) return;
 
-        Debug.Log($"[ExperimentLocomotion] Locking movement for player '{origin.name}'...");
+        Debug.Log($"[ExperimentLocomotion] Locking position for player '{origin.name}' (Turning remains fully active)...");
 
+        // Only disable movement and teleportation. Turning providers are intentionally excluded so physical head turning/snapping is never locked.
         DisableIfFound<ContinuousMoveProvider>(origin, "Continuous Move");
-        DisableIfFound<ContinuousTurnProvider>(origin, "Continuous Turn");
-        DisableIfFound<SnapTurnProvider>(origin, "Snap Turn");
-
         DisableIfFound<TeleportationProvider>(origin, "Teleportation Provider");
 
+        // Safely disable CharacterControllerDriver components via type name inspection
+        DisableCharacterControllerDrivers(origin);
 
         _characterController = origin.GetComponent<CharacterController>();
         if (_characterController != null && _characterController.enabled)
@@ -52,7 +51,7 @@ public class ExperimentLocomotionController : MonoBehaviour
 
         _lockedPosition = origin.transform.position;
         _locomotionLocked = true;
-        Debug.Log("[ExperimentLocomotion] Locomotion locked. UI rays remain active.");
+        Debug.Log("[ExperimentLocomotion] Position locked. Physical turning and UI rays remain active.");
     }
 
     public void UnlockLocomotion()
@@ -85,6 +84,22 @@ public class ExperimentLocomotionController : MonoBehaviour
         }
     }
 
+    private void DisableCharacterControllerDrivers(GameObject root)
+    {
+        var comps = root.GetComponentsInChildren<MonoBehaviour>(true);
+        foreach (var c in comps)
+        {
+            if (c == null || !c.enabled) continue;
+            string typeName = c.GetType().Name;
+
+            if (typeName.Contains("CharacterControllerDriver"))
+            {
+                c.enabled = false;
+                _disabledLocomotion.Add(c);
+            }
+        }
+    }
+
     private void LateUpdate()
     {
         if (!_locomotionLocked) return;
@@ -92,6 +107,7 @@ public class ExperimentLocomotionController : MonoBehaviour
         GameObject origin = FindVRPlayer();
         if (origin == null) return;
 
+        // Explicitly lock ONLY the position vector, leaving transform.rotation completely unconstrained
         origin.transform.position = _lockedPosition;
     }
 }

@@ -226,15 +226,15 @@ public class AttentionalBlindnessManager : MonoBehaviour
         if (!_locomotionLocked) return;
 
         foreach (var c in _disabledLocomotion)
-        {
             if (c != null) c.enabled = true;
-        }
         _disabledLocomotion.Clear();
 
         if (_characterController != null)
             _characterController.enabled = true;
 
         _locomotionLocked = false;
+
+        LocomotionLocker.Unlock();   
         Debug.Log("[AttentionalBlindness] Locomotion unlocked.");
     }
 
@@ -250,7 +250,7 @@ public class AttentionalBlindnessManager : MonoBehaviour
         }
         if (origin == null) return;
 
-        origin.transform.position = _lockedPosition;
+        //origin.transform.position = _lockedPosition;
     }
 
     private static GameObject FindChildRecursive(Transform parent, string name)
@@ -305,7 +305,8 @@ public class AttentionalBlindnessManager : MonoBehaviour
                       $"ab_UseRandomAudioClip={config.ab_UseRandomAudioClip}");
         }
 
-        LocomotionLocker.Lock(LocomotionLocker.LockMode.Full, xrOriginOverride);
+        //LocomotionLocker.Lock(LocomotionLocker.LockMode.Full, xrOriginOverride);
+        LockLocomotion();
 
         if (radioAudioSource == null)
         {

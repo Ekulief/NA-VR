@@ -187,7 +187,7 @@ public class DistancePerceptionUI : MonoBehaviour
         }
         if (origin == null) return;
 
-        origin.transform.position = _lockedPosition;
+        //origin.transform.position = _lockedPosition;
     }
 
     private bool IsSessionPaused()
@@ -267,8 +267,8 @@ public class DistancePerceptionUI : MonoBehaviour
 
         if (instructionPanel != null) instructionPanel.SetActive(false);
 
-        // Stay fully locked during the estimation (no walking / teleport / turn)
-        // LockLocomotion already applied at instruction time; keep position frozen.
+        // Allow teleport + turning from this point. Continuous walk stays locked.
+        UnlockTeleportAndTurn();
 
         _trialStartTime = Time.time;
         _experimentStartRealtime = Time.realtimeSinceStartup;
@@ -498,7 +498,35 @@ public class DistancePerceptionUI : MonoBehaviour
                 return fallback;
         }
     }
+    /// <summary>
+    /// Re-enables teleport + turning while leaving continuous move locked.
+    /// Also stops the hard position freeze so the player can move via teleport.
+    /// </summary>
+    private void UnlockTeleportAndTurn()
+    {
+        if (!_locomotionLocked) return;
 
+        for (int i = _disabledLocomotion.Count - 1; i >= 0; i--)
+        {
+            var c = _disabledLocomotion[i];
+            if (c == null) continue;
+
+            if (c is TeleportationProvider ||
+                c is ContinuousTurnProvider ||
+                c is SnapTurnProvider)
+            {
+                c.enabled = true;
+                _disabledLocomotion.RemoveAt(i);
+                Debug.Log($"[DistancePerception] Unlocked: {c.GetType().Name} on {c.gameObject.name}");
+            }
+        }
+        _locomotionLocked = false;
+
+        if (_characterController != null)
+            _characterController.enabled = true;
+
+        Debug.Log("[DistancePerception] Teleport + Turn unlocked (continuous move remains locked).");
+    }
     private static string FormatDuration(float totalSeconds)
     {
         if (totalSeconds < 0f) totalSeconds = 0f;

@@ -1,4 +1,5 @@
-﻿using Unity.XR.CoreUtils;
+﻿using System.Threading.Tasks;
+using Unity.XR.CoreUtils;
 using UnityEngine;
 
 /// <summary>
@@ -15,7 +16,7 @@ public class ExperimentWalkTrigger : MonoBehaviour
     [Tooltip("Optional. If empty, the ExperimentLoader in the scene is found automatically.")]
     public ExperimentLoader loader;
 
-    [Tooltip("Exact scene name. Leave empty to automatically use ExperimentConfig.sceneId.")]
+    [Tooltip("Exact scene name. Leave empty to automatically resolve from the current config.")]
     public string sceneName;
 
     [Header("Zone")]
@@ -39,6 +40,7 @@ public class ExperimentWalkTrigger : MonoBehaviour
 
     private float _insideTime;
     private bool _armed = true;
+    private bool _loading;
     private Transform _head;
     private float _nextDebug;
     private bool _warnedSetup;
@@ -47,6 +49,7 @@ public class ExperimentWalkTrigger : MonoBehaviour
     private void Update()
     {
         if (!EnsureSetup()) return;
+        if (_loading) return;
 
         // Log the currently active experiment once (when config becomes ready)
         if (!_loggedActiveConfig && ExperimentConfigLoader.IsReady && ExperimentConfigLoader.Current != null)
@@ -100,47 +103,102 @@ public class ExperimentWalkTrigger : MonoBehaviour
         {
             _armed = false;
             _insideTime = 0f;
-
-            string finalScene = ResolveSceneName();
-
-            if (string.IsNullOrEmpty(finalScene))
-            {
-                Debug.LogWarning($"[WalkTrigger:{name}] No scene name available.", this);
-                return;
-            }
-
-            // Extra log right before loading so we see exactly what is being used
-            if (debugLogging)
-            {
-                var cfg = ExperimentConfigLoader.Current;
-                Debug.Log(
-                    $"[WalkTrigger:{name}] Starting scene '{finalScene}' " +
-                    $"(source={(string.IsNullOrEmpty(sceneName) ? "config.sceneId" : "inspector override")}) | " +
-                    $"config.experimentId='{cfg?.experimentId}' | config.moduleId='{cfg?.moduleId}'",
-                    this);
-            }
-
-            loader.LoadScene(finalScene);
+            StartCoroutine(LoadAfterRefresh());
         }
     }
 
     /// <summary>
-    /// Returns the scene name to load.
-    /// Priority: inspector field → current ExperimentConfig.sceneId
+    /// Re-fetches the active session from Firestore so we never load the previous
+    /// experiment after End Attempt / finish, then resolves and loads the scene.
     /// </summary>
-    private string ResolveSceneName()
+    private System.Collections.IEnumerator LoadAfterRefresh()
+    {
+        _loading = true;
+
+        var config = ExperimentConfigLoader.Current;
+        if (config == null)
+        {
+            Debug.LogWarning($"[WalkTrigger:{name}] No ExperimentConfig available.", this);
+            _loading = false;
+            yield break;
+        }
+
+        // Same refresh the teleport anchor does — critical after End Attempt
+        Task fetchTask = config.FetchActiveSessionFromFirestore();
+        while (fetchTask != null && !fetchTask.IsCompleted)
+            yield return null;
+
+        if (fetchTask != null && fetchTask.IsFaulted)
+        {
+            Debug.LogError($"[WalkTrigger:{name}] FetchActiveSessionFromFirestore failed: {fetchTask.Exception?.GetBaseException().Message}", this);
+            _loading = false;
+            yield break;
+        }
+
+        // Keep SessionController in sync if a progress id came back
+        if (SessionController.Instance != null && !string.IsNullOrEmpty(config.progressId))
+            SessionController.Instance.SwitchSession(config.progressId);
+
+        // Refuse to load if nothing is assigned (ended attempt, no new session yet)
+        if (string.IsNullOrEmpty(config.progressId))
+        {
+            Debug.LogWarning($"[WalkTrigger:{name}] No active progress. Connect / start a session from the web first.", this);
+            _loading = false;
+            yield break;
+        }
+
+        string finalScene = ResolveSceneName(config);
+        if (string.IsNullOrEmpty(finalScene))
+        {
+            Debug.LogWarning($"[WalkTrigger:{name}] No scene name available after refresh.", this);
+            _loading = false;
+            yield break;
+        }
+
+        if (debugLogging)
+        {
+            Debug.Log(
+                $"[WalkTrigger:{name}] Starting scene '{finalScene}' " +
+                $"(source={(string.IsNullOrEmpty(sceneName) ? "config" : "inspector override")}) | " +
+                $"experimentId='{config.experimentId}' | moduleId='{config.moduleId}' | " +
+                $"sceneId='{config.sceneId}' | progressId='{config.progressId}'",
+                this);
+        }
+
+        if (loader != null)
+            loader.LoadScene(finalScene);
+        else
+            Debug.LogError($"[WalkTrigger:{name}] ExperimentLoader is null.", this);
+
+        _loading = false;
+    }
+
+    /// <summary>
+    /// Priority: inspector override → config.sceneId → moduleId map (same as ExperimentAnchor).
+    /// </summary>
+    private string ResolveSceneName(ExperimentConfig config)
     {
         if (!string.IsNullOrEmpty(sceneName))
             return sceneName;
 
-        // Automatic: use whatever experiment is currently assigned to this headset
-        if (ExperimentConfigLoader.Current != null &&
-            !string.IsNullOrEmpty(ExperimentConfigLoader.Current.sceneId))
-        {
-            return ExperimentConfigLoader.Current.sceneId;
-        }
+        if (config == null)
+            return null;
 
-        return null;
+        if (!string.IsNullOrEmpty(config.sceneId))
+            return config.sceneId;
+
+        switch (config.moduleId)
+        {
+            case "Depth_Perception": return "Depth Perception Scene";
+            case "Distance_Perception": return "Distance Perception Scene";
+            case "Attentional_Blindness": return "Attentional Blindness Scene";
+            case "Odd_Item_Detection": return "Odd Item Detection Scene";
+            case "Memory2": return "Memory Scene 2";
+            case "Memory": return "Memory Scene";
+            default:
+                Debug.LogWarning($"[WalkTrigger:{name}] Unknown moduleId: '{config.moduleId}'", this);
+                return null;
+        }
     }
 
     private bool EnsureSetup()
