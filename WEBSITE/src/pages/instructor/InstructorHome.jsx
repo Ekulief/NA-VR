@@ -24,6 +24,7 @@ import {
 } from "firebase/storage";
 
 import { useAuth } from "../../context/AuthContext";
+import defaultCourseImage from "../../assets/polygon_bg.jpg";
 
 export default function InstructorHome() {
   const navigate = useNavigate();
@@ -96,11 +97,6 @@ export default function InstructorHome() {
       return;
     }
 
-    if (!courseImage) {
-      setError("Please select a course image.");
-      return;
-    }
-
     setCreatingCourse(true);
     setError("");
 
@@ -115,11 +111,17 @@ export default function InstructorHome() {
 
       const userData = userSnapshot.data();
 
-      const imageRef = ref(storage, `images/${Date.now()}-${courseImage.name}`);
+      let imageUrl = defaultCourseImage;
 
-      await uploadBytes(imageRef, courseImage);
+      if (courseImage) {
+        const imageRef = ref(
+          storage,
+          `images/${Date.now()}-${courseImage.name}`,
+        );
 
-      const imageUrl = await getDownloadURL(imageRef);
+        await uploadBytes(imageRef, courseImage);
+        imageUrl = await getDownloadURL(imageRef);
+      }
 
       const newCourse = {
         className: courseName,
@@ -180,7 +182,10 @@ export default function InstructorHome() {
 
         imageUrl = await getDownloadURL(imageRef);
 
-        if (selectedCourse.imageUrl) {
+        if (
+          selectedCourse.imageUrl &&
+          selectedCourse.imageUrl !== defaultCourseImage
+        ) {
           try {
             const oldImageRef = ref(storage, selectedCourse.imageUrl);
             await deleteObject(oldImageRef);
@@ -245,7 +250,10 @@ export default function InstructorHome() {
 
       await deleteDoc(doc(db, "block", selectedCourse.id));
 
-      if (selectedCourse.imageUrl) {
+      if (
+        selectedCourse.imageUrl &&
+        selectedCourse.imageUrl !== defaultCourseImage
+      ) {
         try {
           await deleteObject(ref(storage, selectedCourse.imageUrl));
         } catch (imageError) {
@@ -362,7 +370,7 @@ export default function InstructorHome() {
               "
             >
               <img
-                src={course.imageUrl}
+                src={course.imageUrl || defaultCourseImage}
                 alt={course.className}
                 className="w-full h-40 object-cover"
               />
@@ -622,13 +630,12 @@ export default function InstructorHome() {
                     mb-1
                   "
                 >
-                  Course Image
+                  Course Image (Optional)
                 </label>
 
                 <input
                   id="courseImage"
                   type="file"
-                  required
                   accept="image/*"
                   onChange={(e) => setCourseImage(e.target.files[0])}
                   className="

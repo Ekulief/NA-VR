@@ -17,7 +17,19 @@ import { db } from "../../config/firebase-config";
 import { useAuth } from "../../context/AuthContext";
 import { getFunctions, httpsCallable } from "firebase/functions";
 
-import { ArrowLeft, Plus, Box, X, Save, Loader2, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Plus,
+  Box,
+  X,
+  Save,
+  Loader2,
+  Trash2,
+  CheckCircle2,
+  AlertCircle,
+  AlertTriangle,
+  Info,
+} from "lucide-react";
 
 const CONFIGURATION_ORDER = {
   Attentional_Blindness: [
@@ -195,6 +207,25 @@ export default function InstructorExperimentBuilder() {
   const [loading, setLoading] = useState(isEditing);
 
   const [showPreview, setShowPreview] = useState(false);
+  const [notice, setNotice] = useState(null);
+
+  const showNotice = (
+    message,
+    title = "Notification",
+    type = "info",
+    onClose = null,
+  ) => {
+    setNotice({ message, title, type, onClose });
+  };
+
+  const closeNotice = () => {
+    const callback = notice?.onClose;
+    setNotice(null);
+
+    if (callback) {
+      callback();
+    }
+  };
 
   const targetRefs = useRef({});
   const [newTargetIndex, setNewTargetIndex] = useState(null);
@@ -242,7 +273,11 @@ export default function InstructorExperimentBuilder() {
       const module = await loadExperimentModule(option.moduleId);
 
       if (!module) {
-        alert(`Unable to load default configuration for ${option.name}.`);
+        showNotice(
+          `Unable to load default configuration for ${option.name}.`,
+          "Environment Configuration Error",
+          "error",
+        );
         return;
       }
 
@@ -335,8 +370,12 @@ export default function InstructorExperimentBuilder() {
         const experimentSnap = await getDoc(experimentRef);
 
         if (!experimentSnap.exists()) {
-          alert("Experiment not found.");
-          navigate(-1);
+          showNotice(
+            "The experiment could not be found. It may have been deleted or is no longer available.",
+            "Experiment Not Found",
+            "error",
+            () => navigate(-1),
+          );
           return;
         }
 
@@ -361,8 +400,12 @@ export default function InstructorExperimentBuilder() {
         setAllowStudentExperiments(data.allowStudentExperiments === true);
       } catch (error) {
         console.error("Error getting experiment:", error);
-        alert("Unable to load the experiment.");
-        navigate(-1);
+        showNotice(
+          "Something went wrong while loading the experiment. Please try again.",
+          "Unable to Load Experiment",
+          "error",
+          () => navigate(-1),
+        );
       } finally {
         setLoading(false);
         setModuleLoading(false);
@@ -505,8 +548,10 @@ export default function InstructorExperimentBuilder() {
         const question = questions[questionIndex];
 
         if (!question || typeof question !== "object") {
-          alert(
+          showNotice(
             `Target ${targetIndex + 1}, Question ${questionIndex + 1} is invalid.`,
+            "Invalid Question",
+            "error",
           );
           return false;
         }
@@ -515,8 +560,10 @@ export default function InstructorExperimentBuilder() {
           typeof question.questionText !== "string" ||
           !question.questionText.trim()
         ) {
-          alert(
+          showNotice(
             `Please enter question text for Target ${targetIndex + 1}, Question ${questionIndex + 1}.`,
+            "Missing Question Text",
+            "warning",
           );
           return false;
         }
@@ -525,8 +572,10 @@ export default function InstructorExperimentBuilder() {
           typeof question.correctAnswer !== "string" ||
           !question.correctAnswer.trim()
         ) {
-          alert(
+          showNotice(
             `Please enter correct answer for Target ${targetIndex + 1}, Question ${questionIndex + 1}.`,
+            "Missing Correct Answer",
+            "warning",
           );
           return false;
         }
@@ -536,14 +585,18 @@ export default function InstructorExperimentBuilder() {
             ? question.multipleChoiceOptions
             : [];
           if (options.length === 0) {
-            alert(
+            showNotice(
               `Please add options for Target ${targetIndex + 1}, Question ${questionIndex + 1}.`,
+              "Missing Answer Options",
+              "warning",
             );
             return false;
           }
           if (options.some((opt) => typeof opt !== "string" || !opt.trim())) {
-            alert(
+            showNotice(
               `Please fill all choice options for Target ${targetIndex + 1}, Question ${questionIndex + 1}.`,
+              "Incomplete Answer Options",
+              "warning",
             );
             return false;
           }
@@ -596,29 +649,48 @@ export default function InstructorExperimentBuilder() {
     event.preventDefault();
 
     if (!experimentName.trim()) {
-      alert("Please enter an experiment name.");
+      showNotice(
+        "Please enter an experiment name.",
+        "Experiment Name Required",
+        "warning",
+      );
       return;
     }
 
     if (!moduleId) {
-      alert("Please select an environment / module.");
-      return;
-    }
-    if (selectedVrIds.length === 0) {
-      alert("Please select a VR device assignment.");
-      return;
-    }
-    if (!Array.isArray(selectedGroups) || selectedGroups.length === 0) {
-      alert(
-        "Please select at least one student group before publishing the experiment.",
+      showNotice(
+        "Please select an environment / module.",
+        "Environment Required",
+        "warning",
       );
       return;
     }
+
+    if (!Array.isArray(selectedGroups) || selectedGroups.length === 0) {
+      showNotice(
+        "Please select at least one student group before publishing the experiment.",
+        "Student Group Required",
+        "warning",
+      );
+      return;
+    }
+
+    if (selectedVrIds.length === 0) {
+      showNotice(
+        "Please select a VR device assignment.",
+        "VR Device Required",
+        "warning",
+      );
+      return;
+    }
+
     if (moduleId === "Attentional_Blindness") {
       const isRandom = configuration.ab_UseRandomFadeTarget === true;
       if (!isRandom && !configuration.ab_SpecificFadeTarget) {
-        alert(
-          "Please select a Fade Target (or enable Use Random Fade Target).",
+        showNotice(
+          "Please select a Fade Target or enable Use Random Fade Target.",
+          "Fade Target Required",
+          "warning",
         );
         return;
       }
@@ -627,7 +699,11 @@ export default function InstructorExperimentBuilder() {
     if (moduleId === "Odd_Item_Detection") {
       const isRandom = configuration.oddItem_RandomizeTarget === true;
       if (!isRandom && !configuration.oddItem_SelectedTarget) {
-        alert("Please select a Target (or enable Randomize Target).");
+        showNotice(
+          "Please select a Target or enable Randomize Target.",
+          "Target Required",
+          "warning",
+        );
         return;
       }
     }
@@ -658,17 +734,31 @@ export default function InstructorExperimentBuilder() {
 
       if (isEditing) {
         await updateDoc(doc(db, "experiment", experimentId), payload);
-        alert("Experiment updated successfully.");
+
+        showNotice(
+          "Your experiment changes have been saved successfully.",
+          "Experiment Updated",
+          "success",
+          () => navigate(-1),
+        );
       } else {
         payload.createdAt = serverTimestamp();
         await addDoc(collection(db, "experiment"), payload);
-        alert("Experiment created successfully.");
-      }
 
-      navigate(-1);
+        showNotice(
+          "Your new experiment has been created successfully.",
+          "Experiment Created",
+          "success",
+          () => navigate(-1),
+        );
+      }
     } catch (error) {
       console.error("Error saving experiment:", error);
-      alert("Failed to save experiment. Please try again.");
+      showNotice(
+        "Failed to save your experiment. Please check your connection and try again.",
+        "Save Failed",
+        "error",
+      );
     } finally {
       setSaving(false);
     }
@@ -1597,6 +1687,113 @@ export default function InstructorExperimentBuilder() {
           </button>
         </div>
       </main>
+
+      {notice && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          onClick={closeNotice}
+        >
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="notice-title"
+            aria-describedby="notice-message"
+            className="w-full max-w-md overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {(() => {
+              const styles = {
+                success: {
+                  icon: CheckCircle2,
+                  iconColor: "text-green-600",
+                  iconBg: "bg-green-100",
+                  button: "bg-green-600 hover:bg-green-700",
+                  title: "Success",
+                },
+                error: {
+                  icon: AlertCircle,
+                  iconColor: "text-red-600",
+                  iconBg: "bg-red-100",
+                  button: "bg-red-600 hover:bg-red-700",
+                  title: "Error",
+                },
+                warning: {
+                  icon: AlertTriangle,
+                  iconColor: "text-amber-600",
+                  iconBg: "bg-amber-100",
+                  button: "bg-amber-600 hover:bg-amber-700",
+                  title: "Attention Required",
+                },
+                info: {
+                  icon: Info,
+                  iconColor: "text-blue-600",
+                  iconBg: "bg-blue-100",
+                  button: "bg-indigo-600 hover:bg-indigo-700",
+                  title: "Notification",
+                },
+              };
+
+              const config = styles[notice.type] || styles.info;
+              const NoticeIcon = config.icon;
+
+              return (
+                <>
+                  <div className="flex items-start justify-between p-6 pb-4">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${config.iconBg}`}
+                      >
+                        <NoticeIcon size={25} className={config.iconColor} />
+                      </div>
+
+                      <div>
+                        <h2
+                          id="notice-title"
+                          className="text-lg font-bold text-gray-900"
+                        >
+                          {notice.title || config.title}
+                        </h2>
+
+                        <p className="mt-1 text-xs text-gray-500">
+                          Na-VR Experiment Builder
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={closeNotice}
+                      className="rounded-lg p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+                      aria-label="Close notification"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
+
+                  <div className="px-6 pb-6">
+                    <p
+                      id="notice-message"
+                      className="text-sm leading-6 text-gray-600"
+                    >
+                      {notice.message}
+                    </p>
+                  </div>
+
+                  <div className="flex justify-end border-t border-gray-200 bg-gray-50 px-6 py-4">
+                    <button
+                      type="button"
+                      onClick={closeNotice}
+                      className={`rounded-lg px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition ${config.button}`}
+                    >
+                      {notice.onClose ? "Continue" : "Got it"}
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
