@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 9accb1f2ece7c4d489df690c83a579e6
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 391942
+  packageName: Retro Diner - Stylized 3D Restaurant Environment (URP)
+  packageVersion: 1.0
+  assetPath: Assets/RetroDiner/Materials/Brown.mat
+  uploadId: 949856

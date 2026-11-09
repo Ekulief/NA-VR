@@ -1,0 +1,1805 @@
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+
+import {
+  collection,
+  getDocs,
+  query,
+  where,
+  addDoc,
+  serverTimestamp,
+  doc,
+  getDoc,
+  updateDoc,
+  deleteField,
+} from "firebase/firestore";
+
+import { db } from "../../config/firebase-config";
+import { useAuth } from "../../context/AuthContext";
+import { getFunctions, httpsCallable } from "firebase/functions";
+
+import {
+  ArrowLeft,
+  Plus,
+  Box,
+  X,
+  Save,
+  Loader2,
+  Trash2,
+  CheckCircle2,
+  AlertCircle,
+  AlertTriangle,
+  Info,
+} from "lucide-react";
+
+const CONFIGURATION_ORDER = {
+  Attentional_Blindness: [
+    "ab_AwarenessQuestionText",
+    "ab_FadeDelaySeconds",
+    "ab_FadeDurationSeconds",
+    "ab_InstructionText",
+    "ab_NotNoticedText",
+    "ab_NoticedText",
+    "ab_PostFadePauseSeconds",
+    "ab_UseRandomFadeTarget",
+    "ab_SpecificFadeTarget",
+    "ab_AudioDelaySeconds",
+    "ab_UseRandomAudioClip",
+    "ab_SpecificAudioClip",
+    "ab_AudioLoop",
+    "ab_AudioVolume",
+    // "ab_SpecificAudioClipIndex",
+    "ab_AvailableAudioClips",
+
+    "globalInstructionDelay",
+  ],
+
+  Depth_Perception: [
+    "depth_ActualHeightMeters",
+    "depth_MaxHeightMeters",
+    "depth_MinHeightMeters",
+    "depth_InstructionText",
+    "globalInstructionDelay",
+  ],
+  Distance_Perception: [
+    "distance_ActualDistanceMeters",
+    "distance_InstructionText",
+    "distance_MaxDistanceMeters",
+    "distance_MinDistanceMeters",
+    "globalInstructionDelay",
+  ],
+
+  Memory2: [
+    "memory2_BriefingText",
+    "memory_DistractorInstructionText",
+    "memory_DistractorTaskDuration",
+    "memory_RandomizeQuestions",
+    "memory_RecallInstructionText",
+    "memory_RoomInstructionText",
+    "memory_TimePerRoomSeconds",
+    "memory_TransitionFadeDuration",
+    "memory_UseDistractorTask",
+    "targets",
+  ],
+
+  Memory: [
+    "memory_BriefingText",
+    "memory_DistractorInstructionText",
+    "memory_DistractorTaskDuration",
+    "memory_RandomizeQuestions",
+    "memory_RecallInstructionText",
+    "memory_RoomInstructionText",
+    "memory_TimePerRoomSeconds",
+    "memory_TransitionFadeDuration",
+    "memory_UseDistractorTask",
+    "targets",
+  ],
+
+  Odd_Item_Detection: [
+    "globalInstructionDelay",
+    "oddItem_InstructionText",
+    "oddItem_WrongItemFeedback",
+    "oddItem_RandomizeTarget",
+    "oddItem_SelectedTarget",
+    // "oddItem_RaycastDistance",
+    "oddItem_SearchTimeLimitSeconds",
+    "oddItem_RepeatLayout",
+  ],
+};
+
+const ENVIRONMENT_OPTIONS = [
+  {
+    moduleId: "Depth_Perception",
+    name: "Depth Perception (Height)",
+    description: "High-altitude rooftop",
+  },
+  {
+    moduleId: "Distance_Perception",
+    name: "Distance Perception",
+    description: "Roadside setting",
+  },
+  {
+    moduleId: "Attentional_Blindness",
+    name: "Attentional Blindness",
+    description: 'Minimalist "minimal" hallway',
+  },
+  {
+    moduleId: "Odd_Item_Detection",
+    name: "Odd-item Detection",
+    description: "Grocery store setting",
+  },
+  // Temporarily disabled: house + diner Sternberg setting is still buggy.
+  // {
+  //   moduleId: "Memory2",
+  //   name: "Sternberg Memory Scanning",
+  //   description: "House and a diner setting",
+  // },
+  {
+    moduleId: "Memory",
+    name: "Sternberg Memory Scanning (Diner)",
+    description: "A diner setting",
+  },
+];
+
+const previewSceneMap = {
+  Depth_Perception: "DepthPerception_Preview",
+  Odd_Item_Detection: "OddItem_Preview",
+  Attentional_Blindness: "AttentionalBlindness_Preview",
+  Memory2: "MemoryHouse_Preview",
+  Distance_Perception: "DistancePerception_Preview",
+  Memory: "MemoryDiner_Preview",
+};
+
+const cloneConfig = (value) => {
+  if (value === undefined || value === null) {
+    return {};
+  }
+  return JSON.parse(JSON.stringify(value));
+};
+
+const formatConfigLabel = (key) => {
+  let label = String(key)
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/_/g, " ")
+    .replace(/-/g, " ");
+
+  label = label
+    .replace(/^ab /i, "")
+    .replace(/^depth /i, "")
+    .replace(/^memory2 /i, "")
+    .replace(/^memory /i, "")
+    .replace(/^oddItem /i, "")
+    .replace(/^odd item /i, "");
+
+  // nicer names for the new audio fields
+  if (key === "ab_AudioDelaySeconds") return "Audio Delay (seconds)";
+  if (key === "ab_UseRandomAudioClip") return "Use Random Audio Clip";
+  if (key === "ab_SpecificAudioClipName") return "Selected Audio Clip";
+  if (key === "ab_AudioLoop") return "Loop Audio";
+  if (key === "ab_AudioVolume") return "Audio Volume";
+
+  return label.replace(/\b\w/g, (character) => character.toUpperCase()).trim();
+};
+
+export default function InstructorExperimentBuilder() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const { blockId, experimentId } = useParams();
+
+  const isEditing = Boolean(experimentId);
+
+  const [experimentName, setExperimentName] = useState("");
+  const [instructions, setInstructions] = useState("");
+
+  const [environment, setEnvironment] = useState("");
+  const [moduleId, setModuleId] = useState("");
+  const [moduleName, setModuleName] = useState("");
+  const [sceneId, setSceneId] = useState("");
+  const [moduleDescription, setModuleDescription] = useState("");
+  const [configuration, setConfiguration] = useState({});
+  const [moduleLoading, setModuleLoading] = useState(true);
+
+  const [groups, setGroups] = useState([]);
+  const [selectedGroups, setSelectedGroups] = useState([]);
+  const [vrDevices, setVrDevices] = useState([]);
+  // { [groupId]: vrId } -> exactly one VR device per checked group
+  const [groupVrMap, setGroupVrMap] = useState({});
+  const [allowStudentExperiments, setAllowStudentExperiments] = useState(false);
+
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(isEditing);
+
+  const [showPreview, setShowPreview] = useState(false);
+  const [notice, setNotice] = useState(null);
+
+  const showNotice = (
+    message,
+    title = "Notification",
+    type = "info",
+    onClose = null,
+  ) => {
+    setNotice({ message, title, type, onClose });
+  };
+
+  const closeNotice = () => {
+    const callback = notice?.onClose;
+    setNotice(null);
+
+    if (callback) {
+      callback();
+    }
+  };
+
+  const targetRefs = useRef({});
+  const [newTargetIndex, setNewTargetIndex] = useState(null);
+  const [activeTargetIndex, setActiveTargetIndex] = useState(null);
+
+  const getPreviewSceneName = () => {
+    if (!moduleId && !sceneId) return null;
+    const key = moduleId || sceneId;
+    return previewSceneMap[key] || null;
+  };
+
+  const loadExperimentModule = async (selectedModuleId) => {
+    if (!selectedModuleId) return null;
+
+    try {
+      const moduleSnap = await getDoc(
+        doc(db, "experimentModule", selectedModuleId),
+      );
+
+      if (!moduleSnap || !moduleSnap.exists()) {
+        console.error(`Experiment module "${selectedModuleId}" was not found.`);
+        return null;
+      }
+
+      const data = moduleSnap.data();
+
+      return {
+        id: selectedModuleId,
+        moduleName: data.moduleName || "",
+        description: data.description || "",
+        sceneId: data.sceneId || "",
+        defaultConfig: cloneConfig(data.defaultConfig || {}),
+      };
+    } catch (error) {
+      console.error("Error loading experiment module:", error);
+      return null;
+    }
+  };
+
+  const selectEnvironment = async (option) => {
+    setModuleLoading(true);
+    setShowPreview(false);
+
+    try {
+      const module = await loadExperimentModule(option.moduleId);
+
+      if (!module) {
+        showNotice(
+          `Unable to load default configuration for ${option.name}.`,
+          "Environment Configuration Error",
+          "error",
+        );
+        return;
+      }
+
+      setEnvironment(option.name);
+      setModuleId(module.id);
+      setModuleName(module.moduleName || option.name);
+      setExperimentName(module.moduleName || option.name);
+      setSceneId(module.sceneId || "");
+      setModuleDescription(module.description || option.description);
+      setInstructions(module.description || option.description);
+
+      setConfiguration(cloneConfig(module.defaultConfig || {}));
+    } finally {
+      setModuleLoading(false);
+    }
+  };
+  useEffect(() => {
+    const getVrDevices = async () => {
+      try {
+        if (!user?.uid) return;
+        // Call a trusted function so the builder does not need permission to
+        // read hardware IDs or publisher UIDs from the full VR inventory.
+        const listAvailable = httpsCallable(
+          getFunctions(),
+          "listVrDevicesForInstructor",
+        );
+        const reply = await listAvailable();
+        const list = Array.isArray(reply.data?.devices)
+          ? reply.data.devices
+          : [];
+        list.sort((a, b) => (a.vrId || a.id).localeCompare(b.vrId || b.id));
+        setVrDevices(list);
+      } catch (error) {
+        console.error("Error loading VR devices:", error);
+      }
+    };
+    getVrDevices();
+  }, [user?.uid]);
+
+  useEffect(() => {
+    const getGroups = async () => {
+      if (!blockId) return;
+
+      try {
+        const groupsRef = collection(db, "group");
+        const q = query(groupsRef, where("blockId", "==", blockId));
+        const snapshot = await getDocs(q);
+
+        const groupList = snapshot.docs.map((groupDoc) => ({
+          id: groupDoc.id,
+          ...groupDoc.data(),
+        }));
+
+        setGroups(groupList);
+      } catch (error) {
+        console.error("Error getting groups:", error);
+      }
+    };
+
+    getGroups();
+  }, [blockId]);
+
+  useEffect(() => {
+    if (newTargetIndex === null) return;
+    const target = targetRefs.current[newTargetIndex];
+    if (!target) return;
+
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    setActiveTargetIndex(newTargetIndex);
+
+    const timeout = setTimeout(() => {
+      setNewTargetIndex(null);
+    }, 1200);
+
+    return () => clearTimeout(timeout);
+  }, [newTargetIndex, configuration.targets]);
+
+  useEffect(() => {
+    const getExperiment = async () => {
+      if (!experimentId) {
+        setLoading(false);
+        setModuleLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+
+        const experimentRef = doc(db, "experiment", experimentId);
+        const experimentSnap = await getDoc(experimentRef);
+
+        if (!experimentSnap.exists()) {
+          showNotice(
+            "The experiment could not be found. It may have been deleted or is no longer available.",
+            "Experiment Not Found",
+            "error",
+            () => navigate(-1),
+          );
+          return;
+        }
+
+        const data = experimentSnap.data();
+
+        setGroupVrMap(
+          data.groupVrAssignments && typeof data.groupVrAssignments === "object"
+            ? { ...data.groupVrAssignments }
+            : {},
+        );
+        setExperimentName(data.experimentName || "");
+        setInstructions(data.instructions || "");
+        setEnvironment(data.environment || "");
+        setModuleId(data.moduleId || "");
+        setModuleName(data.moduleName || "");
+        setSceneId(data.sceneId || "");
+        setModuleDescription(data.moduleDescription || "");
+        setConfiguration(cloneConfig(data.configuration || {}));
+        setSelectedGroups(data.groupIds || []);
+        setAllowStudentExperiments(data.allowStudentExperiments === true);
+      } catch (error) {
+        console.error("Error getting experiment:", error);
+        showNotice(
+          "Something went wrong while loading the experiment. Please try again.",
+          "Unable to Load Experiment",
+          "error",
+          () => navigate(-1),
+        );
+      } finally {
+        setLoading(false);
+        setModuleLoading(false);
+      }
+    };
+
+    getExperiment();
+  }, [experimentId, navigate]);
+
+  const updateConfigValue = (path, value) => {
+    setConfiguration((previous) => {
+      const next = cloneConfig(previous);
+      let current = next;
+
+      for (let index = 0; index < path.length - 1; index += 1) {
+        current = current[path[index]];
+      }
+
+      current[path[path.length - 1]] = value;
+      return next;
+    });
+  };
+
+  const toggleGroup = (groupId) => {
+    setSelectedGroups((previous) => {
+      if (previous.includes(groupId)) {
+        return previous.filter((id) => id !== groupId);
+      }
+      return [...previous, groupId];
+    });
+
+    // Unchecking a group releases its VR device.
+    if (selectedGroups.includes(groupId)) {
+      setGroupVrMap((previous) => {
+        const next = { ...previous };
+        delete next[groupId];
+        return next;
+      });
+    }
+  };
+
+  const setGroupVr = (groupId, vrId) => {
+    setGroupVrMap((previous) => {
+      const next = { ...previous };
+      if (vrId) {
+        next[groupId] = vrId;
+      } else {
+        delete next[groupId];
+      }
+      return next;
+    });
+  };
+
+  const getOrderedConfigurationKeys = () => {
+    const configuredOrder = CONFIGURATION_ORDER[moduleId];
+    if (!configuredOrder) {
+      return Object.keys(configuration);
+    }
+
+    const orderedKeys = configuredOrder.filter((key) =>
+      Object.prototype.hasOwnProperty.call(configuration, key),
+    );
+
+    const remainingKeys = Object.keys(configuration).filter(
+      (key) => !configuredOrder.includes(key),
+    );
+
+    return [...orderedKeys, ...remainingKeys];
+  };
+
+  const getOrderedTargetKeys = (target) => {
+    const hiddenKeys = ["room", "gameId", "objectName"];
+    const preferredOrder = [
+      "questions",
+      "name",
+      "targetName",
+      "question",
+      "answer",
+      "correctAnswer",
+      "description",
+      "text",
+      "value",
+      "type",
+    ];
+
+    const existingKeys = Object.keys(target).filter(
+      (key) => !hiddenKeys.includes(key),
+    );
+
+    const orderedKeys = preferredOrder.filter((key) =>
+      existingKeys.includes(key),
+    );
+
+    const remainingKeys = existingKeys.filter(
+      (key) => !preferredOrder.includes(key),
+    );
+
+    return [...orderedKeys, ...remainingKeys];
+  };
+
+  const addMemoryQuestion = (questionsPath) => {
+    setConfiguration((previous) => {
+      const next = cloneConfig(previous);
+      let questions = next;
+
+      for (let index = 0; index < questionsPath.length; index += 1) {
+        const pathKey = questionsPath[index];
+        if (questions[pathKey] === undefined) {
+          questions[pathKey] = [];
+        }
+        questions = questions[pathKey];
+      }
+
+      if (!Array.isArray(questions)) return previous;
+
+      questions.push({
+        questionText: "",
+        questionType: "MultipleChoice",
+        multipleChoiceOptions: ["", ""],
+        correctAnswer: "",
+        enabled: true,
+      });
+
+      return next;
+    });
+  };
+
+  const removeMemoryQuestion = (questionsPath, questionIndex) => {
+    setConfiguration((previous) => {
+      const next = cloneConfig(previous);
+      let questions = next;
+
+      for (let index = 0; index < questionsPath.length; index += 1) {
+        questions = questions[questionsPath[index]];
+      }
+
+      if (!Array.isArray(questions)) return previous;
+
+      questions.splice(questionIndex, 1);
+      return next;
+    });
+  };
+
+  const validateMemoryQuestions = () => {
+    if (moduleId !== "Memory2" && moduleId !== "Memory") return true;
+
+    const targets = Array.isArray(configuration.targets)
+      ? configuration.targets
+      : [];
+
+    for (let targetIndex = 0; targetIndex < targets.length; targetIndex += 1) {
+      const target = targets[targetIndex];
+      const questions =
+        target && Array.isArray(target.questions) ? target.questions : [];
+
+      for (
+        let questionIndex = 0;
+        questionIndex < questions.length;
+        questionIndex += 1
+      ) {
+        const question = questions[questionIndex];
+
+        if (!question || typeof question !== "object") {
+          showNotice(
+            `Target ${targetIndex + 1}, Question ${questionIndex + 1} is invalid.`,
+            "Invalid Question",
+            "error",
+          );
+          return false;
+        }
+
+        if (
+          typeof question.questionText !== "string" ||
+          !question.questionText.trim()
+        ) {
+          showNotice(
+            `Please enter question text for Target ${targetIndex + 1}, Question ${questionIndex + 1}.`,
+            "Missing Question Text",
+            "warning",
+          );
+          return false;
+        }
+
+        if (
+          typeof question.correctAnswer !== "string" ||
+          !question.correctAnswer.trim()
+        ) {
+          showNotice(
+            `Please enter correct answer for Target ${targetIndex + 1}, Question ${questionIndex + 1}.`,
+            "Missing Correct Answer",
+            "warning",
+          );
+          return false;
+        }
+
+        if (question.questionType === "MultipleChoice") {
+          const options = Array.isArray(question.multipleChoiceOptions)
+            ? question.multipleChoiceOptions
+            : [];
+          if (options.length === 0) {
+            showNotice(
+              `Please add options for Target ${targetIndex + 1}, Question ${questionIndex + 1}.`,
+              "Missing Answer Options",
+              "warning",
+            );
+            return false;
+          }
+          if (options.some((opt) => typeof opt !== "string" || !opt.trim())) {
+            showNotice(
+              `Please fill all choice options for Target ${targetIndex + 1}, Question ${questionIndex + 1}.`,
+              "Incomplete Answer Options",
+              "warning",
+            );
+            return false;
+          }
+        }
+      }
+    }
+
+    return true;
+  };
+
+  const addMemoryTarget = () => {
+    setConfiguration((previous) => {
+      const next = cloneConfig(previous);
+      const targets = Array.isArray(next.targets) ? next.targets : [];
+
+      let newTarget = {
+        objectName: "",
+        questions: [
+          {
+            questionText: "",
+            questionType: "MultipleChoice",
+            multipleChoiceOptions: ["", ""],
+            correctAnswer: "",
+            enabled: true,
+          },
+        ],
+      };
+
+      targets.push(newTarget);
+      next.targets = targets;
+      return next;
+    });
+
+    setNewTargetIndex(
+      Array.isArray(configuration.targets) ? configuration.targets.length : 0,
+    );
+  };
+
+  const removeMemoryTarget = (targetIndex) => {
+    setConfiguration((previous) => {
+      const next = cloneConfig(previous);
+      if (Array.isArray(next.targets)) {
+        next.targets.splice(targetIndex, 1);
+      }
+      return next;
+    });
+  };
+
+  const handleSaveExperiment = async (event) => {
+    event.preventDefault();
+
+    if (!experimentName.trim()) {
+      showNotice(
+        "Please enter an experiment name.",
+        "Experiment Name Required",
+        "warning",
+      );
+      return;
+    }
+
+    if (!moduleId) {
+      showNotice(
+        "Please select an environment / module.",
+        "Environment Required",
+        "warning",
+      );
+      return;
+    }
+
+    if (!Array.isArray(selectedGroups) || selectedGroups.length === 0) {
+      showNotice(
+        "Please select at least one student group before publishing the experiment.",
+        "Student Group Required",
+        "warning",
+      );
+      return;
+    }
+
+    const groupsMissingVr = selectedGroups.filter((id) => !groupVrMap[id]);
+    if (groupsMissingVr.length > 0) {
+      showNotice(
+        "Please assign a VR device to every selected group.",
+        "VR Device Required",
+        "warning",
+      );
+      return;
+    }
+
+    if (moduleId === "Attentional_Blindness") {
+      const isRandom = configuration.ab_UseRandomFadeTarget === true;
+      if (!isRandom && !configuration.ab_SpecificFadeTarget) {
+        showNotice(
+          "Please select a Fade Target or enable Use Random Fade Target.",
+          "Fade Target Required",
+          "warning",
+        );
+        return;
+      }
+    }
+
+    if (moduleId === "Odd_Item_Detection") {
+      const isRandom = configuration.oddItem_RandomizeTarget === true;
+      if (!isRandom && !configuration.oddItem_SelectedTarget) {
+        showNotice(
+          "Please select a Target or enable Randomize Target.",
+          "Target Required",
+          "warning",
+        );
+        return;
+      }
+    }
+
+    if (!validateMemoryQuestions()) {
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      const payload = {
+        blockId: blockId || null,
+        experimentName: experimentName.trim(),
+        instructions: instructions.trim(),
+        environment: environment || "",
+        moduleId: moduleId || "",
+        moduleName: moduleName || "",
+        sceneId: sceneId || "",
+        moduleDescription: moduleDescription || "",
+        configuration: configuration || {},
+        groupIds: selectedGroups || [],
+        // one VR device per group: { groupId: vrId }
+        groupVrAssignments: selectedGroups.reduce((acc, id) => {
+          acc[id] = groupVrMap[id];
+          return acc;
+        }, {}),
+        allowStudentExperiments: allowStudentExperiments === true,
+        updatedAt: serverTimestamp(),
+      };
+
+      if (isEditing) {
+        // remove the old VR id fields from previously saved experiments
+        payload.vrId = deleteField();
+        payload.vrIds = deleteField();
+        await updateDoc(doc(db, "experiment", experimentId), payload);
+
+        showNotice(
+          "Your experiment changes have been saved successfully.",
+          "Experiment Updated",
+          "success",
+          () => navigate(-1),
+        );
+      } else {
+        payload.createdAt = serverTimestamp();
+        await addDoc(collection(db, "experiment"), payload);
+
+        showNotice(
+          "Your new experiment has been created successfully.",
+          "Experiment Created",
+          "success",
+          () => navigate(-1),
+        );
+      }
+    } catch (error) {
+      console.error("Error saving experiment:", error);
+      showNotice(
+        "Failed to save your experiment. Please check your connection and try again.",
+        "Save Failed",
+        "error",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const renderMemoryQuestions = (questions, path) => {
+    return (
+      <>
+        <div className="md:col-span-2 flex justify-end">
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => addMemoryQuestion(path)}
+            className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+          >
+            <Plus size={14} /> Add Question
+          </button>
+        </div>
+
+        {questions.length === 0 ? (
+          <div className="md:col-span-2 rounded-lg border border-dashed border-gray-300 bg-white p-6 text-center text-sm text-gray-500">
+            No questions configured.
+          </div>
+        ) : (
+          <div className="md:col-span-2 space-y-4">
+            {questions.map((question, index) => (
+              <div
+                key={`${path.join(".")}-${index}`}
+                className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm"
+              >
+                <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100 text-sm font-semibold text-indigo-700">
+                      {index + 1}
+                    </div>
+                    <p className="text-sm font-semibold text-gray-900">
+                      Question {index + 1}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => removeMemoryQuestion(path, index)}
+                    className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                  >
+                    Remove
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2">
+                  <div className="md:col-span-2">
+                    <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                      Question Text
+                    </label>
+                    <textarea
+                      value={question.questionText ?? ""}
+                      onChange={(e) =>
+                        updateConfigValue(
+                          [...path, index, "questionText"],
+                          e.target.value,
+                        )
+                      }
+                      rows={2}
+                      placeholder="Enter the question..."
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                      Question Type
+                    </label>
+                    <select
+                      value={
+                        question.questionType === "YesNo"
+                          ? "YesNo"
+                          : "MultipleChoice"
+                      }
+                      onChange={(e) => {
+                        const newType = e.target.value;
+                        updateConfigValue(
+                          [...path, index, "questionType"],
+                          newType,
+                        );
+                        const optionsPath = [
+                          ...path,
+                          index,
+                          "multipleChoiceOptions",
+                        ];
+                        if (newType === "MultipleChoice") {
+                          if (!Array.isArray(question.multipleChoiceOptions)) {
+                            updateConfigValue(optionsPath, ["", ""]);
+                          }
+                        } else {
+                          updateConfigValue(optionsPath, []);
+                        }
+                      }}
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+                    >
+                      <option value="MultipleChoice">Multiple Choice</option>
+                      <option value="YesNo">Yes / No</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                      Correct Answer
+                    </label>
+                    <input
+                      type="text"
+                      value={question.correctAnswer ?? ""}
+                      onChange={(e) =>
+                        updateConfigValue(
+                          [...path, index, "correctAnswer"],
+                          e.target.value,
+                        )
+                      }
+                      placeholder="Correct answer..."
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+                    />
+                  </div>
+
+                  {question.questionType === "MultipleChoice" && (
+                    <div className="md:col-span-2">
+                      <div className="mb-2 flex items-center justify-between">
+                        <label className="block text-sm font-medium text-gray-700">
+                          Options
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const options = Array.isArray(
+                              question.multipleChoiceOptions,
+                            )
+                              ? question.multipleChoiceOptions
+                              : [];
+                            updateConfigValue(
+                              [...path, index, "multipleChoiceOptions"],
+                              [...options, ""],
+                            );
+                          }}
+                          className="flex items-center gap-1 rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                        >
+                          <Plus size={12} /> Add Option
+                        </button>
+                      </div>
+
+                      <div className="space-y-2">
+                        {(question.multipleChoiceOptions || []).map(
+                          (opt, optIndex) => (
+                            <div
+                              key={optIndex}
+                              className="flex items-center gap-2"
+                            >
+                              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-xs font-medium text-indigo-700">
+                                {optIndex + 1}
+                              </span>
+                              <input
+                                type="text"
+                                value={opt ?? ""}
+                                onChange={(e) => {
+                                  const nextOpts = [
+                                    ...question.multipleChoiceOptions,
+                                  ];
+                                  nextOpts[optIndex] = e.target.value;
+                                  updateConfigValue(
+                                    [...path, index, "multipleChoiceOptions"],
+                                    nextOpts,
+                                  );
+                                }}
+                                placeholder={`Option ${optIndex + 1}`}
+                                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const nextOpts =
+                                    question.multipleChoiceOptions.filter(
+                                      (_, i) => i !== optIndex,
+                                    );
+                                  updateConfigValue(
+                                    [...path, index, "multipleChoiceOptions"],
+                                    nextOpts,
+                                  );
+                                }}
+                                className="p-2 text-gray-400 hover:text-red-600"
+                              >
+                                <X size={16} />
+                              </button>
+                            </div>
+                          ),
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </>
+    );
+  };
+
+  const previewSceneName = getPreviewSceneName();
+
+  if (loading) {
+    return (
+      <div className="font-google min-h-screen flex items-center justify-center bg-gray-50">
+        <Loader2 className="animate-spin text-indigo-600" size={32} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="font-google min-h-screen bg-slate-50 pb-24 text-gray-900">
+      <main className="mx-auto max-w-5xl px-5 pt-20">
+        <button
+          onClick={() => navigate(-1)}
+          className="flex items-center gap-2 text-gray-600 hover:text-black transition mb-6"
+        >
+          <ArrowLeft size={20} />
+          <span>Back</span>
+        </button>
+
+        <h1 className="text-2xl font-medium mb-6">
+          {isEditing ? "Edit Experiment" : "Create New Experiment"}
+        </h1>
+
+        {/* Environment Selection */}
+        <section className="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="mb-4 text-base font-semibold tracking-tight text-gray-900">
+            Select Environment / Module
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {ENVIRONMENT_OPTIONS.map((opt) => {
+              const isSelected =
+                moduleId === opt.moduleId || environment === opt.name;
+              return (
+                <button
+                  key={opt.moduleId}
+                  type="button"
+                  onClick={() => selectEnvironment(opt)}
+                  className={`text-left rounded-xl border p-4 transition cursor-pointer ${
+                    isSelected
+                      ? "border-indigo-600 bg-indigo-50/50 ring-2 ring-indigo-500/20"
+                      : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                  }`}
+                >
+                  <p className="font-medium text-sm text-gray-900">
+                    {opt.name}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {opt.description}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* Experiment Details */}
+        <section className="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="mb-4 text-base font-semibold tracking-tight text-gray-900">
+            Experiment Information
+          </h2>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Experiment Title
+              </label>
+              <input
+                type="text"
+                value={experimentName}
+                onChange={(e) => setExperimentName(e.target.value)}
+                placeholder="e.g. Depth Perception - Trial A"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Instructions / Participant Guidance
+              </label>
+              <textarea
+                value={instructions}
+                onChange={(e) => setInstructions(e.target.value)}
+                rows={3}
+                placeholder="Instructions shown to students before taking the experiment..."
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* VR Environment Preview */}
+        {moduleId && (
+          <section className="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-base font-semibold tracking-tight text-gray-900">
+                  VR Environment Preview
+                </h2>
+                <p className="text-sm text-gray-500">
+                  Click inside the preview window, To exit, press Esc key twice
+                </p>
+              </div>
+              {showPreview && (
+                <button
+                  onClick={() => setShowPreview(false)}
+                  className="text-gray-500 hover:text-black transition"
+                >
+                  <X size={20} />
+                </button>
+              )}
+            </div>
+
+            <div className="h-[600px] bg-gray-100 rounded-lg overflow-hidden relative border border-gray-200">
+              {!showPreview ? (
+                <button
+                  onClick={() => setShowPreview(true)}
+                  disabled={!previewSceneName}
+                  className="w-full h-full flex flex-col items-center justify-center text-gray-500 hover:bg-gray-200 transition disabled:opacity-50"
+                >
+                  <Box size={48} className="mb-3 text-indigo-600" />
+                  <p className="font-medium text-lg text-gray-900">
+                    {previewSceneName
+                      ? "Click to Load 3D Preview"
+                      : "Preview not available"}
+                  </p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Loads real-time WebGL view of{" "}
+                    {environment || "selected environment"}
+                  </p>
+                </button>
+              ) : (
+                <iframe
+                  src={`/previews/all-experiments/index.html?scene=${previewSceneName}`}
+                  className="w-full h-full border-0"
+                  allow="fullscreen; pointer-lock"
+                  title="Environment Preview"
+                />
+              )}
+            </div>
+
+            <p className="text-sm text-gray-500 mt-3">
+              (Note: Preview shows only the base environment and not configured
+              variables)
+            </p>
+          </section>
+        )}
+        {/* Configuration Parameters */}
+        {moduleId && Object.keys(configuration).length > 0 && (
+          <section className="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            <h2 className="mb-4 text-base font-semibold tracking-tight text-gray-900">
+              Module Configuration Parameters
+            </h2>
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+              {getOrderedConfigurationKeys().map((key) => {
+                const value = configuration[key];
+                const label = formatConfigLabel(key);
+                // Memory targets
+                if (key === "targets" && Array.isArray(value)) {
+                  return (
+                    <div
+                      key={key}
+                      className="md:col-span-2 space-y-4 pt-4 border-t border-gray-200"
+                    >
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-md font-semibold text-gray-800">
+                          Memory Scan Targets
+                        </h3>
+                        <button
+                          type="button"
+                          onClick={addMemoryTarget}
+                          className="flex items-center gap-1.5 rounded-lg bg-indigo-50 border border-indigo-200 px-3 py-1.5 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100"
+                        >
+                          <Plus size={14} /> Add Target Object
+                        </button>
+                      </div>
+
+                      {value.map((target, targetIdx) => (
+                        <div
+                          key={targetIdx}
+                          ref={(el) => (targetRefs.current[targetIdx] = el)}
+                          className={`rounded-xl border p-5 transition ${
+                            activeTargetIndex === targetIdx
+                              ? "border-indigo-500 bg-indigo-50/30 ring-2 ring-indigo-500/20"
+                              : "border-gray-200 bg-gray-50/50"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-4">
+                            <span className="font-semibold text-gray-700 text-sm">
+                              Target #{targetIdx + 1}
+                              {target.objectName
+                                ? ` – ${target.objectName}`
+                                : ""}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => removeMemoryTarget(targetIdx)}
+                              className="text-red-600 hover:text-red-700 p-1 rounded-lg hover:bg-red-50"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 mb-4">
+                            {getOrderedTargetKeys(target).map((tKey) => {
+                              if (tKey === "questions") return null;
+                              return (
+                                <div key={tKey}>
+                                  <label className="block text-xs font-medium text-gray-600 mb-1 capitalize">
+                                    {formatConfigLabel(tKey)}
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={target[tKey] ?? ""}
+                                    onChange={(e) =>
+                                      updateConfigValue(
+                                        ["targets", targetIdx, tKey],
+                                        e.target.value,
+                                      )
+                                    }
+                                    className="w-full rounded-lg border border-gray-300 p-2 text-sm bg-white"
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {Array.isArray(target.questions) && (
+                            <div className="space-y-3 pt-3 border-t border-gray-200">
+                              <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500">
+                                Target Questions
+                              </h4>
+                              {renderMemoryQuestions(target.questions, [
+                                "targets",
+                                targetIdx,
+                                "questions",
+                              ])}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                }
+                if (
+                  key === "ab_AvailableAudioClips" ||
+                  key === "ab_FurnitureList" ||
+                  key === "targets"
+                ) {
+                  return null;
+                }
+
+                if (key === "ab_SpecificAudioClipName") {
+                  const isRandomAudio =
+                    configuration.ab_UseRandomAudioClip === true;
+                  const availableClips = Array.isArray(
+                    configuration.ab_AvailableAudioClips,
+                  )
+                    ? configuration.ab_AvailableAudioClips
+                    : [];
+
+                  return (
+                    <div key={key} className="space-y-1.5">
+                      <label className="block text-sm font-medium text-gray-700">
+                        {label}
+                      </label>
+                      <select
+                        value={value ?? ""}
+                        disabled={isRandomAudio || saving}
+                        onChange={(e) =>
+                          updateConfigValue([key], e.target.value)
+                        }
+                        className={`w-full rounded-lg border p-2.5 text-sm outline-none transition ${
+                          isRandomAudio
+                            ? "bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200"
+                            : "bg-white text-gray-900 border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                        }`}
+                      >
+                        <option value="">Select an audio clip...</option>
+                        {availableClips.map((clipName, idx) => (
+                          <option key={idx} value={clipName}>
+                            {clipName}
+                          </option>
+                        ))}
+                      </select>
+                      {isRandomAudio && (
+                        <p className="text-xs text-gray-500 italic">
+                          Disabled because "Use Random Audio Clip" is enabled.
+                        </p>
+                      )}
+                    </div>
+                  );
+                }
+
+                if (key === "ab_SpecificFadeTarget") {
+                  const isRandomFade =
+                    configuration.ab_UseRandomFadeTarget === true;
+                  const furnitureList = Array.isArray(
+                    configuration.ab_FurnitureList,
+                  )
+                    ? configuration.ab_FurnitureList
+                    : [];
+
+                  return (
+                    <div key={key} className="space-y-1.5">
+                      <label className="block text-sm font-medium text-gray-700">
+                        {label}
+                      </label>
+                      <select
+                        value={value ?? ""}
+                        disabled={isRandomFade || saving}
+                        onChange={(e) =>
+                          updateConfigValue([key], e.target.value)
+                        }
+                        className={`w-full rounded-lg border p-2.5 text-sm outline-none transition ${
+                          isRandomFade
+                            ? "bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200"
+                            : "bg-white text-gray-900 border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                        }`}
+                      >
+                        <option value="">Select a fade target...</option>
+                        {furnitureList.map((itemName, idx) => (
+                          <option key={idx} value={itemName}>
+                            {itemName}
+                          </option>
+                        ))}
+                      </select>
+                      {isRandomFade && (
+                        <p className="text-xs text-gray-500 italic">
+                          Disabled because "Use Random Fade Target" is enabled.
+                        </p>
+                      )}
+                    </div>
+                  );
+                }
+                if (
+                  key === "ab_FurnitureList" ||
+                  key === "oddItem_AvailableTargets" ||
+                  key === "oddItem_TargetDisplayName" ||
+                  key === "depth_StepAmount" ||
+                  key === "depth_MaxHeightMeters" ||
+                  key === "depth_MinHeightMeters" ||
+                  key === "distance_MinDistanceMeters" ||
+                  key === "distance_MaxDistanceMeters" ||
+                  key === "globalInstructionDelay" ||
+                  key === "ab_AvailableAudioClips" ||
+                  key === "ab_SpecificAudioClipIndex" ||
+                  key === "memory_RoomInstructionText" ||
+                  key === "memory2_RoomInstructionText" ||
+                  key === "oddItem_RaycastDistance"
+                ) {
+                  return null;
+                }
+
+                // Attentional Blindness – Selected Fade Target
+                if (key === "ab_SpecificFadeTarget") {
+                  const isRandom =
+                    configuration.ab_UseRandomFadeTarget === true;
+                  const furniture = Array.isArray(
+                    configuration.ab_FurnitureList,
+                  )
+                    ? configuration.ab_FurnitureList
+                    : [];
+
+                  return (
+                    <div key={key}>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Selected Fade Target
+                      </label>
+                      <select
+                        value={configuration[key] ?? ""}
+                        disabled={isRandom}
+                        onChange={(e) =>
+                          updateConfigValue([key], e.target.value)
+                        }
+                        className={`w-full rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 ${
+                          isRandom
+                            ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                            : "bg-white"
+                        }`}
+                      >
+                        <option value="">— Select a target —</option>
+                        {furniture.map((item) => (
+                          <option key={item} value={item}>
+                            {item}
+                          </option>
+                        ))}
+                      </select>
+                      {isRandom && (
+                        <p className="mt-1 text-xs text-gray-500">
+                          Disabled while “Use Random Fade Target” is enabled.
+                        </p>
+                      )}
+                    </div>
+                  );
+                }
+
+                if (key === "ab_SpecificAudioClip") {
+                  const isRandom = configuration.ab_UseRandomAudioClip === true;
+                  const availableClips = Array.isArray(
+                    configuration.ab_AvailableAudioClips,
+                  )
+                    ? configuration.ab_AvailableAudioClips
+                    : [];
+
+                  return (
+                    <div key={key}>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Selected Audio Clip
+                      </label>
+                      <select
+                        value={configuration[key] ?? ""}
+                        disabled={isRandom}
+                        onChange={(e) =>
+                          updateConfigValue([key], e.target.value)
+                        }
+                        className={`w-full rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 ${
+                          isRandom
+                            ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                            : "bg-white"
+                        }`}
+                      >
+                        <option value="">— Select a sound —</option>
+                        {availableClips.map((clip) => (
+                          <option key={clip} value={clip}>
+                            {clip}
+                          </option>
+                        ))}
+                      </select>
+                      {isRandom && (
+                        <p className="mt-1 text-xs text-gray-500">
+                          Disabled while “Use Random Audio Clip” is enabled.
+                        </p>
+                      )}
+                    </div>
+                  );
+                }
+                if (key === "oddItem_SelectedTarget") {
+                  const isRandom =
+                    configuration.oddItem_RandomizeTarget === true;
+                  const available = Array.isArray(
+                    configuration.oddItem_AvailableTargets,
+                  )
+                    ? configuration.oddItem_AvailableTargets
+                    : [];
+
+                  return (
+                    <div key={key}>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Selected Target
+                      </label>
+                      <select
+                        value={value ?? ""}
+                        disabled={isRandom}
+                        onChange={(e) =>
+                          updateConfigValue([key], e.target.value)
+                        }
+                        className={`w-full rounded-lg border border-gray-300 p-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 ${
+                          isRandom
+                            ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                            : "bg-white"
+                        }`}
+                      >
+                        <option value="">— Select a target —</option>
+                        {available.map((item) => (
+                          <option key={item} value={item}>
+                            {item}
+                          </option>
+                        ))}
+                      </select>
+                      {isRandom && (
+                        <p className="mt-1 text-xs text-gray-500">
+                          Disabled while “Randomize Target” is enabled.
+                        </p>
+                      )}
+                    </div>
+                  );
+                }
+
+                // Boolean
+                if (typeof value === "boolean") {
+                  return (
+                    <label
+                      key={key}
+                      className="flex min-h-12 items-center gap-3 rounded-lg border border-gray-200 bg-gray-50/70 px-3 py-2.5 transition hover:border-gray-300 hover:bg-gray-50"
+                    >
+                      <input
+                        type="checkbox"
+                        id={key}
+                        checked={value}
+                        onChange={(e) =>
+                          updateConfigValue([key], e.target.checked)
+                        }
+                        className="h-4 w-4 shrink-0 rounded border-gray-300 text-indigo-600 accent-indigo-600 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1"
+                      />
+                      <span className="cursor-pointer text-sm font-medium text-gray-700">
+                        {formatConfigLabel(key)}
+                      </span>
+                    </label>
+                  );
+                }
+
+                if (
+                  key === "distance_MinDistanceMeters" ||
+                  key === "distance_MaxDistanceMeters"
+                ) {
+                  return null;
+                }
+
+                if (key === "distance_ActualDistanceMeters") {
+                  const min =
+                    Number(configuration.distance_MinDistanceMeters) || 0;
+                  const max =
+                    Number(configuration.distance_MaxDistanceMeters) || 999;
+
+                  return (
+                    <div key={key}>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {formatConfigLabel(key)}
+                      </label>
+                      <input
+                        type="number"
+                        value={value ?? ""}
+                        min={min}
+                        max={max}
+                        onChange={(e) => {
+                          let num = Number(e.target.value);
+                          if (isNaN(num)) num = min;
+                          num = Math.min(Math.max(num, min), max); // clamp
+                          updateConfigValue([key], num);
+                        }}
+                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">
+                        Must be between {min} m and {max} m
+                      </p>
+                    </div>
+                  );
+                }
+
+                if (
+                  key === "depth_ActualHeightMeters" ||
+                  key === "depth_MinHeightMeters"
+                ) {
+                  const min =
+                    key === "depth_ActualHeightMeters"
+                      ? Number(configuration.depth_MinHeightMeters) || 10
+                      : 0;
+                  const max = Number(configuration.depth_MaxHeightMeters) || 28;
+
+                  return (
+                    <div key={key}>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {formatConfigLabel(key)}
+                      </label>
+                      <input
+                        type="number"
+                        value={value ?? ""}
+                        min={min}
+                        max={max}
+                        onChange={(e) => {
+                          let num = Number(e.target.value);
+                          if (isNaN(num)) num = min;
+                          num = Math.min(Math.max(num, min), max);
+                          updateConfigValue([key], num);
+                        }}
+                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">
+                        Must be between {min} m and {max} m
+                      </p>
+                    </div>
+                  );
+                }
+                // Default
+                return (
+                  <div key={key}>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {formatConfigLabel(key)}
+                    </label>
+                    <input
+                      type={typeof value === "number" ? "number" : "text"}
+                      value={value ?? ""}
+                      onChange={(e) =>
+                        updateConfigValue(
+                          [key],
+                          typeof value === "number"
+                            ? Number(e.target.value)
+                            : e.target.value,
+                        )
+                      }
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* Group Assignment */}
+        {groups.length > 0 && (
+          <section className="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            <h2 className="mb-4 text-base font-semibold tracking-tight text-gray-900">
+              Assign Student Groups
+            </h2>
+            <p className="mb-3 text-sm text-gray-500">
+              Check a group, then choose the one VR headset assigned to it. The same headset can be shared by several groups (e.g. taking turns).
+              {vrDevices.length === 0 &&
+                " No registered headsets were found. Start the Unity app on a headset to register it, then reopen the experiment builder."}
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {groups.map((group) => {
+                const isChecked = selectedGroups.includes(group.id);
+
+                return (
+                  <div key={group.id} className="flex flex-col gap-2">
+                    <label
+                      className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-3 text-sm transition ${
+                        isChecked
+                          ? "border-indigo-300 bg-indigo-50/70"
+                          : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => toggleGroup(group.id)}
+                        className="h-4 w-4 shrink-0 rounded border-gray-300 text-indigo-600 accent-indigo-600 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1"
+                      />
+                      <span className="text-sm font-medium text-gray-800">
+                        {group.groupName || group.name || `Group ${group.id}`}
+                      </span>
+                    </label>
+
+                    {isChecked && (
+                      <select
+                        value={groupVrMap[group.id] || ""}
+                        onChange={(e) => setGroupVr(group.id, e.target.value)}
+                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                      >
+                        <option value="">Select VR device…</option>
+                        {vrDevices.map((device) => {
+                          const vrId = device.vrId || device.id;
+                          return (
+                            <option key={device.id} value={vrId}>
+                              {vrId}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+        {/* Permissions */}
+        <section className="mb-8 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="mb-4 text-base font-semibold tracking-tight text-gray-900">
+            Permissions
+          </h2>
+          <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-gray-200 bg-gray-50/70 px-3 py-3 transition hover:border-gray-300 hover:bg-gray-50">
+            <input
+              type="checkbox"
+              checked={allowStudentExperiments}
+              onChange={(e) => setAllowStudentExperiments(e.target.checked)}
+              className="h-4 w-4 shrink-0 rounded border-gray-300 text-indigo-600 accent-indigo-600 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1"
+            />
+            <span className="text-sm font-medium text-gray-700">
+              Allow students to create and run their own experiments
+            </span>
+          </label>
+        </section>
+
+        {/* Bottom Save Bar */}
+        <div className="sticky bottom-5 z-10 flex items-center justify-end gap-3 bg-white/95 backdrop-blur border border-gray-200 p-4 rounded-xl shadow-lg">
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            className="rounded-xl border border-gray-300 px-5 py-2.5 font-medium text-gray-700 transition hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSaveExperiment}
+            disabled={saving}
+            className="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 font-medium text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
+          >
+            {saving ? (
+              <Loader2 size={18} className="animate-spin" />
+            ) : (
+              <Save size={18} />
+            )}
+            <span>
+              {isEditing ? "Update Experiment" : "Publish Experiment"}
+            </span>
+          </button>
+        </div>
+      </main>
+
+      {notice && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          onClick={closeNotice}
+        >
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="notice-title"
+            aria-describedby="notice-message"
+            className="w-full max-w-md overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {(() => {
+              const styles = {
+                success: {
+                  icon: CheckCircle2,
+                  iconColor: "text-green-600",
+                  iconBg: "bg-green-100",
+                  button: "bg-green-600 hover:bg-green-700",
+                  title: "Success",
+                },
+                error: {
+                  icon: AlertCircle,
+                  iconColor: "text-red-600",
+                  iconBg: "bg-red-100",
+                  button: "bg-red-600 hover:bg-red-700",
+                  title: "Error",
+                },
+                warning: {
+                  icon: AlertTriangle,
+                  iconColor: "text-amber-600",
+                  iconBg: "bg-amber-100",
+                  button: "bg-amber-600 hover:bg-amber-700",
+                  title: "Attention Required",
+                },
+                info: {
+                  icon: Info,
+                  iconColor: "text-blue-600",
+                  iconBg: "bg-blue-100",
+                  button: "bg-indigo-600 hover:bg-indigo-700",
+                  title: "Notification",
+                },
+              };
+
+              const config = styles[notice.type] || styles.info;
+              const NoticeIcon = config.icon;
+
+              return (
+                <>
+                  <div className="flex items-start justify-between p-6 pb-4">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${config.iconBg}`}
+                      >
+                        <NoticeIcon size={25} className={config.iconColor} />
+                      </div>
+
+                      <div>
+                        <h2
+                          id="notice-title"
+                          className="text-lg font-bold text-gray-900"
+                        >
+                          {notice.title || config.title}
+                        </h2>
+
+                        <p className="mt-1 text-xs text-gray-500">
+                          Na-VR Experiment Builder
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={closeNotice}
+                      className="rounded-lg p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+                      aria-label="Close notification"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
+
+                  <div className="px-6 pb-6">
+                    <p
+                      id="notice-message"
+                      className="text-sm leading-6 text-gray-600"
+                    >
+                      {notice.message}
+                    </p>
+                  </div>
+
+                  <div className="flex justify-end border-t border-gray-200 bg-gray-50 px-6 py-4">
+                    <button
+                      type="button"
+                      onClick={closeNotice}
+                      className={`rounded-lg px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition ${config.button}`}
+                    >
+                      {notice.onClose ? "Continue" : "Got it"}
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

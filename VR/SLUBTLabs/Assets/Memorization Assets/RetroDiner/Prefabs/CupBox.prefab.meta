@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: bfb797c39cc048bfb1f38ebd2dc1f087
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 391942
+  packageName: Retro Diner - Stylized 3D Restaurant Environment (URP)
+  packageVersion: 1.0
+  assetPath: Assets/RetroDiner/Prefabs/CupBox.prefab
+  uploadId: 949856

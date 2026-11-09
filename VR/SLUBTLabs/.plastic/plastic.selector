@@ -1,4 +1,3 @@
-repository "SLUBTLabs 2026-03-27_08-57-54/SLUBTLabs@1375464735355@cloud"
+repository "SLUBTLabs/SLUBTLabs@1375464735355@cloud"
   path "/"
-    br "/main"
-    co "/main"
+    smartbranch "/main/Development/FeatureLuke"

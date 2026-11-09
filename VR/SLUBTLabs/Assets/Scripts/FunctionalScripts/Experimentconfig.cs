@@ -1,0 +1,560 @@
+﻿using Firebase.Firestore;
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using UnityEngine;
+
+/// <summary>
+/// SLUBT Labs — Experiment Config
+/// Central configuration asset for all experiments.
+/// Connects directly to Firebase Cloud Firestore to fetch live module parameters.
+/// </summary>
+[CreateAssetMenu(fileName = "ExperimentConfig", menuName = "SLUBT Labs/Experiment Config")]
+public class ExperimentConfig : ScriptableObject
+{
+    // ── General ───────────────────────────────────────────────────────────────
+    [Header("General")]
+    public string studentId;
+    public string groupId;
+    public string blockId;
+    public string experimentId;
+    public string vrId;
+    public string progressId;
+    public string moduleId;
+    public string sceneId;
+    public float globalInstructionDelay = 1.5f;
+
+    // ── Attentional Blindness (Furniture Counting) ───────────────────────────
+    [Header("Attentional Blindness")]
+    public float ab_FadeDelaySeconds = 8f;
+    public float ab_FadeDurationSeconds = 3f;
+    public float ab_PostFadePauseSeconds = 2f;
+    public bool ab_UseRandomFadeTarget = true;
+
+    [TextArea(2, 4)]
+    public string ab_InstructionText = "<b>Count the furniture</b>\n\nWalk around the scene and count how many\nfurniture items you can see.\n\nPress <b>Start Counting</b> when you are ready.";
+    [TextArea(2, 4)]
+    public string ab_AwarenessQuestionText = "While counting the furniture,\ndid you notice anything unusual\nhappening in the scene?";
+    [TextArea(2, 3)]
+    public string ab_NoticedText = "You noticed the furniture item fading —\nyour attention was broadly distributed.";
+    [TextArea(2, 3)]
+    public string ab_NotNoticedText = "You did not notice the fading item.\nThis is the inattentional blindness effect.";
+
+    public List<string> ab_FurnitureList = new();
+    public string ab_SpecificFadeTarget = "";
+
+    [Header("Attentional Blindness — Audio (Radio)")]
+    public float ab_AudioDelaySeconds = 5f;
+    public bool ab_UseRandomAudioClip = true;
+    public int ab_SpecificAudioClipIndex = 0;
+    public string ab_SpecificAudioClipName = "";
+    public bool ab_AudioLoop = false;
+    [Range(0f, 1f)] public float ab_AudioVolume = 0.8f;
+
+    public List<string> ab_AvailableAudioClips = new();
+
+    // ── Odd Item Detection ───────────────────────────────────────────────────
+    [Header("Odd Item Detection")]
+    public string oddItem_TargetDisplayName = "the odd item";
+    public float oddItem_SearchTimeLimitSeconds = 120f;
+    [TextArea(2, 4)]
+    public string oddItem_InstructionText = "Find the item that doesn't belong on the shelves.\n\nPoint at it and pull the trigger to confirm.";
+    public string oddItem_WrongItemFeedback = "That item belongs here. Keep looking!";
+    public float oddItem_RaycastDistance = 10f;
+
+    [Header("Odd Item Detection — Targets")]
+    public List<string> oddItem_AvailableTargets = new List<string>();
+    public string oddItem_SelectedTarget = "";
+    public bool oddItem_RandomizeTarget = false;
+    public bool oddItem_RepeatLayout = false;
+
+
+    // ── Depth Perception ──────────────────────────────────────────────────────
+    [Header("Depth Perception")]
+    public float depth_MinHeightMeters = 10f;
+    public float depth_MaxHeightMeters = 28f;
+    public float depth_StepAmount = 1f;
+    [TextArea(2, 4)]
+    public string depth_InstructionText = "<b>Depth Perception Test</b>\n\nObserve the target building structure and estimate its height in meters.\n\nPress <b>Start Test</b> when ready.";
+    public float depth_ActualHeightMeters = 20f;
+
+    // ── DISTANCE PERCEPTION (Horizontal Distance) ─────────────────────────────
+    [Header("Distance Perception — Car Subject Distance Bounds")]
+    public float distance_MinDistanceMeters = 10f;
+    public float distance_MaxDistanceMeters = 115f;
+    public float distance_ActualDistanceMeters = 20f;
+    [TextArea(2, 4)]
+    public string distance_InstructionText2 = "Observe the car ahead and estimate its horizontal distance in meters.";
+
+    // ── Reaction Time ─────────NOT YET IMPLEMENTED────────────────────────────────────────────────
+    [Header("Reaction Time")]
+    [Range(5, 40)] public int rt_TotalTrials = 10;
+    [Range(0.5f, 2f)] public float rt_MinForeperiodSeconds = 1.0f;
+    [Range(2f, 5f)] public float rt_MaxForeperiodSeconds = 3.5f;
+    [Range(1f, 5f)] public float rt_StimulusTimeoutSeconds = 3.0f;
+    [Range(0.5f, 2f)] public float rt_InterTrialIntervalSeconds = 1.0f;
+    [TextArea(2, 4)]
+    public string rt_InstructionText = "Press the trigger when you see the green panel.\n\nPress trigger to begin.";
+
+    [Header("Shelf Spawner")]
+    public int shelf_Columns = 5;
+    public int shelf_Rows = 2;
+    public float shelf_RandomPositionOffset = 0.04f;
+    public float shelf_RandomRotationOffset = 15f;
+
+    // ── Memory (Document: "Memory") ───────────────────────────────────────────
+    [Header("Memory Experiment (Doc: Memory)")]
+    public float memory_TimePerRoomSeconds = 60f;
+    public float memory_TransitionFadeDuration = 0.5f;
+    public float memory_DistractorTaskDuration = 30f;
+    public bool memory_UseDistractorTask = true;
+    public bool memory_RandomizeQuestions = true;
+
+    [Header("Memory – Remote Targets (from Firestore)")]
+    public List<MemoryTargetEntry> memory_Targets = new List<MemoryTargetEntry>();
+
+    [TextArea(2, 4)] public string memory_BriefingText = "<b>Memory Experiment</b>\n\nYou will explore several rooms.\nPay close attention to the objects and details in each room.\n\nPress <b>Start</b> when you are ready.";
+    [TextArea(2, 4)] public string memory_RoomInstructionText = "Explore this room carefully.\nTry to remember as many objects and details as you can.";
+    [TextArea(2, 4)] public string memory_DistractorInstructionText = "Before we continue, please count backwards from 100 by 3s.\n\nSay each number <b>aloud</b>.";
+    [TextArea(2, 4)] public string memory_RecallInstructionText = "Now you will be asked questions about the rooms you explored.\n\nAnswer as accurately as you can.";
+
+    // ── Memory2 (Document: "Memory2") ─────────────────────────────────────────
+    [Header("Memory 2 Experiment (Doc: Memory2)")]
+    public float memory2_TimePerRoomSeconds = 60f;
+    public float memory2_TransitionFadeDuration = 0.5f;
+    public float memory2_DistractorTaskDuration = 30f;
+    public bool memory2_UseDistractorTask = true;
+    public bool memory2_RandomizeQuestions = true;
+
+    [Header("Memory 2 – Remote Targets (from Firestore)")]
+    public List<MemoryTargetEntry> memory2_Targets = new List<MemoryTargetEntry>();
+
+    [TextArea(2, 4)] public string memory2_BriefingText = "<b>Memory 2 Experiment</b>\n\nYou will explore several rooms.\nPay close attention to the objects and details in each room.\n\nPress <b>Start</b> when you are ready.";
+    [TextArea(2, 4)] public string memory2_RoomInstructionText = "Explore this room carefully.\nTry to remember as many objects and details as you can.";
+    [TextArea(2, 4)] public string memory2_DistractorInstructionText = "Before we continue, please count backwards from 100 by 3s.\n\nSay each number <b>aloud</b>.";
+    [TextArea(2, 4)] public string memory2_RecallInstructionText = "Now you will be asked questions about the rooms you explored.\n\nAnswer as accurately as you can.";
+
+    // ── Web App Integration ───────────────────────────────────────────────────
+    [Header("Web App Integration")]
+    [Tooltip("If enabled, configuration parameters are fetched directly from Firestore at startup.")]
+    public bool useRemoteConfig = true;
+
+
+
+    public void ApplyConfigurationMap(Dictionary<string, object> configMap)
+    {
+        if (configMap == null) return;
+
+        if (configMap.ContainsKey("memory2_BriefingText") || configMap.ContainsKey("memory2_TimePerRoomSeconds"))
+        {
+            ApplyMemory2ConfigurationMap(configMap);
+            return;
+        }
+
+        float GetFloat(string key, float fallback) =>
+            configMap.TryGetValue(key, out object v) && v != null ? Convert.ToSingle(v) : fallback;
+
+        bool GetBool(string key, bool fallback) =>
+            configMap.TryGetValue(key, out object v) && v != null ? Convert.ToBoolean(v) : fallback;
+
+        string GetString(string key, string fallback) =>
+            configMap.TryGetValue(key, out object v) && v != null ? v.ToString() : fallback;
+
+        globalInstructionDelay = GetFloat("globalInstructionDelay", globalInstructionDelay);
+
+        // Depth
+        depth_MinHeightMeters = GetFloat("depth_MinHeightMeters", depth_MinHeightMeters);
+        depth_MaxHeightMeters = GetFloat("depth_MaxHeightMeters", depth_MaxHeightMeters);
+        depth_ActualHeightMeters = GetFloat("depth_ActualHeightMeters", depth_ActualHeightMeters);
+        depth_StepAmount = GetFloat("depth_StepAmount", depth_StepAmount);
+        depth_InstructionText = GetString("depth_InstructionText", depth_InstructionText);
+
+        // Distance Perception
+        distance_MinDistanceMeters = Mathf.Clamp(GetFloat("distance_MinDistanceMeters", GetFloat("distance_MinDistanceMeters", distance_MinDistanceMeters)), 0f, 115f);
+        distance_MaxDistanceMeters = Mathf.Clamp(GetFloat("distance_MaxDistanceMeters", GetFloat("distance_MaxDistanceMeters", distance_MaxDistanceMeters)), 0f, 115f);
+        distance_ActualDistanceMeters = Mathf.Clamp(GetFloat("distance_ActualDistanceMeters", GetFloat("distance_ActualDistanceMeters", distance_ActualDistanceMeters)), distance_MinDistanceMeters, distance_MaxDistanceMeters);
+        distance_InstructionText2 = GetString("distance_InstructionText", GetString("distance_InstructionText2", distance_InstructionText2));
+
+        // Attentional Blindness
+        ab_FadeDelaySeconds = GetFloat("ab_FadeDelaySeconds", ab_FadeDelaySeconds);
+        ab_FadeDurationSeconds = GetFloat("ab_FadeDurationSeconds", ab_FadeDurationSeconds);
+        ab_PostFadePauseSeconds = GetFloat("ab_PostFadePauseSeconds", ab_PostFadePauseSeconds);
+        ab_UseRandomFadeTarget = GetBool("ab_UseRandomFadeTarget", ab_UseRandomFadeTarget);
+        ab_InstructionText = GetString("ab_InstructionText", ab_InstructionText);
+        ab_AwarenessQuestionText = GetString("ab_AwarenessQuestionText", ab_AwarenessQuestionText);
+        ab_NoticedText = GetString("ab_NoticedText", ab_NoticedText);
+        ab_NotNoticedText = GetString("ab_NotNoticedText", ab_NotNoticedText);
+        ab_SpecificFadeTarget = GetString("ab_SpecificFadeTarget", ab_SpecificFadeTarget);
+        ab_AudioDelaySeconds = GetFloat("ab_AudioDelaySeconds", ab_AudioDelaySeconds);
+        ab_UseRandomAudioClip = GetBool("ab_UseRandomAudioClip", ab_UseRandomAudioClip);
+        ab_SpecificAudioClipIndex = (int)GetFloat("ab_SpecificAudioClipIndex", ab_SpecificAudioClipIndex);
+        ab_SpecificAudioClipName = GetString("ab_SpecificAudioClipName", ab_SpecificAudioClipName);  
+        ab_AudioLoop = GetBool("ab_AudioLoop", ab_AudioLoop);
+        ab_AudioVolume = Mathf.Clamp01(GetFloat("ab_AudioVolume", ab_AudioVolume));
+        if (configMap.TryGetValue("ab_FurnitureList", out object furnitureObj))
+        {
+            ab_FurnitureList.Clear();
+            if (furnitureObj is List<object> list)
+            {
+                foreach (object item in list)
+                {
+                    if (item != null)
+                        ab_FurnitureList.Add(item.ToString());
+                }
+            }
+            else if (furnitureObj is string[] arr)
+            {
+                ab_FurnitureList.AddRange(arr);
+            }
+        }
+        if (configMap.TryGetValue("ab_AvailableAudioClips", out object clipsObj))
+        {
+            ab_AvailableAudioClips.Clear();
+            if (clipsObj is List<object> list)
+            {
+                foreach (object item in list)
+                    if (item != null) ab_AvailableAudioClips.Add(item.ToString());
+            }
+        }
+        // Odd Item
+        oddItem_SearchTimeLimitSeconds = GetFloat("oddItem_SearchTimeLimitSeconds", oddItem_SearchTimeLimitSeconds);
+        oddItem_RaycastDistance = GetFloat("oddItem_RaycastDistance", oddItem_RaycastDistance);
+        oddItem_InstructionText = GetString("oddItem_InstructionText", oddItem_InstructionText);
+        oddItem_TargetDisplayName = GetString("oddItem_TargetDisplayName", oddItem_TargetDisplayName);
+        oddItem_WrongItemFeedback = GetString("oddItem_WrongItemFeedback", oddItem_WrongItemFeedback);
+        oddItem_SelectedTarget = GetString("oddItem_SelectedTarget", oddItem_SelectedTarget);
+        oddItem_RandomizeTarget = GetBool("oddItem_RandomizeTarget", oddItem_RandomizeTarget);
+        oddItem_RepeatLayout = GetBool("oddItem_RepeatLayout", oddItem_RepeatLayout); 
+
+        if (configMap.TryGetValue("oddItem_AvailableTargets", out object targetsObj))
+        {
+            ParseOddItemTargets(targetsObj);
+        }
+
+        // Memory (Document: "Memory")
+        memory_TimePerRoomSeconds = GetFloat("memory_TimePerRoomSeconds", memory_TimePerRoomSeconds);
+        memory_TransitionFadeDuration = GetFloat("memory_TransitionFadeDuration", memory_TransitionFadeDuration);
+        memory_DistractorTaskDuration = GetFloat("memory_DistractorTaskDuration", memory_DistractorTaskDuration);
+        memory_UseDistractorTask = GetBool("memory_UseDistractorTask", memory_UseDistractorTask);
+        memory_RandomizeQuestions = GetBool("memory_RandomizeQuestions", memory_RandomizeQuestions);
+        memory_BriefingText = GetString("memory_BriefingText", memory_BriefingText);
+        memory_RoomInstructionText = GetString("memory_RoomInstructionText", memory_RoomInstructionText);
+        memory_DistractorInstructionText = GetString("memory_DistractorInstructionText", memory_DistractorInstructionText);
+        memory_RecallInstructionText = GetString("memory_RecallInstructionText", memory_RecallInstructionText);
+
+        if (configMap.TryGetValue("targets", out object memoryTargetsObj))
+        {
+            memory_Targets = ParseMemoryTargetsList(memoryTargetsObj);
+        }
+    }
+
+    public void ApplyMemory2ConfigurationMap(Dictionary<string, object> configMap)
+    {
+        if (configMap == null) return;
+
+        float GetFloat(string key, float fallback)
+        {
+            if (configMap.TryGetValue(key, out object v) && v != null)
+                return Convert.ToSingle(v);
+            return fallback;
+        }
+
+        bool GetBool(string key, bool fallback)
+        {
+            if (configMap.TryGetValue(key, out object v) && v != null)
+                return Convert.ToBoolean(v);
+            return fallback;
+        }
+
+        string GetString(string key, string fallback)
+        {
+            if (configMap.TryGetValue(key, out object v) && v != null)
+                return v.ToString();
+            return fallback;
+        }
+
+        memory2_TimePerRoomSeconds = GetFloat("memory2_TimePerRoomSeconds", GetFloat("memory_TimePerRoomSeconds", memory2_TimePerRoomSeconds));
+        memory2_TransitionFadeDuration = GetFloat("memory2_TransitionFadeDuration", GetFloat("memory_TransitionFadeDuration", memory2_TransitionFadeDuration));
+        memory2_DistractorTaskDuration = GetFloat("memory2_DistractorTaskDuration", GetFloat("memory_DistractorTaskDuration", memory2_DistractorTaskDuration));
+        memory2_UseDistractorTask = GetBool("memory2_UseDistractorTask", GetBool("memory_UseDistractorTask", memory2_UseDistractorTask));
+        memory2_RandomizeQuestions = GetBool("memory2_RandomizeQuestions", GetBool("memory_RandomizeQuestions", memory2_RandomizeQuestions));
+
+        memory2_BriefingText = GetString("memory2_BriefingText", GetString("memory_BriefingText", memory2_BriefingText));
+        memory2_RoomInstructionText = GetString("memory2_RoomInstructionText", GetString("memory_RoomInstructionText", memory2_RoomInstructionText));
+        memory2_DistractorInstructionText = GetString("memory2_DistractorInstructionText", GetString("memory_DistractorInstructionText", memory2_DistractorInstructionText));
+        memory2_RecallInstructionText = GetString("memory2_RecallInstructionText", GetString("memory_RecallInstructionText", memory2_RecallInstructionText));
+
+        if (configMap.TryGetValue("targets", out object memory2TargetsObj))
+        {
+            memory2_Targets = ParseMemoryTargetsList(memory2TargetsObj);
+        }
+        else if (configMap.TryGetValue("memory2_Targets", out object altTargetsObj))
+        {
+            memory2_Targets = ParseMemoryTargetsList(altTargetsObj);
+        }
+        else if (configMap.TryGetValue("memory_Targets", out object legacyTargetsObj))
+        {
+            memory2_Targets = ParseMemoryTargetsList(legacyTargetsObj);
+        }
+    }
+
+    private void ApplyAttentionalBlindnessValues(DocumentSnapshot snap)
+    {
+        if (!snap.TryGetValue("defaultConfig", out Dictionary<string, object> configMap)) return;
+        ApplyConfigurationMap(configMap);
+    }
+
+    private void ApplyOddItemValues(DocumentSnapshot snap)
+    {
+        if (snap.TryGetValue("defaultConfig", out Dictionary<string, object> configMap))
+        {
+            ApplyConfigurationMap(configMap);
+        }
+        else
+        {
+            var map = snap.ToDictionary();
+            ApplyConfigurationMap(map);
+        }
+    }
+
+    private void ApplyDepthPerceptionValues(DocumentSnapshot snap)
+    {
+        if (!snap.TryGetValue("defaultConfig", out Dictionary<string, object> configMap)) return;
+        ApplyConfigurationMap(configMap);
+    }
+
+    private void ApplyDepthPerception2Values(DocumentSnapshot snap)
+    {
+        if (!snap.TryGetValue("defaultConfig", out Dictionary<string, object> configMap)) return;
+        ApplyConfigurationMap(configMap);
+    }
+
+    private void ApplyMemoryValues(DocumentSnapshot snap)
+    {
+        if (!snap.TryGetValue("defaultConfig", out Dictionary<string, object> configMap))
+        {
+            Debug.LogWarning("[ExperimentConfig] 'defaultConfig' field missing in Memory document.");
+            return;
+        }
+        ApplyConfigurationMap(configMap);
+    }
+
+    private void ApplyMemory2Values(DocumentSnapshot snap)
+    {
+        if (!snap.TryGetValue("defaultConfig", out Dictionary<string, object> configMap))
+        {
+            Debug.LogWarning("[ExperimentConfig] 'defaultConfig' field missing in Memory2 document.");
+            return;
+        }
+        ApplyMemory2ConfigurationMap(configMap);
+    }
+
+    private void ParseOddItemTargets(object targetsObj)
+    {
+        oddItem_AvailableTargets.Clear();
+
+        if (targetsObj is List<object> list)
+        {
+            foreach (object item in list)
+            {
+                if (item != null)
+                    oddItem_AvailableTargets.Add(item.ToString());
+            }
+        }
+        else if (targetsObj is string[] arr)
+        {
+            oddItem_AvailableTargets.AddRange(arr);
+        }
+    }
+
+    private List<MemoryTargetEntry> ParseMemoryTargetsList(object targetsObj)
+    {
+        List<MemoryTargetEntry> parsedList = new List<MemoryTargetEntry>();
+        if (targetsObj is not List<object> targetsList) return parsedList;
+
+        foreach (object targetObj in targetsList)
+        {
+            if (targetObj is not Dictionary<string, object> targetMap) continue;
+
+            MemoryTargetEntry entry = new MemoryTargetEntry();
+
+            if (targetMap.TryGetValue("gameID", out object id)) entry.gameID = id.ToString();
+            if (targetMap.TryGetValue("objectName", out object name)) entry.objectName = name.ToString();
+            if (targetMap.TryGetValue("room", out object room)) entry.room = room.ToString();
+
+            if (targetMap.TryGetValue("questions", out object questionsObj) &&
+                questionsObj is List<object> questionsList)
+            {
+                List<QuestionData> qList = new List<QuestionData>();
+
+                foreach (object qObj in questionsList)
+                {
+                    if (qObj is not Dictionary<string, object> qMap) continue;
+
+                    QuestionData q = new QuestionData();
+
+                    if (qMap.TryGetValue("questionText", out object qt)) q.questionText = qt.ToString();
+                    if (qMap.TryGetValue("correctAnswer", out object ca)) q.correctAnswer = ca.ToString();
+
+                    if (qMap.TryGetValue("questionType", out object typeObj) &&
+                        Enum.TryParse(typeObj.ToString(), true, out QuestionType parsedType))
+                    {
+                        q.questionType = parsedType;
+                    }
+
+                    if (qMap.TryGetValue("multipleChoiceOptions", out object optsObj) &&
+                        optsObj is List<object> optsList)
+                    {
+                        q.multipleChoiceOptions = optsList.ConvertAll(o => o.ToString()).ToArray();
+                    }
+                    else
+                    {
+                        q.multipleChoiceOptions = new string[0];
+                    }
+
+                    qList.Add(q);
+                }
+
+                entry.questions = qList.ToArray();
+            }
+
+            parsedList.Add(entry);
+        }
+
+        return parsedList;
+    }
+
+
+    public async Task FetchActiveSessionFromFirestore(string fallbackVrId = "VR-01")
+    {
+        // Never reuse an old session if the new web assignment is missing/invalid.
+        progressId = "";
+        experimentId = "";
+        blockId = "";
+        studentId = "";
+        groupId = "";
+        moduleId = "";
+        sceneId = "";
+        try
+        {
+            FirebaseFirestore db = FirebaseFirestore.DefaultInstance;
+
+            // 1. Reuse the exact hardware-linked document resolved on startup.
+            if (!FirebaseManager.IsInitialized ||
+                string.IsNullOrEmpty(FirebaseManager.RegisteredDeviceDocumentId))
+            {
+                Debug.LogError("[ExperimentConfig] VR registration is not ready.");
+                return;
+            }
+            DocumentSnapshot deviceDoc = await db.Collection("vrDevices")
+                .Document(FirebaseManager.RegisteredDeviceDocumentId).GetSnapshotAsync();
+            if (!deviceDoc.Exists ||
+                !deviceDoc.ContainsField("publisherAuthUid") ||
+                deviceDoc.GetValue<string>("publisherAuthUid") != FirebaseManager.AuthUid ||
+                !deviceDoc.ContainsField("deviceId") ||
+                deviceDoc.GetValue<string>("deviceId") != SystemInfo.deviceUniqueIdentifier)
+            {
+                Debug.LogError("[ExperimentConfig] Registered headset ownership does not match.");
+                return;
+            }
+            string vrId = deviceDoc.ContainsField("vrId")
+                ? deviceDoc.GetValue<string>("vrId") : "";
+            if (string.IsNullOrEmpty(vrId))
+            {
+                Debug.LogError("[ExperimentConfig] Registered headset is missing vrId.");
+                return;
+            }
+
+            // 2. Extract currentProgressId from the matched device document
+            string currentProgressId = "";
+            if (deviceDoc != null && deviceDoc.ContainsField("currentProgressId"))
+            {
+                currentProgressId = deviceDoc.GetValue<string>("currentProgressId") ?? "";
+            }
+
+            if (string.IsNullOrEmpty(currentProgressId))
+            {
+                Debug.LogWarning("[ExperimentConfig] No currentProgressId is pinned on this headset yet.");
+                return;
+            }
+
+            // Bind this config only to the automatically registered VR document.
+            vrId = deviceDoc.GetValue<string>("vrId");
+            this.vrId = vrId;
+            progressId = currentProgressId;
+
+            // 3. Read experimentProgressto get experimentId
+            DocumentSnapshot progressSnap = await db.Collection("experimentProgress").Document(progressId).GetSnapshotAsync();
+            if (!progressSnap.Exists)
+            {
+                Debug.LogError($"[ExperimentConfig] Progress document '{progressId}' not found!");
+                return;
+            }
+            if (!progressSnap.ContainsField("vrId") ||
+                progressSnap.GetValue<string>("vrId") != vrId)
+            {
+                Debug.LogError("[ExperimentConfig] The pinned progress belongs to another VR.");
+                return;
+            }
+
+            // Refresh IDs for the new session. A previous session's blockId must
+            // never be reused when the instructor switches experiments/classes.
+            studentId = progressSnap.ContainsField("studentId") ? progressSnap.GetValue<string>("studentId") : "";
+            groupId = progressSnap.ContainsField("groupId") ? progressSnap.GetValue<string>("groupId") : "";
+            blockId = progressSnap.ContainsField("blockId") ? progressSnap.GetValue<string>("blockId") : "";
+
+            experimentId = progressSnap.ContainsField("experimentId") ? progressSnap.GetValue<string>("experimentId") : "";
+            if (string.IsNullOrEmpty(experimentId))
+                experimentId = progressSnap.ContainsField("exeprimentId") ? progressSnap.GetValue<string>("exeprimentId") : "";
+
+            if (string.IsNullOrEmpty(experimentId))
+            {
+                Debug.LogError($"[ExperimentConfig] Progress document has no 'experimentId'.");
+                return;
+            }
+
+            // 4. Read experiment to get moduleId and sceneId
+            DocumentSnapshot expSnap = await db.Collection("experiment").Document(experimentId).GetSnapshotAsync();
+            if (!expSnap.Exists)
+            {
+                Debug.LogError($"[ExperimentConfig] Experiment document '{experimentId}' not found!");
+                return;
+            }
+
+            var experimentBlockId = expSnap.ContainsField("blockId") ? expSnap.GetValue<string>("blockId") : "";
+            if (string.IsNullOrEmpty(blockId)) blockId = experimentBlockId;
+            if (blockId != experimentBlockId)
+            {
+                Debug.LogError("[ExperimentConfig] Progress block does not match selected experiment's class.");
+                return;
+            }
+            moduleId = expSnap.ContainsField("moduleId") ? expSnap.GetValue<string>("moduleId") : "";
+            sceneId = expSnap.ContainsField("sceneId") ? expSnap.GetValue<string>("sceneId") : "";
+            if (expSnap.TryGetValue("configuration", out Dictionary<string, object> activeConfig))
+                ApplyConfigurationMap(activeConfig);
+            else if (expSnap.TryGetValue("defaultConfig", out Dictionary<string, object> defaultConfig))
+                ApplyConfigurationMap(defaultConfig);
+
+            Debug.Log(sfxLog($"Refreshed Session Chain -> Module: {moduleId} | Scene: {sceneId} | Progress: {progressId}"));
+
+    
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"[ExperimentConfig] Failed to fetch session chain: {ex.Message}");
+        }
+    }
+
+    private string sfxLog(string msg) => $"[ExperimentConfig] {msg}";
+    public void ApplyFromJson(string json)
+    {
+        JsonUtility.FromJsonOverwrite(json, this);
+        Debug.Log("[ExperimentConfig] Config updated from JSON payload.");
+    }
+
+    public string ToJson()
+    {
+        return JsonUtility.ToJson(this, prettyPrint: true);
+    }
+}
