@@ -175,6 +175,12 @@ const downloadCSV = (rows, fileName) => {
   URL.revokeObjectURL(url);
 };
 
+// Hides developer-only keys (ids, indexes, scene object names) from people-facing views
+const isDeveloperKey = (key) =>
+  /(^|_)(id|ids|uid|idx|index|indices)$/i.test(String(key)) ||
+  /[a-z](Id|Ids|Uid|Idx|Index|Indices)$/.test(String(key)) ||
+  String(key).toLowerCase() === "room";
+
 const renderDataNode = (data) => {
   if (data === null || data === undefined)
     return <span className="text-gray-400">—</span>;
@@ -223,7 +229,9 @@ const renderDataNode = (data) => {
   if (typeof data === "object") {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full items-start">
-        {Object.entries(data).map(([key, value]) => (
+        {Object.entries(data)
+          .filter(([key]) => !isDeveloperKey(key))
+          .map(([key, value]) => (
           <div
             key={key}
             className={`bg-white border border-gray-200 rounded-lg p-3 flex flex-col gap-1 ${
@@ -518,7 +526,11 @@ export default function InstructorExperimentOverview() {
             participantCode: p.participantCode || "",
             attemptNumber: p.attemptNumber || 1,
             experimentName: experiment?.experimentName || experiment?.name || "",
-            vrId: p.vrId || experiment?.vrId || "",
+            vrId:
+              p.vrId ||
+              experiment?.groupVrAssignments?.[group.id] ||
+              experiment?.vrId ||
+              "",
             durationSeconds:
               resultData.durationSeconds ?? p.elapsedSeconds ?? "",
             completedAt:
@@ -830,7 +842,7 @@ export default function InstructorExperimentOverview() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {[
                 ["Environment", experiment.environment],
-                ["Module", experiment.moduleId || experiment.sceneId],
+                ["Module", experiment.moduleName],
                 ["Status", experiment.status || "Available"],
               ].map(([label, value]) => (
                 <div

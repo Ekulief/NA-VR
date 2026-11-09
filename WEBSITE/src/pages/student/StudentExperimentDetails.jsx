@@ -157,6 +157,12 @@ export default function StudentExperimentDetails() {
     }
   };
 
+  // Hides developer-only keys (ids, indexes, scene object names) from people-facing views
+  const isDeveloperKey = (key) =>
+    /(^|_)(id|ids|uid|idx|index|indices)$/i.test(String(key)) ||
+    /[a-z](Id|Ids|Uid|Idx|Index|Indices)$/.test(String(key)) ||
+    String(key).toLowerCase() === "room";
+  
   // "oddItem_WrongItemFeedback" -> "odd Item Wrong Item Feedback"
   const formatLabel = (key) =>
     key
@@ -266,7 +272,9 @@ export default function StudentExperimentDetails() {
             gridTemplateColumns: "repeat(auto-fit, minmax(12rem, 1fr))",
           }}
         >
-          {Object.entries(data).map(([key, value]) => {
+          {Object.entries(data)
+            .filter(([key]) => !isDeveloperKey(key))
+            .map(([key, value]) => {
             const isNested = !isPrimitive(value);
 
             return (

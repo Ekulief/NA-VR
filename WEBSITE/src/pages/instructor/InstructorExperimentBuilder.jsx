@@ -11,6 +11,7 @@ import {
   doc,
   getDoc,
   updateDoc,
+  deleteField,
 } from "firebase/firestore";
 
 import { db } from "../../config/firebase-config";
@@ -127,11 +128,12 @@ const ENVIRONMENT_OPTIONS = [
     name: "Odd-item Detection",
     description: "Grocery store setting",
   },
-  {
-    moduleId: "Memory2",
-    name: "Sternberg Memory Scanning",
-    description: "House and a diner setting",
-  },
+  // Temporarily disabled: house + diner Sternberg setting is still buggy.
+  // {
+  //   moduleId: "Memory2",
+  //   name: "Sternberg Memory Scanning",
+  //   description: "House and a diner setting",
+  // },
   {
     moduleId: "Memory",
     name: "Sternberg Memory Scanning (Diner)",
@@ -200,7 +202,8 @@ export default function InstructorExperimentBuilder() {
   const [groups, setGroups] = useState([]);
   const [selectedGroups, setSelectedGroups] = useState([]);
   const [vrDevices, setVrDevices] = useState([]);
-  const [selectedVrIds, setSelectedVrIds] = useState([]);
+  // { [groupId]: vrId } -> exactly one VR device per checked group
+  const [groupVrMap, setGroupVrMap] = useState({});
   const [allowStudentExperiments, setAllowStudentExperiments] = useState(false);
 
   const [saving, setSaving] = useState(false);
@@ -381,12 +384,10 @@ export default function InstructorExperimentBuilder() {
 
         const data = experimentSnap.data();
 
-        setSelectedVrIds(
-          Array.isArray(data.vrIds) && data.vrIds.length
-            ? data.vrIds
-            : data.vrId
-              ? [data.vrId]
-              : [],
+        setGroupVrMap(
+          data.groupVrAssignments && typeof data.groupVrAssignments === "object"
+            ? { ...data.groupVrAssignments }
+            : {},
         );
         setExperimentName(data.experimentName || "");
         setInstructions(data.instructions || "");
@@ -435,6 +436,27 @@ export default function InstructorExperimentBuilder() {
         return previous.filter((id) => id !== groupId);
       }
       return [...previous, groupId];
+    });
+
+    // Unchecking a group releases its VR device.
+    if (selectedGroups.includes(groupId)) {
+      setGroupVrMap((previous) => {
+        const next = { ...previous };
+        delete next[groupId];
+        return next;
+      });
+    }
+  };
+
+  const setGroupVr = (groupId, vrId) => {
+    setGroupVrMap((previous) => {
+      const next = { ...previous };
+      if (vrId) {
+        next[groupId] = vrId;
+      } else {
+        delete next[groupId];
+      }
+      return next;
     });
   };
 
@@ -675,9 +697,10 @@ export default function InstructorExperimentBuilder() {
       return;
     }
 
-    if (selectedVrIds.length === 0) {
+    const groupsMissingVr = selectedGroups.filter((id) => !groupVrMap[id]);
+    if (groupsMissingVr.length > 0) {
       showNotice(
-        "Please select a VR device assignment.",
+        "Please assign a VR device to every selected group.",
         "VR Device Required",
         "warning",
       );
@@ -722,17 +745,23 @@ export default function InstructorExperimentBuilder() {
         environment: environment || "",
         moduleId: moduleId || "",
         moduleName: moduleName || "",
-        vrId: selectedVrIds[0] || "", // legacy compatibility
-        vrIds: selectedVrIds, // multiple assigned VR devices
         sceneId: sceneId || "",
         moduleDescription: moduleDescription || "",
         configuration: configuration || {},
         groupIds: selectedGroups || [],
+        // one VR device per group: { groupId: vrId }
+        groupVrAssignments: selectedGroups.reduce((acc, id) => {
+          acc[id] = groupVrMap[id];
+          return acc;
+        }, {}),
         allowStudentExperiments: allowStudentExperiments === true,
         updatedAt: serverTimestamp(),
       };
 
       if (isEditing) {
+        // remove the old VR id fields from previously saved experiments
+        payload.vrId = deleteField();
+        payload.vrIds = deleteField();
         await updateDoc(doc(db, "experiment", experimentId), payload);
 
         showNotice(
@@ -1569,81 +1598,58 @@ export default function InstructorExperimentBuilder() {
             <h2 className="mb-4 text-base font-semibold tracking-tight text-gray-900">
               Assign Student Groups
             </h2>
+            <p className="mb-3 text-sm text-gray-500">
+              Check a group, then choose the one VR headset assigned to it. The same headset can be shared by several groups (e.g. taking turns).
+              {vrDevices.length === 0 &&
+                " No registered headsets were found. Start the Unity app on a headset to register it, then reopen the experiment builder."}
+            </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
               {groups.map((group) => {
+                const isChecked = selectedGroups.includes(group.id);
+
                 return (
-                  <label
-                    key={group.id}
-                    className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-3 text-sm transition ${
-                      selectedGroups.includes(group.id)
-                        ? "border-indigo-300 bg-indigo-50/70"
-                        : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedGroups.includes(group.id)}
-                      onChange={() => toggleGroup(group.id)}
-                      className="h-4 w-4 shrink-0 rounded border-gray-300 text-indigo-600 accent-indigo-600 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1"
-                    />
-                    <span className="text-sm font-medium text-gray-800">
-                      {group.groupName || group.name || `Group ${group.id}`}
-                    </span>
-                  </label>
+                  <div key={group.id} className="flex flex-col gap-2">
+                    <label
+                      className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-3 text-sm transition ${
+                        isChecked
+                          ? "border-indigo-300 bg-indigo-50/70"
+                          : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => toggleGroup(group.id)}
+                        className="h-4 w-4 shrink-0 rounded border-gray-300 text-indigo-600 accent-indigo-600 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1"
+                      />
+                      <span className="text-sm font-medium text-gray-800">
+                        {group.groupName || group.name || `Group ${group.id}`}
+                      </span>
+                    </label>
+
+                    {isChecked && (
+                      <select
+                        value={groupVrMap[group.id] || ""}
+                        onChange={(e) => setGroupVr(group.id, e.target.value)}
+                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                      >
+                        <option value="">Select VR device…</option>
+                        {vrDevices.map((device) => {
+                          const vrId = device.vrId || device.id;
+                          return (
+                            <option key={device.id} value={vrId}>
+                              {vrId}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    )}
+                  </div>
                 );
               })}
             </div>
           </section>
         )}
-        {/* VR Device Assignment */}
-        <section className="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-base font-semibold tracking-tight text-gray-900">
-            Assign VR Devices
-          </h2>
-          <p className="text-sm text-gray-500 mb-3">
-            Select registered VR devices for this experiment. Available headsets
-            can be reused; when a student connects, the headset is automatically
-            linked to the instructor and class. A student session is still
-            required before video begins.
-          </p>
-          {vrDevices.length === 0 ? (
-            <p className="text-sm text-amber-700">
-              No available registered headsets were found. Start the Unity app
-              on a headset to register its VR document and publisher UID
-              automatically, then reopen the experiment builder.
-            </p>
-          ) : (
-            <div className="flex flex-wrap gap-3">
-              {vrDevices.map((device) => {
-                const vrId = device.vrId || device.id;
-                return (
-                  <label
-                    key={device.id}
-                    className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-3 text-sm transition ${
-                      selectedVrIds.includes(vrId)
-                        ? "border-indigo-300 bg-indigo-50/70"
-                        : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedVrIds.includes(vrId)}
-                      onChange={(e) =>
-                        setSelectedVrIds((previous) =>
-                          e.target.checked
-                            ? [...previous, vrId]
-                            : previous.filter((id) => id !== vrId),
-                        )
-                      }
-                      className="h-4 w-4 shrink-0 rounded border-gray-300 text-indigo-600 accent-indigo-600 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1"
-                    />
-                    {vrId} {""}
-                  </label>
-                );
-              })}
-            </div>
-          )}
-        </section>
         {/* Permissions */}
         <section className="mb-8 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
           <h2 className="mb-4 text-base font-semibold tracking-tight text-gray-900">

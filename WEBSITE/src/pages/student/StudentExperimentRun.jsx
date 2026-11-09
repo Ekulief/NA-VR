@@ -390,11 +390,15 @@ export default function StudentExperimentRun() {
   const displaySeconds =
     result?.durationSeconds != null ? result.durationSeconds : elapsedSeconds;
 
+  // One VR headset per group: { groupId: vrId } (falls back to the old single vrId)
+  const groupVrId =
+    experiment?.groupVrAssignments?.[resolvedGroupId] || experiment?.vrId || "";
+
   // ---------- Create progress ----------
   const createProgress = async ({ participantCode, attemptNumber }) => {
     if (!experiment || !user?.uid || connecting || isDataCollectionDone) return;
 
-    const vrId = experiment.vrId;
+    const vrId = groupVrId;
     if (!vrId) {
       alert("This experiment has no VR headset assigned.");
       return;
@@ -458,7 +462,7 @@ export default function StudentExperimentRun() {
 
     if (progress && progress.sessionControl !== "ended") {
       await updateSessionControl("ended");
-      await releaseVrLock(progress.id, progress.vrId || experiment.vrId);
+      await releaseVrLock(progress.id, progress.vrId || groupVrId);
     }
 
     await createProgress({
@@ -520,7 +524,7 @@ export default function StudentExperimentRun() {
     if (!confirmed) return;
 
     await updateSessionControl("ended");
-    await releaseVrLock(progress.id, progress.vrId || experiment.vrId);
+    await releaseVrLock(progress.id, progress.vrId || groupVrId);
   };
 
   // If Unity finishes an attempt without a web End click, quietly release its
@@ -654,7 +658,7 @@ export default function StudentExperimentRun() {
           participantCode: p.participantCode || "",
           attemptNumber: p.attemptNumber || 1,
           experimentName: experiment?.experimentName || "",
-          vrId: p.vrId || experiment?.vrId || "",
+          vrId: p.vrId || groupVrId || "",
           durationSeconds:
             resultData.durationSeconds ?? p.elapsedSeconds ?? "",
           completedAt:
@@ -771,6 +775,12 @@ export default function StudentExperimentRun() {
     return exportJamoviCSV([progress], suffix);
   };
 
+  // Hides developer-only keys (ids, indexes, scene object names) from people-facing views
+  const isDeveloperKey = (key) =>
+    /(^|_)(id|ids|uid|idx|index|indices)$/i.test(String(key)) ||
+    /[a-z](Id|Ids|Uid|Idx|Index|Indices)$/.test(String(key)) ||
+    String(key).toLowerCase() === "room";
+  
   // ---------- Render helpers ----------
   const renderDynamicDataNode = (data) => {
     if (data === null || data === undefined)
@@ -800,7 +810,9 @@ export default function StudentExperimentRun() {
     if (typeof data === "object") {
       return (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
-          {Object.entries(data).map(([key, value]) => (
+          {Object.entries(data)
+            .filter(([key]) => !isDeveloperKey(key))
+            .map(([key, value]) => (
             <div
               key={key}
               className="bg-white border border-gray-200 rounded-lg p-3 flex flex-col justify-between"
@@ -910,9 +922,9 @@ export default function StudentExperimentRun() {
             "Run this experiment in VR."}
         </p>
 
-        {experiment.vrId && (
+        {groupVrId && (
           <p className="text-sm text-gray-400 mb-6">
-            VR Headset: <span className="font-medium">{experiment.vrId}</span>
+            VR Headset: <span className="font-medium">{groupVrId}</span>
           </p>
         )}
 
