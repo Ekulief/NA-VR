@@ -475,6 +475,64 @@ export default function InstructorCourseExperiments() {
     return "";
   };
 
+  // Normalize imported names before sending them to the API/Firestore.
+  // Capitalize the first letter of each name part and lowercase the rest.
+  const capitalizeName = (value) =>
+    String(value || "")
+      .trim()
+      .toLocaleLowerCase()
+      .replace(
+        /(^|[\s'-])(\p{L})/gu,
+        (_, separator, letter) => `${separator}${letter.toLocaleUpperCase()}`,
+      );
+
+  // Remove a trailing middle initial (for example, "Juan M." -> "Juan").
+  const removeMiddleInitial = (value) =>
+    String(value || "")
+      .trim()
+      .replace(/\s+[A-Za-z]\.?$/, "")
+      .trim();
+
+  // Supports checklist-style names such as "DELA CRUZ, JUAN {SANTOS}".
+  // For names without a comma, the first word is treated as the first name
+  // and the remaining words as the last name.
+  const splitStudentName = (value) => {
+    const fullName = String(value || "")
+      .replace(/\{[^}]*\}/g, " ") // Remove middle names enclosed in braces.
+      .replace(/\([^)]*\)/g, " ") // Also remove parenthesized middle names.
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (!fullName) {
+      return { firstName: "", lastName: "" };
+    }
+
+    if (fullName.includes(",")) {
+      const [lastNamePart, ...firstNameParts] = fullName.split(",");
+
+      return {
+        firstName: firstNameParts.join(",").trim(),
+        lastName: lastNamePart.trim(),
+      };
+    }
+
+    const nameParts = fullName.split(" ");
+
+    if (nameParts.length === 1) {
+      return { firstName: nameParts[0], lastName: "" };
+    }
+
+    const remainingNameParts = nameParts.slice(1);
+    if (remainingNameParts[0] && /^[A-Za-z]\.?$/.test(remainingNameParts[0])) {
+      remainingNameParts.shift();
+    }
+
+    return {
+      firstName: nameParts[0],
+      lastName: remainingNameParts.join(" "),
+    };
+  };
+
   const processImportedFile = (file) => {
     if (!file) {
       return;
@@ -523,10 +581,8 @@ export default function InstructorCourseExperiments() {
           return;
         }
 
-        const mappedStudents = rows.map((row, index) => ({
-          rowNumber: index + 2,
-
-          firstName: String(
+        const mappedStudents = rows.map((row, index) => {
+          const importedFirstName = String(
             findColumn(row, [
               "firstName",
               "first name",
@@ -534,9 +590,9 @@ export default function InstructorCourseExperiments() {
               "givenName",
               "given name",
             ]),
-          ).trim(),
+          ).trim();
 
-          lastName: String(
+          const importedLastName = String(
             findColumn(row, [
               "lastName",
               "last name",
@@ -545,24 +601,42 @@ export default function InstructorCourseExperiments() {
               "familyName",
               "family name",
             ]),
-          ).trim(),
+          ).trim();
 
-          email: String(
-            findColumn(row, ["email", "emailAddress", "email address"]),
-          ).trim(),
+          const fullName = findColumn(row, [
+            "name",
+            "studentName",
+            "student name",
+            "fullName",
+            "full name",
+          ]);
 
-          studentNumber: String(
-            findColumn(row, [
-              "studentNumber",
-              "student number",
-              "studentNo",
-              "student no",
-              "studentId",
-              "student id",
-              "id",
-            ]),
-          ).trim(),
-        }));
+          const parsedName = splitStudentName(fullName);
+
+          return {
+            rowNumber: index + 2,
+            firstName: importedFirstName || parsedName.firstName,
+            lastName: importedLastName || parsedName.lastName,
+
+            email: String(
+              findColumn(row, ["email", "emailAddress", "email address"]),
+            ).trim(),
+
+            studentNumber: String(
+              findColumn(row, [
+                "studentNumber",
+                "student number",
+                "studentNo",
+                "student no",
+                "studentId",
+                "student id",
+                "idNumber",
+                "id number",
+                "id",
+              ]),
+            ).trim(),
+          };
+        });
 
         const nonEmptyStudents = mappedStudents.filter(
           (student) =>
@@ -687,8 +761,8 @@ export default function InstructorCourseExperiments() {
         }
 
         studentsToAdd.push({
-          firstName: student.firstName.trim(),
-          lastName: student.lastName.trim(),
+          firstName: capitalizeName(removeMiddleInitial(student.firstName)),
+          lastName: capitalizeName(student.lastName),
           email,
           studentNumber,
         });
@@ -1573,10 +1647,6 @@ export default function InstructorCourseExperiments() {
             >
               <div>
                 <h2 className="text-3xl font-medium">Add Students</h2>
-
-                <p className="text-gray-500 mt-1">
-                  Add students individually or import them from a spreadsheet.
-                </p>
               </div>
 
               <button
@@ -1887,11 +1957,6 @@ export default function InstructorCourseExperiments() {
                         }
                       />
                     </label>
-
-                    <p className="text-xs text-gray-500 mt-4">
-                      Expected columns: firstName, lastName, email,
-                      studentNumber
-                    </p>
                   </div>
 
                   {importError && (
@@ -2140,16 +2205,17 @@ export default function InstructorCourseExperiments() {
       )}
 
       {showCreateGroupModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white w-[500px] max-h-[90vh] rounded-xl p-5">
-            <h2 className="text-2xl font-medium mb-4">Group Name</h2>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4 py-6 overflow-y-auto">
+          <div className="bg-white w-full max-w-[500px] max-h-[90vh] rounded-xl shadow-2xl flex flex-col overflow-hidden">
+            <div className="p-5 pb-3 shrink-0">
+              <h2 className="text-2xl font-medium mb-4">Group Name</h2>
 
-            <input
-              type="text"
-              value={groupName}
-              onChange={(e) => setGroupName(e.target.value)}
-              placeholder="Group 1"
-              className="
+              <input
+                type="text"
+                value={groupName}
+                onChange={(e) => setGroupName(e.target.value)}
+                placeholder="Group 1"
+                className="
                 w-full
                 px-4
                 py-3
@@ -2160,11 +2226,12 @@ export default function InstructorCourseExperiments() {
                 outline-none
                 mb-5
               "
-            />
+              />
 
-            <h2 className="text-2xl font-medium mb-3">Select students</h2>
+              <h2 className="text-2xl font-medium mb-3">Select students</h2>
+            </div>
 
-            <div className="max-h-[550px] overflow-y-auto">
+            <div className="px-5 flex-1 min-h-0 overflow-y-auto overscroll-contain">
               {getUnassignedStudents().length === 0 ? (
                 <p className="text-sm text-gray-500 py-3">
                   All students have already been assigned to a group. No more
@@ -2216,7 +2283,7 @@ export default function InstructorCourseExperiments() {
               )}
             </div>
 
-            <div className="flex gap-3 mt-5">
+            <div className="flex flex-wrap gap-3 p-5 pt-4 border-t border-gray-200 shrink-0">
               <button
                 onClick={handleCreateGroup}
                 className="
@@ -2255,15 +2322,16 @@ export default function InstructorCourseExperiments() {
       )}
 
       {showEditGroupModal && editingGroup && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white w-[500px] max-h-[90vh] rounded-xl p-5">
-            <h2 className="text-2xl font-medium mb-4">Group Name</h2>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4 py-6 overflow-y-auto">
+          <div className="bg-white w-full max-w-[500px] max-h-[90vh] rounded-xl shadow-2xl flex flex-col overflow-hidden">
+            <div className="p-5 pb-3 shrink-0">
+              <h2 className="text-2xl font-medium mb-4">Group Name</h2>
 
-            <input
-              type="text"
-              value={groupName}
-              onChange={(e) => setGroupName(e.target.value)}
-              className="
+              <input
+                type="text"
+                value={groupName}
+                onChange={(e) => setGroupName(e.target.value)}
+                className="
                   w-full
                   px-4
                   py-3
@@ -2274,11 +2342,12 @@ export default function InstructorCourseExperiments() {
                   outline-none
                   mb-5
                 "
-            />
+              />
 
-            <h2 className="text-2xl font-medium mb-3">Students</h2>
+              <h2 className="text-2xl font-medium mb-3">Students</h2>
+            </div>
 
-            <div className="max-h-[550px] overflow-y-auto">
+            <div className="px-5 flex-1 min-h-0 overflow-y-auto overscroll-contain">
               {getAvailableStudentsForEdit(editingGroup.id).length === 0 ? (
                 <p className="text-sm text-gray-500 py-3">
                   All students have already been assigned to a group. No more
@@ -2330,7 +2399,7 @@ export default function InstructorCourseExperiments() {
               )}
             </div>
 
-            <div className="flex gap-3 mt-5">
+            <div className="flex flex-wrap gap-3 p-5 pt-4 border-t border-gray-200 shrink-0">
               <button
                 onClick={handleSaveGroupChanges}
                 className="
