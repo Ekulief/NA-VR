@@ -222,6 +222,17 @@ export default function StudentExperimentDetails() {
 
   const isPrimitive = (v) => v === null || typeof v !== "object";
 
+  const formatValue = (value) => {
+    if (value === null || value === undefined || String(value) === "") {
+      return "—";
+    }
+    if (typeof value === "boolean") {
+      return value ? "Yes" : "No";
+    }
+    return String(value);
+  };
+
+  // Renders configuration as plain lists (no cards/tables)
   const renderDynamicDataNode = (data) => {
     if (data === null || data === undefined) {
       return <span className="text-gray-400">—</span>;
@@ -229,79 +240,75 @@ export default function StudentExperimentDetails() {
 
     if (Array.isArray(data)) {
       if (data.length === 0) {
-        return <span className="text-gray-400">Empty list</span>;
+        return <span className="text-gray-400">None</span>;
       }
 
-      // Simple lists (numbers, strings) -> plain numbered list
+      // Simple values -> bulleted list
       if (data.every(isPrimitive)) {
         return (
-          <ol className="list-decimal list-inside space-y-1 text-sm font-medium text-gray-900 break-words">
+          <ul className="list-disc ml-5 space-y-1 text-sm font-medium text-gray-900 break-words">
             {data.map((item, idx) => (
-              <li key={idx}>
-                {item === null || item === undefined || String(item) === ""
-                  ? "—"
-                  : String(item)}
-              </li>
+              <li key={idx}>{formatValue(item)}</li>
             ))}
-          </ol>
+          </ul>
         );
       }
 
+      // Objects -> numbered list, each entry is its own nested list
       return (
-        <div className="space-y-3 w-full">
+        <ol className="list-decimal ml-5 space-y-3 text-sm text-gray-900">
           {data.map((item, idx) => (
-            <div
-              key={idx}
-              className="bg-gray-50 border border-gray-200 rounded-lg p-3"
-            >
-              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">
-                Item #{idx + 1}
-              </span>
+            <li key={idx} className="pl-1">
               {renderDynamicDataNode(item)}
-            </div>
+            </li>
           ))}
-        </div>
+        </ol>
       );
     }
 
     if (typeof data === "object") {
+      const entries = Object.entries(data).filter(
+        ([key]) => !isDeveloperKey(key),
+      );
+
+      if (entries.length === 0) {
+        return <span className="text-gray-400">—</span>;
+      }
+
       return (
-        <div
-          className="grid items-start gap-3 w-full"
-          style={{
-            gridTemplateColumns: "repeat(auto-fit, minmax(12rem, 1fr))",
-          }}
-        >
-          {Object.entries(data)
-            .filter(([key]) => !isDeveloperKey(key))
-            .map(([key, value]) => {
+        <ul className="w-full divide-y divide-gray-100">
+          {entries.map(([key, value]) => {
             const isNested = !isPrimitive(value);
 
             return (
-              <div
-                key={key}
-                className="bg-white border border-gray-200 rounded-lg p-3 flex flex-col justify-between min-w-0"
-                // Nested lists/objects take the full row so they never get squeezed
-                style={isNested ? { gridColumn: "1 / -1" } : undefined}
-              >
-                <span className="text-xs font-medium text-gray-500 capitalize mb-1">
-                  {formatLabel(key)}
-                </span>
-                <div className="text-sm font-medium text-gray-900 break-words">
-                  {isNested
-                    ? renderDynamicDataNode(value)
-                    : String(value) === ""
-                      ? "—"
-                      : String(value)}
-                </div>
-              </div>
+              <li key={key} className="py-2 first:pt-0 last:pb-0 min-w-0">
+                {isNested ? (
+                  <>
+                    <span className="text-sm text-gray-500 capitalize">
+                      {formatLabel(key)}
+                    </span>
+                    <div className="mt-1 ml-1 pl-3 border-l-2 border-gray-200">
+                      {renderDynamicDataNode(value)}
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex flex-wrap items-baseline gap-x-2 text-sm">
+                    <span className="text-gray-500 capitalize">
+                      {formatLabel(key)}:
+                    </span>
+                    <span className="font-medium text-gray-900 break-words">
+                      {formatValue(value)}
+                    </span>
+                  </div>
+                )}
+              </li>
             );
           })}
-        </div>
+        </ul>
       );
     }
 
-    return <span>{String(data)}</span>;
+    return <span>{formatValue(data)}</span>;
   };
 
   const experimentConfiguration = filterConfiguration(
