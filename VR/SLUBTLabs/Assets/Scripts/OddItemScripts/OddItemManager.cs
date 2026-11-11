@@ -771,7 +771,20 @@ public class OddItemManager : MonoBehaviour
                 { "experimentalResults", experimentalResults }
             };
 
-            await db.Collection("experimentResults").AddAsync(doc);
+            WriteBatch batch = db.StartBatch();
+            batch.Set(db.Collection("experimentResults").Document(), doc);
+            if (!string.IsNullOrEmpty(progressId))
+            {
+                batch.Update(db.Collection("experimentProgress").Document(progressId),
+                    new Dictionary<string, object>
+                    {
+                        { "sessionControl", "ended" },
+                        { "completionStatus", "Completed" },
+                        { "completionAt", completedAtUtc.ToString("o") }
+                    });
+            }
+            await batch.CommitAsync();
+
             Debug.Log($"[OddItemDetection] Saved (duration={durationDisplay}, found={foundItem}, progressId={progressId})");
 
             ExperimentLogger.Log("experiment_completed",
@@ -782,17 +795,6 @@ public class OddItemManager : MonoBehaviour
                     { "durationSeconds", durationSeconds },
                     { "oddItemName", _chosenOddItemPrefab != null ? _chosenOddItemPrefab.name : "" }
                 });
-
-            if (!string.IsNullOrEmpty(progressId))
-            {
-                await db.Collection("experimentProgress").Document(progressId).UpdateAsync(
-                    new Dictionary<string, object>
-                    {
-                        { "sessionControl", "ended" },
-                        { "completionStatus", "Completed" },
-                        { "completionAt", completedAtUtc.ToString("o") }
-                    });
-            }
         }
         catch (Exception ex)
         {

@@ -324,12 +324,12 @@ public class DistancePerceptionUI : MonoBehaviour
         if (_experimentLoader != null)
         {
             _experimentLoader.QueueExperimentSummary("Distance Perception – Results", summary);
-            await SaveResultsToFirestoreAsync(error);
+            _ = SaveResultsToFirestoreAsync(error);
             _experimentLoader.ReturnToHub();
         }
         else
         {
-            await SaveResultsToFirestoreAsync(error);
+            _ = SaveResultsToFirestoreAsync(error);
         }
     }
 
@@ -403,12 +403,11 @@ public class DistancePerceptionUI : MonoBehaviour
                 { "experimentalResults", experimentalResults }
             };
 
-            await db.Collection("experimentResults").AddAsync(doc);
-            Debug.Log($"[DistancePerception] Saved (duration={durationDisplay}, progressId={progressId})");
-
+            WriteBatch batch = db.StartBatch();
+            batch.Set(db.Collection("experimentResults").Document(), doc);
             if (!string.IsNullOrEmpty(progressId))
             {
-                await db.Collection("experimentProgress").Document(progressId).UpdateAsync(
+                batch.Update(db.Collection("experimentProgress").Document(progressId),
                     new Dictionary<string, object>
                     {
                         { "sessionControl", "ended" },
@@ -416,6 +415,9 @@ public class DistancePerceptionUI : MonoBehaviour
                         { "completionAt", completedAtUtc.ToString("o") }
                     });
             }
+            await batch.CommitAsync();
+
+            Debug.Log($"[DistancePerception] Saved (duration={durationDisplay}, progressId={progressId})");
         }
         catch (Exception ex)
         {

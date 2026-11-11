@@ -679,7 +679,7 @@ public class MemoryExperimentManager : MonoBehaviour
             $"Accuracy:        {(accuracy * 100f):F0}%\n\n" +
             $"Study time:      {studyDuration:F0}s\n" +
             (useDistractorTask ? $"Distractor:      {distractorDuration:F0}s\n" : "") +
-            "\nData has been uploaded.";
+            "\nSaving results…";
 
         var loader = FindAnyObjectByType<ExperimentLoader>();
         if (loader != null)
@@ -691,7 +691,7 @@ public class MemoryExperimentManager : MonoBehaviour
         else
         {
             if (endPanel != null) endPanel.SetActive(true);
-            SetQuestionText("Experiment complete. Data uploaded.");
+            SetQuestionText("Experiment complete. Saving results…");
             SaveFinalResults();
         }
 
@@ -961,7 +961,20 @@ public class MemoryExperimentManager : MonoBehaviour
                 { "experimentalResults", experimentalResults }
             };
 
-            await db.Collection("experimentResults").AddAsync(doc);
+            WriteBatch batch = db.StartBatch();
+            batch.Set(db.Collection("experimentResults").Document(), doc);
+            if (!string.IsNullOrEmpty(progressId))
+            {
+                batch.Update(db.Collection("experimentProgress").Document(progressId),
+                    new Dictionary<string, object>
+                    {
+                        { "sessionControl", "ended" },
+                        { "completionStatus", "Completed" },
+                        { "completionAt", completedAtUtc.ToString("o") }
+                    });
+            }
+            await batch.CommitAsync();
+
             Debug.Log($"[MemoryExperimentManager] Saved ({correctCount}/{trials.Count}, duration={durationDisplay})");
 
             ExperimentLogger.Log("experiment_completed",
@@ -972,17 +985,6 @@ public class MemoryExperimentManager : MonoBehaviour
                     { "correctCount", correctCount },
                     { "durationSeconds", durationSeconds }
                 });
-
-            if (!string.IsNullOrEmpty(progressId))
-            {
-                await db.Collection("experimentProgress").Document(progressId).UpdateAsync(
-                    new Dictionary<string, object>
-                    {
-                        { "sessionControl", "ended" },
-                        { "completionStatus", "Completed" },
-                        { "completionAt", completedAtUtc.ToString("o") }
-                    });
-            }
         }
         catch (Exception ex)
         {

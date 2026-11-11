@@ -36,6 +36,8 @@ public class ExperimentLoader : MonoBehaviour
     public string loadingLayerName = "LoadingUI";
     [Tooltip("Max seconds to wait for the experiment scene to signal it is ready.")]
     public float readyTimeout = 5f;
+    [Tooltip("Max seconds to wait for Firestore/Functions status updates (In Use / Available). Prevents hanging offline.")]
+    public float statusUpdateTimeout = 10f;
 
     [Header("Startup Disclaimers")]
     [Tooltip("Optional. Shows consent / disclaimer pages during the first startup.")]
@@ -164,11 +166,28 @@ public class ExperimentLoader : MonoBehaviour
         if (FirebaseManager.InitializationFailed)
         {
             Debug.LogError("[ExperimentLoader] Firebase startup or VR registration failed.");
-            if (loadingText != null) loadingText.text = "Cannot register VR headset.";
+            if (loadingText != null)
+                loadingText.text = "Cannot register VR headset.\nCheck Wi-Fi, then restart the app.";
             yield break;
         }
         // No inspector pairing: use the document ID verified during startup.
         vrDeviceDocumentId = FirebaseManager.RegisteredDeviceDocumentId;
+
+        // Clear any stale "In Use" left by a previous power cut / forced shutdown.
+        if (!string.IsNullOrWhiteSpace(vrDeviceDocumentId))
+        {
+            if (loadingText != null)
+                loadingText.text = "Clearing previous session status...";
+
+            Task clearTask = UpdateDeviceStatus("Available", "");
+            yield return StartCoroutine(WaitForTaskWithTimeout(
+                clearTask, statusUpdateTimeout, "Clearing previous session…"));
+
+            if (clearTask.IsFaulted || clearTask.IsCanceled || !clearTask.IsCompleted)
+            {
+                Debug.LogWarning("[ExperimentLoader] Could not reset device status to Available at startup (offline or timeout). Continuing.");
+            }
+        }
 
         if (loadingText != null)
             loadingText.text = "Loading Experiment Configuration...";
@@ -259,9 +278,9 @@ public class ExperimentLoader : MonoBehaviour
         if (_inVoid)
         {
             yield return StartCoroutine(Fade(1f, 0f));
-            SetScreenAlpha(1f);                  
+            SetScreenAlpha(1f);
             ExitLoadingVoid();
-            yield return StartCoroutine(WaitForSmoothFrames());  
+            yield return StartCoroutine(WaitForSmoothFrames());
             yield return StartCoroutine(FadeScreen(1f, 0f, screenFadeDuration));
         }
         else
@@ -485,24 +504,30 @@ public class ExperimentLoader : MonoBehaviour
         // Begin Experiment is pressed.
         LocomotionLocker.Lock(LocomotionLocker.LockMode.MoveOnly, xrOrigin);
 
-        // Update Firestore before starting the video publisher.
+        // Update Firestore before starting the video publisher (with timeout so offline does not hang).
+        if (loadingText != null)
+            loadingText.text = "Updating session status…";
+
         Task statusTask = UpdateDeviceStatus("In Use", sceneName);
-        yield return new WaitUntil(() => statusTask.IsCompleted);
+        yield return StartCoroutine(WaitForTaskWithTimeout(
+            statusTask, statusUpdateTimeout, "Updating session status…"));
 
-        if (statusTask.IsFaulted || statusTask.IsCanceled)
+        bool statusOk = statusTask.IsCompleted && !statusTask.IsFaulted && !statusTask.IsCanceled;
+        if (!statusOk)
         {
-            Debug.LogError("[ExperimentLoader] Firestore status update failed. Live streaming will not start.");
-            _isLoading = false;
-            yield return StartCoroutine(RevealWorld());
-            UnfreezePlayer();
-            yield break;
+            Debug.LogWarning("[ExperimentLoader] Firestore status update failed or timed out. Continuing without live streaming.");
+            if (loadingText != null)
+                loadingText.text = "No connection — continuing offline…";
+            yield return new WaitForSecondsRealtime(1f);
         }
-
-        // Start the LiveKit publisher only after the status update succeeds.
-        if (livePublisher != null)
-            livePublisher.StartStreaming();
         else
-            Debug.LogWarning("[ExperimentLoader] LiveKit publisher is not assigned. The experiment will load without live streaming.");
+        {
+            // Start the LiveKit publisher only after the status update succeeds.
+            if (livePublisher != null)
+                livePublisher.StartStreaming();
+            else
+                Debug.LogWarning("[ExperimentLoader] LiveKit publisher is not assigned. The experiment will load without live streaming.");
+        }
 
         // Wait until the experiment scene says it is ready (with a safety timeout).
         float waited = 0f;
@@ -560,12 +585,16 @@ public class ExperimentLoader : MonoBehaviour
             PlaceLoadingScreenInFront();          // keep the canvas with the player
         }
 
-        // Mark the device as available in Firestore.
-        Task statusTask = UpdateDeviceStatus("Available", "");
-        yield return new WaitUntil(() => statusTask.IsCompleted);
+        // Mark the device as available in Firestore (timeout so offline return to hub does not hang).
+        if (loadingText != null)
+            loadingText.text = "Updating session status…";
 
-        if (statusTask.IsFaulted || statusTask.IsCanceled)
-            Debug.LogError("[ExperimentLoader] Failed to mark the VR device as Available.");
+        Task statusTask = UpdateDeviceStatus("Available", "");
+        yield return StartCoroutine(WaitForTaskWithTimeout(
+            statusTask, statusUpdateTimeout, "Updating session status…"));
+
+        if (statusTask.IsFaulted || statusTask.IsCanceled || !statusTask.IsCompleted)
+            Debug.LogWarning("[ExperimentLoader] Failed or timed out marking the VR device as Available.");
 
         // Make sure locomotion is free again in the hub.
         LocomotionLocker.Unlock();
@@ -709,6 +738,30 @@ public class ExperimentLoader : MonoBehaviour
             Debug.LogError($"[ExperimentLoader] Failed to update VR status: {ex}");
             throw;
         }
+    }
+
+    /// <summary>
+    /// Waits for a Task up to timeoutSeconds. Updates loading text while waiting.
+    /// Returns when the task completes or the timeout elapses (does not cancel the task).
+    /// </summary>
+    private IEnumerator WaitForTaskWithTimeout(Task task, float timeoutSeconds, string statusMessage)
+    {
+        if (task == null)
+            yield break;
+
+        float waited = 0f;
+        float timeout = Mathf.Max(0.5f, timeoutSeconds);
+
+        while (!task.IsCompleted && waited < timeout)
+        {
+            if (loadingText != null && !string.IsNullOrEmpty(statusMessage))
+                loadingText.text = $"{statusMessage} ({Mathf.CeilToInt(timeout - waited)}s)";
+            waited += Time.unscaledDeltaTime;
+            yield return null;
+        }
+
+        if (!task.IsCompleted)
+            Debug.LogWarning($"[ExperimentLoader] Task timed out after {timeout:F0}s ({statusMessage}).");
     }
 
     // ------------------------------------------------------------------
