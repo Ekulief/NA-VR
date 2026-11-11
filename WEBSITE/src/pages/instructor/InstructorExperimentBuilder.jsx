@@ -6,12 +6,11 @@ import {
   getDocs,
   query,
   where,
-  addDoc,
   serverTimestamp,
   doc,
   getDoc,
-  updateDoc,
   deleteField,
+  writeBatch,
 } from "firebase/firestore";
 
 import { db } from "../../config/firebase-config";
@@ -205,6 +204,9 @@ export default function InstructorExperimentBuilder() {
   // { [groupId]: vrId } -> exactly one VR device per checked group
   const [groupVrMap, setGroupVrMap] = useState({});
   const [allowStudentExperiments, setAllowStudentExperiments] = useState(false);
+  // Old experiments stored several groups in one doc; remember the extras so
+  // they can be split into their own docs the next time the doc is saved.
+  const legacyExtraGroups = useRef([]);
 
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(isEditing);
@@ -384,11 +386,24 @@ export default function InstructorExperimentBuilder() {
 
         const data = experimentSnap.data();
 
-        setGroupVrMap(
+        const legacyIds = Array.isArray(data.groupIds) ? data.groupIds : [];
+        const legacyVrMap =
           data.groupVrAssignments && typeof data.groupVrAssignments === "object"
-            ? { ...data.groupVrAssignments }
-            : {},
+            ? data.groupVrAssignments
+            : {};
+        const primaryGroupId = data.groupId || legacyIds[0] || null;
+        const primaryVrId =
+          (typeof data.vrId === "string" && data.vrId) ||
+          legacyVrMap[primaryGroupId] ||
+          "";
+
+        setSelectedGroups(primaryGroupId ? [primaryGroupId] : []);
+        setGroupVrMap(
+          primaryGroupId && primaryVrId ? { [primaryGroupId]: primaryVrId } : {},
         );
+        legacyExtraGroups.current = legacyIds
+          .filter((id) => id !== primaryGroupId)
+          .map((id) => ({ groupId: id, vrId: legacyVrMap[id] || "" }));
         setExperimentName(data.experimentName || "");
         setInstructions(data.instructions || "");
         setEnvironment(data.environment || "");
@@ -397,7 +412,6 @@ export default function InstructorExperimentBuilder() {
         setSceneId(data.sceneId || "");
         setModuleDescription(data.moduleDescription || "");
         setConfiguration(cloneConfig(data.configuration || {}));
-        setSelectedGroups(data.groupIds || []);
         setAllowStudentExperiments(data.allowStudentExperiments === true);
       } catch (error) {
         console.error("Error getting experiment:", error);
@@ -748,21 +762,37 @@ export default function InstructorExperimentBuilder() {
         sceneId: sceneId || "",
         moduleDescription: moduleDescription || "",
         configuration: configuration || {},
-        groupIds: selectedGroups || [],
-        // one VR device per group: { groupId: vrId }
-        groupVrAssignments: selectedGroups.reduce((acc, id) => {
-          acc[id] = groupVrMap[id];
-          return acc;
-        }, {}),
         allowStudentExperiments: allowStudentExperiments === true,
         updatedAt: serverTimestamp(),
       };
 
       if (isEditing) {
-        // remove the old VR id fields from previously saved experiments
-        payload.vrId = deleteField();
-        payload.vrIds = deleteField();
-        await updateDoc(doc(db, "experiment", experimentId), payload);
+        // One experiment doc = one group + one VR id string (e.g. "VR-01").
+        const batch = writeBatch(db);
+        const groupId = selectedGroups[0];
+
+        batch.update(doc(db, "experiment", experimentId), {
+          ...payload,
+          groupId,
+          vrId: groupVrMap[groupId],
+          // clean up the old array / map fields
+          groupIds: deleteField(),
+          groupVrAssignments: deleteField(),
+          vrIds: deleteField(),
+        });
+
+        // Old docs that held several groups: split the extras into their own docs.
+        legacyExtraGroups.current.forEach((extra) => {
+          batch.set(doc(collection(db, "experiment")), {
+            ...payload,
+            groupId: extra.groupId,
+            vrId: extra.vrId,
+            createdAt: serverTimestamp(),
+          });
+        });
+
+        await batch.commit();
+        legacyExtraGroups.current = [];
 
         showNotice(
           "Your experiment changes have been saved successfully.",
@@ -771,8 +801,19 @@ export default function InstructorExperimentBuilder() {
           () => navigate(-1),
         );
       } else {
-        payload.createdAt = serverTimestamp();
-        await addDoc(collection(db, "experiment"), payload);
+        // Each checked group gets its own experiment doc with its own vrId.
+        const batch = writeBatch(db);
+
+        selectedGroups.forEach((groupId) => {
+          batch.set(doc(collection(db, "experiment")), {
+            ...payload,
+            groupId,
+            vrId: groupVrMap[groupId], // string, e.g. "VR-01"
+            createdAt: serverTimestamp(),
+          });
+        });
+
+        await batch.commit();
 
         showNotice(
           "Your new experiment has been created successfully.",
@@ -1599,12 +1640,16 @@ export default function InstructorExperimentBuilder() {
               Assign Student Groups
             </h2>
             <p className="mb-3 text-sm text-gray-500">
-              Check a group, then choose the one VR headset assigned to it. The same headset can be shared by several groups (e.g. taking turns).
+              {isEditing
+                ? "This experiment belongs to one group. You can change the VR headset assigned to it."
+                : "Check one or more groups, then choose a VR headset for each. A separate experiment is created for every checked group. The same headset can be shared by several groups (e.g. taking turns)."}
               {vrDevices.length === 0 &&
                 " No registered headsets were found. Start the Unity app on a headset to register it, then reopen the experiment builder."}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              {groups.map((group) => {
+              {groups
+                .filter((group) => !isEditing || selectedGroups.includes(group.id))
+                .map((group) => {
                 const isChecked = selectedGroups.includes(group.id);
 
                 return (
@@ -1620,6 +1665,7 @@ export default function InstructorExperimentBuilder() {
                         type="checkbox"
                         checked={isChecked}
                         onChange={() => toggleGroup(group.id)}
+                        disabled={isEditing}
                         className="h-4 w-4 shrink-0 rounded border-gray-300 text-indigo-600 accent-indigo-600 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1"
                       />
                       <span className="text-sm font-medium text-gray-800">
