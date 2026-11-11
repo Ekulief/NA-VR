@@ -619,4 +619,75 @@ exports.createLiveStreamToken = onCall(
       vrDeviceId: resolvedVrDeviceId, token: await token.toJwt(),
     };
   }
+  
 );
+/**
+ * Allows an instructor to forcibly stop an active VR experiment session,
+ * end the student progress attempt, and release the headset back to "Available".
+ */
+exports.instructorStopVrSession = onCall(async (request) => {
+  if (!request.auth || request.auth.token?.firebase?.sign_in_provider === "anonymous") {
+    fail("unauthenticated", "Sign in as an instructor is required.");
+  }
+  const { blockId, vrDeviceId, progressId } = request.data || {};
+  if (!nonblank(blockId) || !nonblank(vrDeviceId) || !nonblank(progressId)) {
+    fail("invalid-argument", "blockId, vrDeviceId, and progressId are required.");
+  }
+
+  // Verify caller is the instructor of this course
+  const [blockSnap, userSnap] = await Promise.all([
+    db.collection("block").doc(blockId).get(),
+    db.collection("user").doc(request.auth.uid).get(),
+  ]);
+
+  if (!blockSnap.exists || blockSnap.get("instructorId") !== request.auth.uid ||
+      !userSnap.exists || userSnap.get("role") !== "instructor") {
+    fail("permission-denied", "You are not authorized to manage this course's VR sessions.");
+  }
+
+  const deviceRef = db.collection("vrDevices").doc(vrDeviceId);
+  const progressRef = db.collection("experimentProgress").doc(progressId);
+
+  return db.runTransaction(async (tx) => {
+    const [deviceSnap, progressSnap] = await Promise.all([
+      tx.get(deviceRef),
+      tx.get(progressRef),
+    ]);
+
+    if (!deviceSnap.exists) {
+      fail("not-found", "VR device not found.");
+    }
+
+    const deviceData = deviceSnap.data();
+    // Ensure the device belongs to this block/course
+    if (deviceData.currentBlockId && deviceData.currentBlockId !== blockId) {
+      fail("permission-denied", "This device does not belong to the specified course.");
+    }
+
+    // Update progress document if it exists and is still active
+    if (progressSnap.exists) {
+      tx.update(progressRef, {
+        sessionControl: "ended",
+        completionStatus: "Terminated by Instructor",
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+
+    // Reset the VR device inventory record to Available
+    tx.update(deviceRef, {
+      currentProgressId: null,
+      currentExperimentId: null,
+      currentGroupId: null,
+      currentUserId: null,
+      currentBlockId: null,
+      assignedInstructorId: null,
+      currentSceneName: "",
+      currentModuleId: "",
+      streamRoomName: "",
+      status: "Available",
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    return { success: true };
+  });
+});

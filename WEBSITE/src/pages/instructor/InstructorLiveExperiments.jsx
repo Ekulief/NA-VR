@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { LiveKitRoom, VideoTrack, useTracks } from "@livekit/components-react";
 import { Track } from "livekit-client";
-import { ArrowLeft, RefreshCw, Radio, AlertTriangle, MonitorPlay, Maximize2, X } from "lucide-react";
+import { ArrowLeft, RefreshCw, Radio, AlertTriangle, MonitorPlay, Maximize2, X, Square, Loader2 } from "lucide-react";
 import "@livekit/components-styles";
 import { useAuth } from "../../context/AuthContext";
 
@@ -27,12 +27,13 @@ function StreamVideo({ deviceId, onHasVideo }) {
   </div>;
 }
 
-function LiveStreamCard({ blockId, device, expanded, onExpand, onClose }) {
+function LiveStreamCard({ blockId, device, expanded, onExpand, onClose, onStopped }) {
   const [tokenInfo, setTokenInfo] = useState(null);
   const [error, setError] = useState("");
   const [phase, setPhase] = useState("Requesting viewer token...");
   const [retry, setRetry] = useState(0);
   const [hasVideo, setHasVideo] = useState(false);
+  const [stopping, setStopping] = useState(false);
   const openButtonRef = useRef(null);
   const closeButtonRef = useRef(null);
   const wasExpanded = useRef(false);
@@ -78,6 +79,37 @@ function LiveStreamCard({ blockId, device, expanded, onExpand, onClose }) {
   const stateLabel = hasVideo ? "LIVE VIDEO" : canView ? "ATTEMPT ACTIVE" : device.state === "waiting-vr" ? "WAITING FOR VR" : device.state === "needs-attention" ? "NEEDS ATTENTION" : "IDLE";
   const titleId = `stream-title-${device.id}`;
 
+  // Same effect as "End Attempt" on the student page: ends the attempt and
+  // releases the headset, done server-side because the instructor does not own
+  // the student's progress document.
+  const handleStop = async (event) => {
+    event.stopPropagation();
+    if (!progressId || stopping) return;
+    const ok = window.confirm(
+      "Stop this attempt and reset the VR headset?\n\nThe participant's current attempt will end immediately."
+    );
+    if (!ok) return;
+    setStopping(true);
+    try {
+      const call = httpsCallable(getFunctions(), "instructorStopVrSession");
+      await call({ blockId, vrDeviceId: device.id, progressId });
+      onStopped?.();
+    } catch (err) {
+      console.error("[Live VR] Stop failed:", err);
+      alert(err?.message || "Unable to stop the VR session. Please try again.");
+    } finally {
+      setStopping(false);
+    }
+  };
+
+  const stopButton = progressId ? (
+    <button type="button" onClick={handleStop} disabled={stopping}
+      className="pointer-events-auto relative z-20 flex items-center gap-2 rounded-lg bg-red-700 px-3 py-2 text-sm font-medium text-white hover:bg-red-600 disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700">
+      {stopping ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Square size={14} fill="currentColor" aria-hidden="true" />}
+      <span>{stopping ? "Stopping..." : "Stop & reset VR"}</span>
+    </button>
+  ) : null;
+
   return <article
     role={expanded ? "dialog" : undefined}
     aria-modal={expanded ? true : undefined}
@@ -90,9 +122,8 @@ function LiveStreamCard({ blockId, device, expanded, onExpand, onClose }) {
     <div className={`flex items-start justify-between gap-3 border-b border-gray-200 ${expanded ? "p-5" : "p-4"}`}>
       <div className="min-w-0">
         <h2 id={titleId} className={`font-semibold text-gray-900 ${expanded ? "text-xl" : ""}`}>
-          {device.vrId || device.id}{expanded && device.experimentName ? ` — ${device.experimentName}` : ""}
+          {device.experimentName || "No active experiment"}
         </h2>
-        {!expanded && <p className="mt-1 text-sm text-gray-700">{device.experimentName || "No active experiment"}</p>}
         <p className="mt-1 text-xs text-gray-500">{device.currentSceneName || "VR hub (no experiment scene)"}</p>
         {device.currentGroupId && <p className="mt-1 text-sm text-gray-600">Group: <span className="font-medium text-gray-900">{device.currentGroupName || "Unknown group"}</span></p>}
       </div>
@@ -136,12 +167,15 @@ function LiveStreamCard({ blockId, device, expanded, onExpand, onClose }) {
         <div className="flex h-full w-full items-center justify-center p-5 text-center text-sm text-gray-300">{phase}</div>
       )}
     </div>
-    {expanded ? <div className="flex items-center justify-between gap-3 border-t border-gray-200 px-5 py-3 text-sm text-gray-600">
-      <span>{hasVideo ? "Live spectator view" : "Headset preview"}</span>
-      <span>Press Esc or X to close</span>
-    </div> : canView && !hasVideo ? <div className="px-4 py-3 text-xs text-gray-500">{phase}</div> : null}
+    {expanded ? <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 px-5 py-3 text-sm text-gray-600">
+      <span>{hasVideo ? "Live spectator view" : "Headset preview"} · Press Esc or X to close</span>
+      {stopButton}
+    </div> : (stopButton || (canView && !hasVideo)) ? <div className="pointer-events-none relative z-20 flex items-center justify-between gap-3 px-4 py-3">
+      <span className="text-xs text-gray-500">{canView && !hasVideo ? phase : ""}</span>
+      {stopButton}
+    </div> : null}
     {!expanded && <button ref={openButtonRef} type="button" onClick={onExpand}
-      aria-label={`Enlarge ${device.vrId || device.id} livestream`}
+      aria-label={`Enlarge livestream${device.experimentName ? ` for ${device.experimentName}` : ""}`}
       className="absolute inset-0 z-10 cursor-zoom-in rounded-xl focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-indigo-600" />}
   </article>;
 }
@@ -251,7 +285,7 @@ export default function InstructorLiveExperiments() {
         </p>
         {devices.length === 0 ? (
           <div className="rounded-xl border border-gray-200 p-7 text-gray-600">
-            No VR headset is currently associated with this course. Assign at least one registered headset to an experiment, then have a student start a session. If one is already assigned, verify its <code>vrId</code> matches <code>vrDevices</code>.
+            No VR headset is currently associated with this course. Assign a registered headset to an experiment, then have a student start a session.
           </div>
         ) : (
           <>
@@ -264,7 +298,8 @@ export default function InstructorLiveExperiments() {
                 blockId={blockId} device={device}
                 expanded={expandedDeviceId === device.id}
                 onExpand={() => setExpandedDeviceId(device.id)}
-                onClose={() => setExpandedDeviceId(null)} />)}
+                onClose={() => setExpandedDeviceId(null)}
+                onStopped={() => setRefreshVersion((n) => n + 1)} />)}
             </div>
           </>
         )}
