@@ -12,7 +12,6 @@ import {
   where,
   addDoc,
   updateDoc,
-  deleteDoc,
   serverTimestamp,
 } from "firebase/firestore";
 
@@ -235,42 +234,33 @@ export default function InstructorHome() {
     setError("");
 
     try {
-      const experimentsQuery = query(
-        collection(db, "experiment"),
-        where("blockId", "==", selectedCourse.id),
+      if (!user) {
+        throw new Error("You must be signed in to delete a course.");
+      }
+
+      const idToken = await user.getIdToken();
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL || "http://localhost:5000"}/api/courses/${encodeURIComponent(selectedCourse.id)}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${idToken}`,
+          },
+        },
       );
 
-      const experimentsSnapshot = await getDocs(experimentsQuery);
-
-      await Promise.all(
-        experimentsSnapshot.docs.map((experimentDoc) =>
-          deleteDoc(doc(db, "experiment", experimentDoc.id)),
-        ),
-      );
-
-      await deleteDoc(doc(db, "block", selectedCourse.id));
-
-      if (
-        selectedCourse.imageUrl &&
-        selectedCourse.imageUrl !== defaultCourseImage
-      ) {
-        try {
-          await deleteObject(ref(storage, selectedCourse.imageUrl));
-        } catch (imageError) {
-          console.warn("Unable to delete course image:", imageError);
-        }
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result.error || "Unable to delete this course.");
       }
 
       setCourses((prev) =>
         prev.filter((course) => course.id !== selectedCourse.id),
       );
-
       closeDeleteModal();
     } catch (error) {
-      console.error("Error deleting course and experiments:", error);
-      setError(
-        "Unable to delete course and its experiments. Please try again.",
-      );
+      console.error("Error deleting course:", error);
+      setError(error.message || "Unable to delete course. Please try again.");
     } finally {
       setDeletingCourse(false);
     }
@@ -958,7 +948,14 @@ export default function InstructorHome() {
               <span className="font-medium text-gray-800">
                 {selectedCourse.className}
               </span>
-              ? This action cannot be undone.
+              ? This action cannot be undone. The course, its experiments,
+              groups, results, and related course data will be deleted.
+            </p>
+
+            <p className="mt-3 text-sm text-gray-600 leading-5">
+              Student accounts used only in this course will also be permanently
+              deleted. Students enrolled in another course will keep their
+              accounts and access to their other courses.
             </p>
 
             <p className="mt-2 text-sm text-gray-500">
