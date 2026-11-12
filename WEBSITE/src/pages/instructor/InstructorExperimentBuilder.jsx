@@ -391,7 +391,7 @@ export default function InstructorExperimentBuilder() {
           data.groupVrAssignments && typeof data.groupVrAssignments === "object"
             ? data.groupVrAssignments
             : {};
-        const primaryGroupId = data.groupId || legacyIds[0] || null;
+        const primaryGroupId = legacyIds[0] || data.groupId || null;
         const primaryVrId =
           (typeof data.vrId === "string" && data.vrId) ||
           legacyVrMap[primaryGroupId] ||
@@ -773,10 +773,9 @@ export default function InstructorExperimentBuilder() {
 
         batch.update(doc(db, "experiment", experimentId), {
           ...payload,
-          groupId,
-          vrId: groupVrMap[groupId],
-          // clean up the old array / map fields
-          groupIds: deleteField(),
+          groupIds: [groupId], // array with this doc's single group
+          vrId: groupVrMap[groupId], // string, e.g. "VR-01"
+          // clean up the old per-group map fields
           groupVrAssignments: deleteField(),
           vrIds: deleteField(),
         });
@@ -785,7 +784,7 @@ export default function InstructorExperimentBuilder() {
         legacyExtraGroups.current.forEach((extra) => {
           batch.set(doc(collection(db, "experiment")), {
             ...payload,
-            groupId: extra.groupId,
+            groupIds: [extra.groupId],
             vrId: extra.vrId,
             createdAt: serverTimestamp(),
           });
@@ -807,7 +806,7 @@ export default function InstructorExperimentBuilder() {
         selectedGroups.forEach((groupId) => {
           batch.set(doc(collection(db, "experiment")), {
             ...payload,
-            groupId,
+            groupIds: [groupId], // array with this doc's single group
             vrId: groupVrMap[groupId], // string, e.g. "VR-01"
             createdAt: serverTimestamp(),
           });
