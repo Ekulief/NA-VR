@@ -47,12 +47,14 @@ export default function AdminDashboard() {
   const [documentJson, setDocumentJson] = useState("{}");
   const [documentId, setDocumentId] = useState("");
   const [isNewDocument, setIsNewDocument] = useState(false);
-  const [showInstructorForm, setShowInstructorForm] = useState(false);
-  const [instructor, setInstructor] = useState({
+  const [showCreateUserForm, setShowCreateUserForm] = useState(false);
+  const [newUser, setNewUser] = useState({
     firstName: "",
     lastName: "",
     email: "",
     password: "",
+    role: "student",
+    studentId: "",
   });
   const [busy, setBusy] = useState(false);
   const [loadingUsers, setLoadingUsers] = useState(false);
@@ -165,30 +167,42 @@ export default function AdminDashboard() {
     );
   }, [users, userSearch]);
 
-  const submitInstructor = async (event) => {
+  const submitNewUser = async (event) => {
     event.preventDefault();
     setBusy(true);
     setNotice({ type: "", text: "" });
     try {
-      const fullName =
-        `${instructor.firstName.trim()} ${instructor.lastName.trim()}`.trim();
+      const firstName = newUser.firstName.trim();
+      const lastName = newUser.lastName.trim();
+      const fullName = `${firstName} ${lastName}`.trim();
+
       await apiFetch("/api/users", {
         method: "POST",
         body: JSON.stringify({
-          firstName: instructor.firstName.trim(),
-          lastName: instructor.lastName.trim(),
+          firstName,
+          lastName,
           name: fullName,
-          email: instructor.email.trim().toLowerCase(),
-          password: instructor.password,
-          role: "instructor",
+          email: newUser.email.trim().toLowerCase(),
+          password: newUser.password,
+          role: newUser.role,
+          studentId: newUser.role === "student" ? newUser.studentId.trim() : "",
           status: "Active",
         }),
       });
-      setInstructor({ firstName: "", lastName: "", email: "", password: "" });
-      setShowInstructorForm(false);
+
+      const createdRole = newUser.role;
+      setNewUser({
+        firstName: "",
+        lastName: "",
+        email: "",
+        password: "",
+        role: "student",
+        studentId: "",
+      });
+      setShowCreateUserForm(false);
       setNotice({
         type: "success",
-        text: "Instructor account created successfully.",
+        text: `${createdRole.charAt(0).toUpperCase()}${createdRole.slice(1)} account created successfully.`,
       });
       await loadUsers();
     } catch (err) {
@@ -326,6 +340,7 @@ export default function AdminDashboard() {
     role: "Student",
     studentId: "",
     status: "Active",
+    password: "",
   });
   const openEditUser = (user) => {
     setEditingUser(user);
@@ -336,6 +351,7 @@ export default function AdminDashboard() {
       role: user.role || "Student",
       studentId: user.studentId || "",
       status: user.status || "Active",
+      password: "",
     });
   };
   const saveUser = async (event) => {
@@ -343,12 +359,20 @@ export default function AdminDashboard() {
     if (!editingUser) return;
     setBusy(true);
     try {
+      const updatePayload = { ...editUserForm };
+      if (!updatePayload.password) delete updatePayload.password;
+
       await apiFetch(`/api/users/${encodeURIComponent(editingUser.id)}`, {
         method: "PATCH",
-        body: JSON.stringify(editUserForm),
+        body: JSON.stringify(updatePayload),
       });
       setEditingUser(null);
-      setNotice({ type: "success", text: "User profile updated." });
+      setNotice({
+        type: "success",
+        text: updatePayload.password
+          ? "User profile and password updated successfully."
+          : "User profile updated successfully.",
+      });
       await loadUsers();
     } catch (err) {
       setNotice({ type: "error", text: err.message });
@@ -437,9 +461,9 @@ export default function AdminDashboard() {
 
                   <button
                     className={buttonPrimary}
-                    onClick={() => setShowInstructorForm(true)}
+                    onClick={() => setShowCreateUserForm(true)}
                   >
-                    <UserPlus size={17} /> Create instructor
+                    <UserPlus size={17} /> Create user
                   </button>
                 </div>
                 <div className="overflow-x-auto">
@@ -743,19 +767,34 @@ export default function AdminDashboard() {
         </div>
       </main>
 
-      {showInstructorForm && (
+      {showCreateUserForm && (
         <Modal
-          title="Create instructor account"
-          onClose={() => setShowInstructorForm(false)}
+          title="Create user account"
+          onClose={() => setShowCreateUserForm(false)}
         >
-          <form onSubmit={submitInstructor} className="space-y-4">
+          <form onSubmit={submitNewUser} className="space-y-4">
+            <Field label="Account role" required>
+              <select
+                className={input}
+                value={newUser.role}
+                onChange={(e) =>
+                  setNewUser({ ...newUser, role: e.target.value })
+                }
+                required
+              >
+                <option value="student">Student</option>
+                <option value="instructor">Instructor</option>
+                <option value="admin">Admin</option>
+              </select>
+            </Field>
+
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="First name" required>
                 <input
                   className={input}
-                  value={instructor.firstName}
+                  value={newUser.firstName}
                   onChange={(e) =>
-                    setInstructor({ ...instructor, firstName: e.target.value })
+                    setNewUser({ ...newUser, firstName: e.target.value })
                   }
                   required
                   autoComplete="given-name"
@@ -764,49 +803,64 @@ export default function AdminDashboard() {
               <Field label="Last name" required>
                 <input
                   className={input}
-                  value={instructor.lastName}
+                  value={newUser.lastName}
                   onChange={(e) =>
-                    setInstructor({ ...instructor, lastName: e.target.value })
+                    setNewUser({ ...newUser, lastName: e.target.value })
                   }
                   required
                   autoComplete="family-name"
                 />
               </Field>
             </div>
+
+            {newUser.role === "student" && (
+              <Field label="Student ID">
+                <input
+                  className={input}
+                  value={newUser.studentId}
+                  onChange={(e) =>
+                    setNewUser({ ...newUser, studentId: e.target.value })
+                  }
+                  placeholder="Enter student ID"
+                />
+              </Field>
+            )}
+
             <Field label="Email address" required>
               <input
                 className={input}
                 type="email"
-                value={instructor.email}
+                value={newUser.email}
                 onChange={(e) =>
-                  setInstructor({ ...instructor, email: e.target.value })
+                  setNewUser({ ...newUser, email: e.target.value })
                 }
                 required
                 autoComplete="email"
               />
             </Field>
+
             <Field label="Temporary password" required>
               <input
                 className={input}
                 type="password"
                 minLength={6}
-                value={instructor.password}
+                value={newUser.password}
                 onChange={(e) =>
-                  setInstructor({ ...instructor, password: e.target.value })
+                  setNewUser({ ...newUser, password: e.target.value })
                 }
                 required
                 autoComplete="new-password"
               />
               <p className="mt-1 text-xs text-slate-400">
-                At least 6 characters. Share credentials securely with the
-                instructor.
+                At least 6 characters. Share the credentials securely.
               </p>
             </Field>
+
             <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
               <button
                 type="button"
                 className={buttonSecondary}
-                onClick={() => setShowInstructorForm(false)}
+                onClick={() => setShowCreateUserForm(false)}
               >
                 Cancel
               </button>
@@ -874,6 +928,26 @@ export default function AdminDashboard() {
                   })
                 }
               />
+            </Field>
+            <Field label="New password (optional)">
+              <input
+                className={input}
+                type="password"
+                minLength={6}
+                autoComplete="new-password"
+                placeholder="Leave blank to keep the current password"
+                value={editUserForm.password}
+                onChange={(e) =>
+                  setEditUserForm({
+                    ...editUserForm,
+                    password: e.target.value,
+                  })
+                }
+              />
+              <p className="mt-1 text-xs text-slate-400">
+                Enter at least 6 characters to change this user's Firebase
+                password.
+              </p>
             </Field>
             <Field label="Status">
               <select

@@ -4,7 +4,6 @@ import { FieldValue } from "firebase-admin/firestore";
 
 const router = express.Router();
 
-// Verify the Firebase ID token and require an administrator.
 async function requireAdmin(req, res, next) {
   try {
     const authorization = req.headers.authorization || "";
@@ -203,13 +202,18 @@ router.post("/", requireAdmin, async (req, res) => {
     }
 
     const normalizedEmail = email.trim().toLowerCase();
+
     const fullName =
       (typeof name === "string" && name.trim()) ||
       `${firstName} ${lastName}`.trim();
 
     const normalizedRole = String(role || "Student").trim();
 
-    if (!["student", "instructor", "admin"].includes(normalizedRole.toLowerCase())) {
+    if (
+      !["student", "instructor", "admin"].includes(
+        normalizedRole.toLowerCase()
+      )
+    ) {
       return res.status(400).json({
         error: "Role must be Student, Instructor, or Admin.",
       });
@@ -454,6 +458,7 @@ router.patch("/:uid", requireAdmin, async (req, res) => {
       lastName,
       name,
       email,
+      password,
       role,
       studentId,
       studentNumber,
@@ -461,6 +466,16 @@ router.patch("/:uid", requireAdmin, async (req, res) => {
     } = req.body || {};
 
     const authUpdate = {};
+
+    if (password !== undefined && password !== "") {
+      if (typeof password !== "string" || password.length < 6) {
+        return res.status(400).json({
+          error: "The password must be at least 6 characters long.",
+        });
+      }
+
+      authUpdate.password = password;
+    }
 
     if (email !== undefined) {
       if (typeof email !== "string" || !email.trim()) {
@@ -483,7 +498,6 @@ router.patch("/:uid", requireAdmin, async (req, res) => {
       authUpdate.disabled = normalizeStatus(status) === "Inactive";
     }
 
-    // Check the account exists before updating.
     await adminAuth.getUser(uid);
 
     if (Object.keys(authUpdate).length > 0) {
@@ -497,11 +511,17 @@ router.patch("/:uid", requireAdmin, async (req, res) => {
     if (firstName !== undefined) firestoreUpdate.firstName = firstName;
     if (lastName !== undefined) firestoreUpdate.lastName = lastName;
     if (name !== undefined) firestoreUpdate.name = name;
-    if (email !== undefined) firestoreUpdate.email = email.trim().toLowerCase();
+    if (email !== undefined) {
+      firestoreUpdate.email = email.trim().toLowerCase();
+    }
     if (role !== undefined) firestoreUpdate.role = role;
     if (studentId !== undefined) firestoreUpdate.studentId = studentId;
-    if (studentNumber !== undefined) firestoreUpdate.studentNumber = studentNumber;
-    if (status !== undefined) firestoreUpdate.status = normalizeStatus(status);
+    if (studentNumber !== undefined) {
+      firestoreUpdate.studentNumber = studentNumber;
+    }
+    if (status !== undefined) {
+      firestoreUpdate.status = normalizeStatus(status);
+    }
 
     await adminDb.collection("user").doc(uid).set(firestoreUpdate, {
       merge: true,
