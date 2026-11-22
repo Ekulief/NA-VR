@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import {
@@ -51,6 +51,31 @@ export default function InstructorCourseExperiments() {
   const [activeTab, setActiveTab] = useState("experiments");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  // Reusable in-page alert and confirmation dialogs.
+  const [popupMessage, setPopupMessage] = useState("");
+  const [showPopup, setShowPopup] = useState(false);
+  const [confirmPopup, setConfirmPopup] = useState(null);
+  const confirmResolver = useRef(null);
+
+  const openPopup = (message) => {
+    setPopupMessage(String(message || ""));
+    setShowPopup(true);
+  };
+
+  const askForConfirmation = (message) =>
+    new Promise((resolve) => {
+      confirmResolver.current = resolve;
+      setConfirmPopup(message);
+    });
+
+  const closeConfirmation = (confirmed) => {
+    setConfirmPopup(null);
+    if (confirmResolver.current) {
+      confirmResolver.current(confirmed);
+      confirmResolver.current = null;
+    }
+  };
 
   const [showManageGroupModal, setShowManageGroupModal] = useState(false);
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
@@ -254,7 +279,7 @@ export default function InstructorCourseExperiments() {
   };
 
   const handleDelete = async (experimentId) => {
-    const confirmed = window.confirm(
+    const confirmed = await askForConfirmation(
       "Are you sure you want to delete this experiment?",
     );
 
@@ -273,11 +298,11 @@ export default function InstructorCourseExperiments() {
         ),
       );
 
-      alert("Experiment deleted successfully.");
+      openPopup("Experiment deleted successfully.");
     } catch (error) {
       console.error("Error deleting experiment:", error);
 
-      alert("Unable to delete the experiment. Please try again.");
+      openPopup("Unable to delete the experiment. Please try again.");
     }
   };
 
@@ -335,7 +360,7 @@ export default function InstructorCourseExperiments() {
     } catch (error) {
       console.error("Error saving default password:", error);
 
-      alert("Unable to save the default password.");
+      openPopup("Unable to save the default password.");
     }
   };
 
@@ -346,17 +371,17 @@ export default function InstructorCourseExperiments() {
     const studentNumber = newStudent.studentNumber.trim();
 
     if (!firstName || !lastName) {
-      alert("Please enter the student's first and last name.");
+      openPopup("Please enter the student's first and last name.");
       return;
     }
 
     if (!email) {
-      alert("Please enter the student's email.");
+      openPopup("Please enter the student's email.");
       return;
     }
 
     if (!defaultPassword || defaultPassword.length < 6) {
-      alert("Please enter a default password of at least 6 characters.");
+      openPopup("Please enter a default password of at least 6 characters.");
       return;
     }
 
@@ -365,7 +390,7 @@ export default function InstructorCourseExperiments() {
     );
 
     if (duplicateEmail) {
-      alert("A student with this email is already enrolled.");
+      openPopup("A student with this email is already enrolled.");
       return;
     }
 
@@ -377,7 +402,7 @@ export default function InstructorCourseExperiments() {
       );
 
       if (duplicateNumber) {
-        alert("A student with this student number is already enrolled.");
+        openPopup("A student with this student number is already enrolled.");
         return;
       }
     }
@@ -440,12 +465,12 @@ export default function InstructorCourseExperiments() {
         studentIds: [...(current?.studentIds || []), createdStudent.id],
       }));
 
-      alert("Student account created successfully.");
+      openPopup("Student account created successfully.");
 
       closeAddStudentModal();
     } catch (error) {
       console.error("Error creating student account:", error);
-      alert(error.message || "Unable to create the student account.");
+      openPopup(error.message || "Unable to create the student account.");
     } finally {
       setAddingStudents(false);
     }
@@ -676,12 +701,12 @@ export default function InstructorCourseExperiments() {
 
   const handleImportStudents = async () => {
     if (importedStudents.length === 0) {
-      alert("Please select a file containing students.");
+      openPopup("Please select a file containing students.");
       return;
     }
 
     if (!defaultPassword || defaultPassword.length < 6) {
-      alert("Please enter a default password of at least 6 characters.");
+      openPopup("Please enter a default password of at least 6 characters.");
       return;
     }
 
@@ -693,7 +718,7 @@ export default function InstructorCourseExperiments() {
     );
 
     if (invalidRows.length > 0) {
-      alert(
+      openPopup(
         `There are ${invalidRows.length} invalid row(s). Each student must have a first name, last name, and email.`,
       );
       return;
@@ -769,7 +794,7 @@ export default function InstructorCourseExperiments() {
       }
 
       if (studentsToAdd.length === 0) {
-        alert(
+        openPopup(
           "No new students were submitted. All imported students were duplicates or invalid.",
         );
         return;
@@ -853,7 +878,7 @@ export default function InstructorCourseExperiments() {
         );
       }
 
-      alert(messages.join("\n"));
+      openPopup(messages.join("\n"));
 
       if (createdStudents.length > 0) {
         closeAddStudentModal();
@@ -861,7 +886,7 @@ export default function InstructorCourseExperiments() {
     } catch (error) {
       console.error("Error importing student accounts:", error);
 
-      alert(
+      openPopup(
         error.message || "An error occurred while importing student accounts.",
       );
     } finally {
@@ -918,12 +943,12 @@ export default function InstructorCourseExperiments() {
 
   const handleCreateGroup = async () => {
     if (!groupName.trim()) {
-      setError("Please enter a group name.");
+      openPopup("Please enter a group name.");
       return;
     }
 
     if (selectedStudents.length === 0) {
-      setError("Please select at least one student.");
+      openPopup("Please select at least one student.");
       return;
     }
 
@@ -946,7 +971,7 @@ export default function InstructorCourseExperiments() {
     } catch (error) {
       console.error("Error creating group:", error);
 
-      setError("Unable to create group.");
+      openPopup("Unable to create group.");
     }
   };
 
@@ -956,7 +981,7 @@ export default function InstructorCourseExperiments() {
     }
 
     if (!groupName.trim()) {
-      setError("Please enter a group name.");
+      openPopup("Please enter a group name.");
       return;
     }
 
@@ -978,12 +1003,12 @@ export default function InstructorCourseExperiments() {
     } catch (error) {
       console.error("Error updating group:", error);
 
-      setError("Unable to update group.");
+      openPopup("Unable to update group.");
     }
   };
 
   const handleDeleteGroup = async (groupId) => {
-    const confirmed = window.confirm(
+    const confirmed = await askForConfirmation(
       "Are you sure you want to delete this group?",
     );
 
@@ -1000,7 +1025,7 @@ export default function InstructorCourseExperiments() {
     } catch (error) {
       console.error("Error deleting group:", error);
 
-      setError("Unable to delete group.");
+      openPopup("Unable to delete group.");
     }
   };
 
@@ -2432,6 +2457,77 @@ export default function InstructorCourseExperiments() {
                   "
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Alert popup */}
+      {showPopup && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 px-4">
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="notification-title"
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+          >
+            <div className="mb-3 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-indigo-800">
+                <FileText size={22} />
+              </div>
+              <h2 id="notification-title" className="text-xl font-semibold">
+                Notification
+              </h2>
+            </div>
+            <p className="whitespace-pre-line break-words text-gray-600">
+              {popupMessage}
+            </p>
+            <div className="mt-6 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowPopup(false)}
+                className="rounded-lg bg-indigo-800 px-5 py-2.5 font-medium text-white transition hover:bg-indigo-700"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation popup */}
+      {confirmPopup !== null && (
+        <div className="fixed inset-0 z-[101] flex items-center justify-center bg-black/50 px-4">
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="confirmation-title"
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+          >
+            <div className="mb-3 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 text-red-600">
+                <Trash2 size={22} />
+              </div>
+              <h2 id="confirmation-title" className="text-xl font-semibold">
+                Confirm Action
+              </h2>
+            </div>
+            <p className="whitespace-pre-line text-gray-600">{confirmPopup}</p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => closeConfirmation(false)}
+                className="rounded-lg border border-gray-300 px-5 py-2.5 font-medium text-gray-700 transition hover:bg-gray-100"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => closeConfirmation(true)}
+                className="rounded-lg bg-red-600 px-5 py-2.5 font-medium text-white transition hover:bg-red-700"
+              >
+                Confirm
               </button>
             </div>
           </div>

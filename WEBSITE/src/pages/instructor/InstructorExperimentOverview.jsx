@@ -133,9 +133,9 @@ const csvEscape = (v) => {
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 
-const downloadCSV = (rows, fileName) => {
+const downloadCSV = (rows, fileName, onEmpty) => {
   if (rows.length === 0) {
-    alert("No data to export.");
+    onEmpty?.("No data to export.");
     return;
   }
 
@@ -232,22 +232,24 @@ const renderDataNode = (data) => {
         {Object.entries(data)
           .filter(([key]) => !isDeveloperKey(key))
           .map(([key, value]) => (
-          <div
-            key={key}
-            className={`bg-white border border-gray-200 rounded-lg p-3 flex flex-col gap-1 ${
-              value !== null && typeof value === "object"
-                ? "sm:col-span-2"
-                : ""
-            }`}
-          >
-            <span className="text-xs font-medium text-gray-500 capitalize mb-1">
-              {key.replace(/([A-Z])/g, " $1")}
-            </span>
-            <div className="text-sm font-medium text-gray-900 break-words">
-              {typeof value === "object" ? renderDataNode(value) : String(value)}
+            <div
+              key={key}
+              className={`bg-white border border-gray-200 rounded-lg p-3 flex flex-col gap-1 ${
+                value !== null && typeof value === "object"
+                  ? "sm:col-span-2"
+                  : ""
+              }`}
+            >
+              <span className="text-xs font-medium text-gray-500 capitalize mb-1">
+                {key.replace(/([A-Z])/g, " $1")}
+              </span>
+              <div className="text-sm font-medium text-gray-900 break-words">
+                {typeof value === "object"
+                  ? renderDataNode(value)
+                  : String(value)}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
       </div>
     );
   }
@@ -274,6 +276,9 @@ export default function InstructorExperimentOverview() {
 
   const [expandedGroups, setExpandedGroups] = useState({});
   const [expandedAttempts, setExpandedAttempts] = useState({});
+  const [popupMessage, setPopupMessage] = useState("");
+
+  const openPopup = (message) => setPopupMessage(message);
 
   /* ---------- Load experiment + verify ownership ---------- */
   useEffect(() => {
@@ -525,7 +530,8 @@ export default function InstructorExperimentOverview() {
             groupName: group.name,
             participantCode: p.participantCode || "",
             attemptNumber: p.attemptNumber || 1,
-            experimentName: experiment?.experimentName || experiment?.name || "",
+            experimentName:
+              experiment?.experimentName || experiment?.name || "",
             vrId:
               p.vrId ||
               experiment?.groupVrAssignments?.[group.id] ||
@@ -565,10 +571,11 @@ export default function InstructorExperimentOverview() {
       downloadCSV(
         buildRows([group]),
         `${safeName}_${group.name.replace(/\s+/g, "_")}_jamovi.csv`,
+        openPopup,
       );
     } catch (err) {
       console.error("CSV export failed:", err);
-      alert("Failed to export CSV. Please try again.");
+      openPopup("Failed to export CSV. Please try again.");
     }
   };
 
@@ -577,10 +584,11 @@ export default function InstructorExperimentOverview() {
       downloadCSV(
         buildRows(groups.filter((g) => g.hasResults)),
         `${safeName}_all_groups_jamovi.csv`,
+        openPopup,
       );
     } catch (err) {
       console.error("CSV export failed:", err);
-      alert("Failed to export CSV. Please try again.");
+      openPopup("Failed to export CSV. Please try again.");
     }
   };
 
@@ -874,6 +882,34 @@ export default function InstructorExperimentOverview() {
           </div>
         </section>
       </div>
+
+      {popupMessage && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 px-4">
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="overview-popup-title"
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+          >
+            <h2
+              id="overview-popup-title"
+              className="mb-3 text-xl font-semibold text-gray-900"
+            >
+              Notice
+            </h2>
+            <p className="mb-6 text-gray-600">{popupMessage}</p>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setPopupMessage("")}
+                className="rounded-lg bg-indigo-800 px-5 py-2.5 font-medium text-white transition hover:bg-indigo-700"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
