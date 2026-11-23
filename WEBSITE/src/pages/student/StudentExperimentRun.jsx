@@ -669,19 +669,46 @@ export default function StudentExperimentRun() {
           completionStatus: p.completionStatus || "",
         };
 
-        const configFlat = flattenObject(
-          normalizeForFlatten(experiment?.configuration) || {},
-          "config"
-        );
+const configFlat = flattenObject(
+  normalizeForFlatten(experiment?.configuration) || {},
+  "config"
+);
 
-        const resultsFlat = resultData.experimentalResults
-          ? flattenObject(
-              normalizeForFlatten(resultData.experimentalResults) || {},
-              "result"
-            )
-          : {};
+const rawResults = resultData.experimentalResults;
+const trials = Array.isArray(rawResults)
+  ? rawResults
+  : rawResults
+  ? [rawResults]
+  : [];
 
-        rows.push({ ...base, ...configFlat, ...resultsFlat });
+// Summary calculated from the trial records themselves, so it never
+// depends on how the Unity scene counted. Only added for experiments
+// whose trials record a boolean "correct" field (Memory).
+const summaryFlat = {};
+const scored = trials.filter(
+  (t) => t && typeof t === "object" && typeof t.correct === "boolean"
+);
+if (scored.length > 0) {
+  const correctN = scored.filter((t) => t.correct).length;
+  summaryFlat.summary_questionsAnswered = scored.length;
+  summaryFlat.summary_questionsCorrect = correctN;
+  summaryFlat.summary_accuracy = Number((correctN / scored.length).toFixed(3));
+}
+
+if (trials.length === 0) {
+  rows.push({ ...base, ...configFlat });
+} else {
+  // One row per trial. Single-trial experiments still give one row,
+  // with the same columns as before.
+  trials.forEach((t) => {
+    rows.push({
+      ...base,
+      ...configFlat,
+      ...summaryFlat,
+      ...flattenObject(t, "result"),
+    });
+  });
+}
       }
 
       if (rows.length === 0) {
